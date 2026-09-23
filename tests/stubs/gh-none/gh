@@ -1,0 +1,3 @@
+#!/bin/sh
+# stub: no PR exists for any branch
+echo '[]'

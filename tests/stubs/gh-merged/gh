@@ -1,0 +1,9 @@
+#!/bin/sh
+# stub: the branch named in $BB_TEST_MERGED_HEAD has a MERGED PR, others none
+for a in "$@"; do
+  if [ -n "$BB_TEST_MERGED_HEAD" ] && [ "$a" = "$BB_TEST_MERGED_HEAD" ]; then
+    echo '[{"number":42,"state":"MERGED","title":"squashed","isDraft":false,"url":"http://example/42"}]'
+    exit 0
+  fi
+done
+echo '[]'

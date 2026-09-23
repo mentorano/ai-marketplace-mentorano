@@ -1,0 +1,10 @@
+{
+  "name": "clean-code",
+  "description": "Rules and measurement for clean code in Python and TypeScript — the agent measures function length, complexity, parameters, nesting and file size, and the import boundaries between modules, before and after every change, and follows Clean Code / Clean Architecture rules shaped for FastAPI and React projects.",
+  "version": "0.4.0",
+  "license": "MIT",
+  "author": {
+    "name": "Ivan Dachev",
+    "email": "ivan@mentorano.com"
+  }
+}

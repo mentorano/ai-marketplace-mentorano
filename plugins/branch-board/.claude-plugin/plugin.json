@@ -1,0 +1,10 @@
+{
+  "name": "branch-board",
+  "description": "Build a live status page for a repository's recent branches — what exists, who moved it, how far it got, what it touches, and what its own plan documents say the goal is.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": {
+    "name": "Ivan Dachev",
+    "email": "ivan@mentorano.com"
+  }
+}

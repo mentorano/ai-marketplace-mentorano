@@ -1,0 +1,49 @@
+{
+  "name": "ai-marketplace-mentorano",
+  "owner": {
+    "name": "Ivan Dachev",
+    "email": "ivan@mentorano.com"
+  },
+  "description": "Claude Code plugins for reading the state of a repository and keeping its code clean.",
+  "metadata": {
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "branch-board",
+      "source": "./plugins/branch-board",
+      "description": "Build a live status page for a repository's recent branches — what exists, who moved it, how far it got, what it touches, and what its own plan documents say the goal is. Every number is derived from git and gh, never remembered.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "author": {
+        "name": "Ivan Dachev"
+      },
+      "keywords": [
+        "git",
+        "branches",
+        "status",
+        "handover",
+        "standup",
+        "review"
+      ]
+    },
+    {
+      "name": "clean-code",
+      "source": "./plugins/clean-code",
+      "description": "Clean Code and Clean Architecture rules for Python and TypeScript, plus two measurement scripts — shape of functions and files, and the import boundaries between modules — that the agent runs before and after every change so the numbers come from a command, not a feeling.",
+      "version": "0.4.0",
+      "license": "MIT",
+      "author": {
+        "name": "Ivan Dachev"
+      },
+      "keywords": [
+        "clean-code",
+        "clean-architecture",
+        "refactoring",
+        "python",
+        "typescript",
+        "code-quality"
+      ]
+    }
+  ]
+}

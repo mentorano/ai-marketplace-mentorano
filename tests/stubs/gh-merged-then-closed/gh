@@ -1,0 +1,17 @@
+#!/bin/sh
+# stub: this branch had PR #1 MERGED, then a follow-up PR #2 opened and CLOSED.
+# `gh pr list` returns newest first, so `--limit 1` sees only the CLOSED one.
+head=""; prev=""
+for a in "$@"; do
+  [ "$prev" = "--head" ] && head="$a"
+  prev="$a"
+done
+if [ -z "$head" ]; then echo '[]'; exit 0; fi
+if [ "$head" = "$BB_TEST_MERGED_HEAD" ]; then
+  cat <<'JSON'
+[{"number":2,"state":"CLOSED","title":"follow-up, abandoned","isDraft":false,"url":"http://example/2"},
+ {"number":1,"state":"MERGED","title":"the real merge","isDraft":false,"url":"http://example/1"}]
+JSON
+  exit 0
+fi
+echo '[]'

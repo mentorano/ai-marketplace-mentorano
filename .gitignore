@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+board.json
+tmp/
+node_modules/
+.serena/

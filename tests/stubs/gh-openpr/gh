@@ -1,0 +1,19 @@
+#!/bin/sh
+# stub: BB_TEST_OPEN_HEAD has an OPEN PR last updated at BB_TEST_OPEN_UPDATED.
+# The collector makes two shapes of call: a repo-wide list of open PRs, and a
+# per-branch lookup with --head. They need different answers.
+head=""
+prev=""
+for a in "$@"; do
+  [ "$prev" = "--head" ] && head="$a"
+  prev="$a"
+done
+if [ -z "$head" ]; then
+  printf '[{"headRefName":"%s","updatedAt":"%s"}]\n' "$BB_TEST_OPEN_HEAD" "$BB_TEST_OPEN_UPDATED"
+  exit 0
+fi
+if [ "$head" = "$BB_TEST_OPEN_HEAD" ]; then
+  printf '[{"number":7,"state":"OPEN","title":"under review","isDraft":false,"url":"http://example/7"}]\n'
+  exit 0
+fi
+echo '[]'

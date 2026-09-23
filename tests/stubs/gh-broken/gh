@@ -1,0 +1,4 @@
+#!/bin/sh
+# stub: gh is installed but every call fails (no auth, no network, not a GitHub repo)
+echo "gh: could not determine base repository" >&2
+exit 1

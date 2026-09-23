@@ -1,0 +1,17 @@
+#!/bin/sh
+# stub: a git whose messages are translated, like a distro build with gettext.
+# Everything passes through to the real git; only `diff --shortstat` is
+# rewritten into German, and only when the caller did NOT pin the locale.
+REAL=$(PATH=$(echo "$PATH" | sed "s|[^:]*git-localized:||g") command -v git)
+shortstat=0
+for a in "$@"; do [ "$a" = "--shortstat" ] && shortstat=1; done
+case "${LC_ALL:-}" in
+  C|POSIX) shortstat=0 ;;
+esac
+if [ "$shortstat" = "1" ]; then
+  "$REAL" "$@" | sed -e 's/ file[s]* changed/ Datei geändert/' \
+                     -e 's/ insertion[s]*(+)/ Zeile hinzugefügt(+)/' \
+                     -e 's/ deletion[s]*(-)/ Zeile entfernt(-)/'
+  exit 0
+fi
+exec "$REAL" "$@"
