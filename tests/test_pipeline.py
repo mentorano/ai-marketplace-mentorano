@@ -243,7 +243,7 @@ class TestRender(Pipeline):
 
 
 class TestHandWrittenMarkdown(Pipeline):
-    """Review finding: BOARD.md is the source of truth and a human writes prose
+    """Regression: BOARD.md is the source of truth and a human writes prose
     into it. A bullet written under a branch was not attached to that branch:
     parse() fell through to the section handler and moved it into the section
     intro, above every record. A `- word: text` note became a monospaced field
@@ -273,7 +273,7 @@ class TestHandWrittenMarkdown(Pipeline):
 
 
 class TestContrast(Pipeline):
-    """Review finding: the page had never been looked at rendered. In the LIGHT
+    """Regression: the page had never been looked at rendered. In the LIGHT
     theme --muted on --paper measures 3.80:1 — below WCAG AA's 4.5:1 for normal
     text. It carries every field label, every section heading, the footer
     generation stamp, and the unanswered TODO that SKILL.md says must be
