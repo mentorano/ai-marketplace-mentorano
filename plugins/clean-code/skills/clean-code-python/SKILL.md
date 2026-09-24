@@ -148,7 +148,7 @@ Two of its rows are the old greps, made into numbers: `sql_in_api` is a
 file under `api/` with a statement that contains `select(`, `.execute(`,
 `.where(` or `func.` (text match inside each statement, so one query that
 spans three lines is one site; sites per file, so a `SELECT 1` health probe
-is not the same row as fourteen queries), and `http_in_services` is a file
+is not the same row as a dozen queries), and `http_in_services` is a file
 under `services/` whose `ast` imports include `fastapi` or `starlette`. The
 second one reads imports, not text, because a comment that says a service
 never raises `HTTPException` is not a finding. Both work for `app/services/`

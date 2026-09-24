@@ -75,9 +75,9 @@ between two runs is a readable record of what moved.
 The skeleton and the page are written in Bulgarian: the field values, most
 section headings, the fixed notes and the `TODO:` prompts. The field keys
 (`author`, `state`, `position`, ...) stay in English, because `render.py`
-reads them back. The
-plan reader recognises goal, task and flag words in both Bulgarian and
-English. Write the prose in whichever language the team reads.
+reads them back. The plan reader recognises goal, task and flag words in
+both Bulgarian and English. Write the prose in whichever language the team
+reads.
 
 **3. Render and publish:**
 

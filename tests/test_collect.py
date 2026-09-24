@@ -21,7 +21,7 @@ class Base(unittest.TestCase):
 
 
 class TestBaseResolution(Base):
-    """Finding 1: an unresolvable base dropped every branch and exited 0."""
+    """Regression: an unresolvable base dropped every branch and exited 0."""
 
     def test_missing_remote_is_fatal_not_empty(self):
         repo, _ = new_repo(self.tmp)
@@ -47,7 +47,7 @@ class TestBaseResolution(Base):
 
 
 class TestPrune(Base):
-    """Finding 3: --no-fetch skipped the mandatory prune without saying so."""
+    """Regression: --no-fetch skipped the mandatory prune without saying so."""
 
     def test_no_fetch_is_declared_as_unpruned(self):
         repo, _ = new_repo(self.tmp)
@@ -105,7 +105,7 @@ class TestPrune(Base):
 
 
 class TestLanded(Base):
-    """Finding 4: a squash-merged branch reported merged=False."""
+    """Regression: a squash-merged branch reported merged=False."""
 
     def squashed_repo(self):
         repo, _ = new_repo(self.tmp)
@@ -149,7 +149,7 @@ class TestLanded(Base):
 
 
 class TestWindowAndRefs(Base):
-    """Finding 6: the window filter ran before local and remote were merged."""
+    """Regression: the window filter ran before local and remote were merged."""
 
     def test_pushed_branch_with_an_old_remote_tip_is_not_local_only(self):
         repo, origin = new_repo(self.tmp)
@@ -166,7 +166,7 @@ class TestWindowAndRefs(Base):
                       "the branch exists on origin; calling it unpushed is a lie")
 
     def test_a_stale_tip_with_a_live_open_pr_stays_on_the_page(self):
-        # Finding 14: the window read committerdate only, so a branch sitting in
+        # Regression: the window read committerdate only, so a branch sitting in
         # review for longer than N days fell off exactly when it mattered most.
         from datetime import datetime, timedelta, timezone
         repo, _ = new_repo(self.tmp)
@@ -210,7 +210,7 @@ class TestWindowAndRefs(Base):
 
 
 class TestPlanSelection(Base):
-    """Finding 2: a top-level plans/ ranked no higher than an incidental doc,
+    """Regression: a top-level plans/ ranked no higher than an incidental doc,
     and a deleted path silently consumed one of the three plan slots."""
 
     def test_top_level_plans_outranks_docs(self):
@@ -254,7 +254,7 @@ class TestPlanSelection(Base):
 
 
 class TestPlanParsing(Base):
-    """Findings 7, 8 and 9: fenced blocks leaked into flags and checkbox
+    """Regression: fenced blocks leaked into flags and checkbox
     counts, and a "what is NOT built" section was read as the goal."""
 
     def plan_branch(self, body):
@@ -316,7 +316,7 @@ class TestPlanParsing(Base):
 
 
 class TestRole(Base):
-    """Finding 15: a release pointer looked exactly like work in flight."""
+    """Regression: a release pointer looked exactly like work in flight."""
 
     def test_a_branch_at_the_base_is_a_pointer_not_work(self):
         repo, _ = new_repo(self.tmp)
@@ -353,7 +353,7 @@ class TestRole(Base):
 
 
 class TestBrokenGhIsDeclared(Base):
-    """Review finding: `gh` installed but failing was reported as "no PR".
+    """Regression: `gh` installed but failing was reported as "no PR".
 
     The repo-wide `gh pr list --state open` call already marks itself FAILED and
     raises a warning. The per-branch `gh pr list --head ... --state all` call —
@@ -398,7 +398,7 @@ class TestBrokenGhIsDeclared(Base):
 
 
 class TestPrHistory(Base):
-    """Review finding: `gh pr list --head ... --state all --limit 1` returns the
+    """Regression: `gh pr list --head ... --state all --limit 1` returns the
     NEWEST pr. A branch merged by PR #1 and then given an abandoned follow-up
     PR #2 reports landed_by=None — the exact squash case the design exists for.
     """
@@ -422,7 +422,7 @@ class TestPrHistory(Base):
 
 
 class TestFenceClosing(Base):
-    """Review finding: strip_fences required the closing fence to be the exact
+    """Regression: strip_fences required the closing fence to be the exact
     same string as the opening one. CommonMark allows a LONGER closing fence, so
     ``` ... ```` left the fence "unclosed" and blanked the rest of the document:
     every checkbox and every flag after it silently disappeared.
@@ -463,7 +463,7 @@ class TestFenceClosing(Base):
 
 
 class TestTopDirs(Base):
-    """Review finding: top_dirs joined the first two path segments, so a file at
+    """Regression: top_dirs joined the first two path segments, so a file at
     the repo root, and any file one directory deep, was labelled a directory.
     The real board showed `dirs: STATUS.md (1)` and `dirs: CLAUDE.md (1)`.
     """
@@ -491,7 +491,7 @@ class TestTopDirs(Base):
 
 
 class TestOrdering(Base):
-    """Review finding: last_date is `iso[:10]` — the date in the COMMITTER's
+    """Regression: last_date is `iso[:10]` — the date in the COMMITTER's
     timezone — and branches are sorted by that string. SKILL.md says the page is
     ordered by last activity because "recency is the one ranking that needs no
     judgement". Across timezones the string ranking reverses real recency.
@@ -518,7 +518,7 @@ class TestOrdering(Base):
 
 
 class TestNegativeHeadingInTheOtherDirection(Base):
-    """Review finding: NEGATIVE_HEAD_RE rejects a heading containing any of
+    """Regression: NEGATIVE_HEAD_RE rejects a heading containing any of
     "не", "няма", "not", "no". It was written for "## Какво НЕ се строи", but it
     also silences real goal headings. GOAL_HEADS deliberately ranks
     "проблем"/"problem" as the second-best goal source — and a problem is almost
@@ -554,7 +554,7 @@ class TestNegativeHeadingInTheOtherDirection(Base):
 
 
 class TestOpenPrListingCap(Base):
-    """Review finding: `gh pr list --state open --limit 200` is a silent cap.
+    """Regression: `gh pr list --state open --limit 200` is a silent cap.
     A repository with more open PRs than the limit loses the tail, and a branch
     whose tip is older than the window but whose PR is live falls off the page
     with nothing said. SKILL.md builds its whole warning mechanism around
@@ -580,7 +580,7 @@ class TestOpenPrListingCap(Base):
 
 
 class TestShortstatLocale(Base):
-    """Review finding: the diff size is parsed by looking for the English words
+    """Regression: the diff size is parsed by looking for the English words
     "insertion" and "deletion" in `git diff --shortstat`. git translates that
     line, so a translated build reports every branch as +0 −0 — a measurement
     replaced by a plausible number, with nothing said.
@@ -609,7 +609,7 @@ class TestShortstatLocale(Base):
 
 
 class TestCommandProvenance(Base):
-    """Finding 10: meta.commands listed commands that never ran."""
+    """Regression: meta.commands listed commands that never ran."""
 
     def test_explicit_base_does_not_claim_a_symbolic_ref_lookup(self):
         repo, _ = new_repo(self.tmp)
@@ -632,7 +632,7 @@ class TestCommandProvenance(Base):
 
 
 class TestLockSafety(Base):
-    """Finding 12: one git call bypassed the wrapper and its
+    """Regression: one git call bypassed the wrapper and its
     --no-optional-locks. Asserted on the source, so a new call site fails."""
 
     def test_every_git_subprocess_carries_no_optional_locks(self):

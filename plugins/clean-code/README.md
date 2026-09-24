@@ -140,8 +140,8 @@ report is the after side, followed by a `BEFORE` line with the SUMMARY at
 the before ref and `VERDICT up=none` or the rule counts that went up, such
 as `VERDICT up=upward:0->1`.
 
-`measure.py` sees a function; it never reads an `import`, so a handler of
-109 lines that builds four queries is green for it, and so are two modules
+`measure.py` sees a function; it never reads an `import`, so a long handler
+that builds several queries is green for it, and so are two modules
 that import each other. `boundaries.py` reads every import with the stdlib
 `ast` and places every file at (module, layer) from its path:
 `app/billing/api/users.py` is module `billing`, layer `api`;
@@ -161,7 +161,7 @@ TypeScript file is a broken run that names `dependency-cruiser`.
 | `cyclic_modules` | 0 | modules inside any cycle, pairs or longer (the strongly connected components of the module graph); a cycle through three modules has no pair and shows only here | ch. 14 |
 | `core_outward` | 0 | an import from a `--core` module (`core`, `shared`) to a feature module; `main.py` is the composition root and is exempt | ch. 22; `architect.prompt` Phase 2 |
 | `framework_in_domain` | 0 | `fastapi`, `sqlalchemy` or `starlette` imported under a `--domain` module or layer (`domain`, `shared`, `parsers`; `parsers` is also a default layer so a feature's `parsers/` counts) | ch. 22; `architect.prompt` Phase 2 |
-| `sql_in_api` | 0 | files under `api/` with a statement that contains `select(`, `.execute(`, `.where(` or `func.`; text match inside each statement, sites per file, so one query over three lines is one site and a `SELECT 1` health probe is not the same row as fourteen queries | `architect.prompt` Phase 1; `clean-code-python` layer table |
+| `sql_in_api` | 0 | files under `api/` with a statement that contains `select(`, `.execute(`, `.where(` or `func.`; text match inside each statement, sites per file, so one query over three lines is one site and a `SELECT 1` health probe is not the same row as a dozen queries | `architect.prompt` Phase 1; `clean-code-python` layer table |
 | `http_in_services` | 0 | `fastapi` or `starlette` in the `ast` imports of a file under `services/`; imports, not text, because a comment that mentions `HTTPException` is not a finding | ch. 22; `clean-code-python` layer table |
 | `ports` | counted | `Protocol` or `ABC` classes under `services/` or `domain/`; informational, the pattern the other services should follow | ch. 11 (DIP) |
 
