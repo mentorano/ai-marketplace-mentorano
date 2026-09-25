@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = sorted((ROOT / "plugins").glob("*/skills/*/SKILL.md"))
 EXPECTED = {
+    "bg-claude-rc",
     "branch-board",
     "clean-code",
     "clean-code-python",

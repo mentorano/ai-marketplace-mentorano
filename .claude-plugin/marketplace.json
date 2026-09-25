@@ -4,7 +4,7 @@
     "name": "Ivan Dachev",
     "email": "ivan@mentorano.com"
   },
-  "description": "Claude Code plugins for reading the state of a repository and keeping its code clean.",
+  "description": "Claude Code plugins for reading the state of a repository and keeping its code clean, and small helpers such as starting a background Remote Control session.",
   "metadata": {
     "version": "0.1.0"
   },
@@ -43,6 +43,22 @@
         "python",
         "typescript",
         "code-quality"
+      ]
+    },
+    {
+      "name": "utils",
+      "source": "./plugins/utils",
+      "description": "Small helpers for working with Claude Code — start a new background Claude Code session with Remote Control in the same repository and get its link, to continue from a phone or the web.",
+      "version": "0.2.0",
+      "license": "MIT",
+      "author": {
+        "name": "Ivan Dachev"
+      },
+      "keywords": [
+        "remote-control",
+        "background",
+        "sessions",
+        "utils"
       ]
     }
   ]

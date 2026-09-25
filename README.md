@@ -10,6 +10,7 @@ code clean.
 /plugin marketplace add mentorano/ai-marketplace-mentorano
 /plugin install branch-board@ai-marketplace-mentorano
 /plugin install clean-code@ai-marketplace-mentorano
+/plugin install utils@ai-marketplace-mentorano
 ```
 
 To work on the marketplace itself, point Claude Code at a local clone instead:
@@ -94,13 +95,24 @@ over a whole tree and keeps shape and boundaries as two lists. See
 `plugins/clean-code/README.md` for the thresholds, the rules and a
 sample run.
 
+### utils
+
+Small helpers for working with Claude Code.
+
+- `bg-claude-rc` starts a new, empty Claude Code session in the background, in
+  the git root of the current repository, with Remote Control on. The session
+  is named `<repo-slug>-<YYYYMMDD>-rc<N>`, where N is the first number not yet
+  taken by a live session or by a transcript from today, and the script prints
+  the session link so the work can go on from a phone or the web. Needs `jq`.
+  See [`plugins/utils/skills/bg-claude-rc/SKILL.md`](plugins/utils/skills/bg-claude-rc/SKILL.md).
+
 ## Tests
 
 ```bash
 ./run-tests.sh
 ```
 
-Six suites. The collector suite builds real throwaway repositories — squash
+Seven suites. The collector suite builds real throwaway repositories — squash
 merges, refs deleted behind the clone's back, plans full of fenced blocks — and
 asserts on the JSON. The pipeline suite asserts that the markdown really is the
 source: a value edited in `BOARD.md` reaches the page, and the renderer never
@@ -108,7 +120,8 @@ reaches back into the JSON. The measure and boundaries suites measure fixtures
 with known numbers and scratch packages that each break one boundary. The
 revisions suite builds scratch repositories and checks `--at` and every
 `--compare` verdict of both scripts. The skills suite checks every `SKILL.md`
-frontmatter and the two manifests.
+frontmatter and the two manifests. The bg-claude-rc suite runs
+`start.sh` against a stub `claude` and a temporary `HOME`, so it starts nothing.
 
 The TypeScript tests need `node` and the `typescript` package. They look for
 it at `CLEAN_CODE_TS_PACKAGE`, then at `node_modules/typescript` in the repo
