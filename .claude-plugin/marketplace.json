@@ -31,7 +31,7 @@
       "name": "clean-code",
       "source": "./plugins/clean-code",
       "description": "Clean Code and Clean Architecture rules for Python and TypeScript, plus two measurement scripts — shape of functions and files, and the import boundaries between modules — that the agent runs before and after every change so the numbers come from a command, not a feeling.",
-      "version": "0.4.0",
+      "version": "0.4.2",
       "license": "MIT",
       "author": {
         "name": "Ivan Dachev"

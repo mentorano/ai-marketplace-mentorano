@@ -125,9 +125,11 @@ frontmatter and the two manifests. The bg-claude-rc suite runs
 
 The TypeScript tests need `node` and the `typescript` package. They look for
 it at `CLEAN_CODE_TS_PACKAGE`, then at `node_modules/typescript` in the repo
-root (`npm install --no-save typescript@5`), and skip with one line when neither
-is there. TypeScript 7 ships without the JavaScript compiler API that
-`measure-ts.mjs` loads, so the tests pin 5.x.
+root, and skip with one line when neither is there. The root `package.json`
+pins it as a test-only dependency: `npm ci` in the repo root installs it, and
+`run-tests.sh` runs `npm ci` once by itself when it is missing. TypeScript 7
+ships without the JavaScript compiler API that `measure-ts.mjs` loads, so the
+pin stays on 5.x.
 
 ```bash
 BB_COLLECT=<path-to-another-collect.py> ./run-tests.sh

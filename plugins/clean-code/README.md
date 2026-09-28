@@ -252,9 +252,11 @@ each — an upward import, a two-module cycle, a cycle through three modules,
 `shared`, a port, and a clean tree — and asserts the SUMMARY counts and the
 printed closing edges. The
 TypeScript tests use the `typescript` package at `CLEAN_CODE_TS_PACKAGE`
-when that variable is set, and otherwise `node_modules/typescript` in the
-repository root (`npm install --no-save typescript@5` puts it there); they
-print one line naming the variable and skip when neither is there.
+when that variable is set, and otherwise the repository's own
+`node_modules/typescript`, pinned in the root `package.json` as a
+test-only dependency and installed by `npm ci` in the repository root;
+`run-tests.sh` runs `npm ci` once by itself when it is missing. Without
+either, or without `node`, they skip with one line that names both options.
 `tests/test_revisions.py` builds scratch git repositories and checks
 `--at` (uncommitted and untracked files stay out, `--changed` lists
 committed changes only) and every `--compare` verdict, for both scripts.

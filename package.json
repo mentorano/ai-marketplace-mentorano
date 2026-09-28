@@ -1,0 +1,8 @@
+{
+  "name": "ai-marketplace-tests",
+  "private": true,
+  "description": "Test-only dependencies: the clean-code TypeScript tests measure through this typescript package.",
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

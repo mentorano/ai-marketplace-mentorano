@@ -22,8 +22,8 @@ SKILL = ROOT / "plugins" / "clean-code" / "skills" / "clean-code"
 MEASURE = SKILL / "measure.py"
 BOUNDARIES = SKILL / "boundaries.py"
 
-TS_PACKAGE = Path(os.environ.get("CLEAN_CODE_TS_PACKAGE", str(ROOT / "node_modules" / "typescript")))
-TS_READY = TS_PACKAGE.is_dir() and bool(shutil.which("node"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ts_package import SKIP_REASON, TS_PACKAGE, TS_READY  # noqa: E402
 
 
 def git(repo: Path, *args: str) -> str:
@@ -267,7 +267,7 @@ class ComparePathsTest(unittest.TestCase):
         self.assertEqual((file, verdict), ("other/b.py", "crossed"))
 
 
-@unittest.skipUnless(TS_READY, f"needs node on PATH and {TS_PACKAGE} (set CLEAN_CODE_TS_PACKAGE)")
+@unittest.skipUnless(TS_READY, SKIP_REASON)
 class CompareTypeScriptTest(unittest.TestCase):
     def test_the_snapshot_finds_the_projects_typescript_package(self):
         with tempfile.TemporaryDirectory() as tmp:

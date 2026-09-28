@@ -99,16 +99,11 @@ class PythonMeasurementTest(unittest.TestCase):
         self.assertIsNone(measure.language_of(Path("a.md")))
 
 
-DEFAULT_TS_PACKAGE = Path(__file__).resolve().parent.parent / "node_modules" / "typescript"
-TS_PACKAGE = Path(os.environ.get("CLEAN_CODE_TS_PACKAGE", str(DEFAULT_TS_PACKAGE)))
-TS_READY = TS_PACKAGE.is_dir() and bool(shutil.which("node"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ts_package import SKIP_REASON, TS_PACKAGE, TS_READY  # noqa: E402
 
 if not TS_READY:
-    print(
-        "test_measure: TypeScript tests skipped \u2014 set CLEAN_CODE_TS_PACKAGE to a "
-        f"node_modules/typescript directory (default: {DEFAULT_TS_PACKAGE})",
-        file=sys.stderr,
-    )
+    print(f"test_measure: TypeScript tests skipped \u2014 {SKIP_REASON}", file=sys.stderr)
 
 
 def make_ts_project(tmp: Path) -> Path:
@@ -121,10 +116,7 @@ def make_ts_project(tmp: Path) -> Path:
     return project
 
 
-@unittest.skipUnless(
-    TS_READY,
-    f"needs node on PATH and {TS_PACKAGE} (set CLEAN_CODE_TS_PACKAGE, or run `npm install --no-save typescript@5` in the repo root)",
-)
+@unittest.skipUnless(TS_READY, SKIP_REASON)
 class TypeScriptMeasurementTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -186,7 +178,7 @@ class TypeScriptMeasurementTest(unittest.TestCase):
         self.assertEqual(found, self.project.resolve() / "node_modules" / "typescript")
 
 
-@unittest.skipUnless(TS_READY, f"needs node on PATH and {TS_PACKAGE} (set CLEAN_CODE_TS_PACKAGE)")
+@unittest.skipUnless(TS_READY, SKIP_REASON)
 class TypeScriptTestFileTest(unittest.TestCase):
     """describe is a container; each test and hook is measured on its own, named after its call."""
 
