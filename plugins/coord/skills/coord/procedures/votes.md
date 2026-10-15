@@ -3,9 +3,9 @@
 Coord's own architecture/contract rulings, and product questions while the owner is away
 (`decisions-and-owner.md`), are decided by a vote of three. Mechanical matters (merge order,
 lane assignment) coord decides alone. Never voted: destructive/outward actions and anything
-irreversible - they wait for the owner on the "Чакат теб" list. Code-review findings are not voted.
+irreversible - they wait for the owner on the "Waiting on you" list. Code-review findings are not voted.
 
-## Ballot (write it to `<config handoff dir>/votes/<ГЛn>.md`)
+## Ballot (write it to `<config handoff dir>/votes/<GLn>.md`)
 ```
 <one-paragraph question>. Context (<= 15 lines): <facts, file:line, constraints, what is built>.
 Options:
@@ -17,9 +17,9 @@ Answer with exactly one first line: `Vote: <letter> — <reason in one sentence>
 
 ## Run a round (8 min max)
 1. [ ] In ONE message: a background Bash call
-   `python3 <skill dir>/scripts/vote.py codex <ballot> <votes dir>/<ГЛn> --timeout 300 --cwd <primary checkout>`,
-   an Opus voter `Agent(model: "opus", description: "Vote ГЛn (Opus)")` and a Fable voter
-   `Agent(model: "fable", description: "Vote ГЛn (Fable)")`. Each agent's prompt = the ballot + "you are
+   `python3 <skill dir>/scripts/vote.py codex <ballot> <votes dir>/<GLn> --timeout 300 --cwd <primary checkout>`,
+   an Opus voter `Agent(model: "opus", description: "Vote GLn (Opus)")` and a Fable voter
+   `Agent(model: "fable", description: "Vote GLn (Fable)")`. Each agent's prompt = the ballot + "you are
    one of three independent voters; read the files named if needed; you have 5 minutes; answer with
    the Vote line only".
 2. [ ] Wait for all three (never poll), at most 5 minutes after the start: an agent still running then
@@ -33,9 +33,9 @@ Answer with exactly one first line: `Vote: <letter> — <reason in one sentence>
 4. [ ] Codex `missing` with `why` = `missing-binary`, `login` or `usage-limit`: one line to the owner, once per session. No retry.
 
 ## Record
-- [ ] In the plan, "for ratification": `ГЛn (date, voted): <question> -> <winner> [contested|single voter|no vote]; Codex <X — reason>, Opus <X — reason>, Fable <X — reason>`.
-- [ ] Tell affected lanes with ОТГОВОР naming ГЛn ("voted, for the owner's ratification").
-- [ ] A settled ГЛn reopens only on new evidence or the owner's word.
+- [ ] In the plan, "for ratification": `GLn (date, voted): <question> -> <winner> [contested|single voter|no vote]; Codex <X — reason>, Opus <X — reason>, Fable <X — reason>`.
+- [ ] Tell affected lanes with ANSWER naming GLn ("voted, for the owner's ratification").
+- [ ] A settled GLn reopens only on new evidence or the owner's word.
 
 ## Cost
 A round = 1 CLI call + 1 Opus agent + 1 Fable agent. Expect 3-10 rounds per scope. The owner

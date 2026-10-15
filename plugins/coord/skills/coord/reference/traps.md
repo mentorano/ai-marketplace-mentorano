@@ -19,7 +19,7 @@ Stack examples (pytest, alembic, Playwright, vitest, zsh) are illustrations; the
 14. **Line numbers in a failure point at unrelated code** -> the runner reports transformed-code positions locally -> navigate by test title; note which environment produced a number.
 15. **A live reporter piped through `tail` gives a plausible wrong result** -> cursor-control rewrites get spliced -> use a JSON/line reporter for anything you act on.
 16. **Red in CI, green on many local re-runs (or the reverse)** -> a real race that a faster machine outruns -> widen the gap (inject a delay on the suspect request); never relax the assertion.
-17. **A local visual/overflow assertion fails on a clean checkout while CI is green** -> local rendering env differs -> control run, name the mismatch in КАЦНА; re-confirm before trusting an old note.
+17. **A local visual/overflow assertion fails on a clean checkout while CI is green** -> local rendering env differs -> control run, name the mismatch in LANDED; re-confirm before trusting an old note.
 18. **A command stored in a variable fails oddly in zsh** -> zsh does not word-split `$CMD` -> write the command out or use an array.
 
 ## Git and worktrees

@@ -16,9 +16,9 @@
 
 The split is by kind of action, not by a guess of its duration. File ownership comes first:
 an action on files or a task a running or finished writer already has in its context goes to
-that writer by `SendMessage` (ДЛ3), before the ДЛ1 list. In doubt → delegate (ДЛ5).
+that writer by `SendMessage` (DL3), before the DL1 list. In doubt → delegate (DL5).
 
-**ДЛ1 — main does it inline:**
+**DL1 — main does it inline:**
 
 - `Agent`, `SendMessage`, `TaskStop`, `AskUserQuestion`, `ToolSearch` (to load the deferred ones),
   `ReadNotifications`, `ListAgents` (the R21 successor handshake, `reference/handoff.md`),
@@ -30,11 +30,11 @@ that writer by `SendMessage` (ДЛ3), before the ДЛ1 list. In doubt → delega
   `docs/**` (plans, specs, notes: `.md`, `.mdx`, `.markdown`, `.txt`, `.rst`, `.adoc`),
   `.claude/settings.local.json` (the change the owner approved, R15), and the session's auto
   memory `~/.claude/projects/<project>/memory/*.md`. A plugin skill file (`SKILL.md`, anything
-  under `plugins/*/skills/`, also under `docs/`, in any letter case) is product code: ДЛ2.
-- `Write` / `Edit` of `.agent-memory/<topic>.md` in the run checkout (ПК3, ПТ1, not
+  under `plugins/*/skills/`, also under `docs/`, in any letter case) is product code: DL2.
+- `Write` / `Edit` of `.agent-memory/<topic>.md` in the run checkout (PK3, PT1, not
   `README.md`): the repo root or `.claude/worktrees/captain-run-<id>`, a flat `.md` file in an
   existing real `.agent-memory/`; never through `.claude/rules/project-memory/`, never in an
-  agent worktree, never with Bash (`cp`, `mv`, a redirection stay ДЛ2).
+  agent worktree, never with Bash (`cp`, `mv`, a redirection stay DL2).
 - Read-only Bash: `cat`, `head`, `tail` (never `-f`/`-F`), `wc`, `ls`, `find` (no `-exec`,
   `-ok`, `-delete`, `-fprint`), `date`, `stat`, `ps`, `cd`; git inspection: `log -n <N>` (no
   `-p`), `status`, `diff`, `show` (only the options
@@ -47,7 +47,7 @@ that writer by `SendMessage` (ДЛ3), before the ДЛ1 list. In doubt → delega
   (`run_in_background: true`) as a fallback timer, the only background call main makes; a shell `&` is denied.
 - `Skill` for `captain`, `captain:captain`, `captain:captain-setup` (the config start step) and
   `3amigos:3amigos` (main runs the panel itself; its voters are `Agent` launches; `panel.py`,
-  `tally.py` and the Codex voter are script runs, so a `captain:runner` runs them: ДЛ2).
+  `tally.py` and the Codex voter are script runs, so a `captain:runner` runs them: DL2).
 - The merge flow (`reference/queue.md`), each command alone in its Bash call:
   `git [-C '<abs dir>'] merge --no-ff [--no-edit] <local branch>`, the sync forms
   `git -C '<abs dir>' merge --no-ff --no-edit origin/<default>` and
@@ -70,7 +70,7 @@ that writer by `SendMessage` (ДЛ3), before the ДЛ1 list. In doubt → delega
   protected HEAD (`main`, `master`, the origin default, or with no readable `origin/HEAD` every
   branch outside `captain/*`) is denied, even one named `captain/*`; then a `captain/*` HEAD or
   the recorded base branch (a typed `/captain base <branch>`, or the auto base of a Skill call
-  `captain base <branch>` while АБ1–АБ6 hold, `reference/prompts.md`) passes without the grant;
+  `captain base <branch>` while AB1–AB6 hold, `reference/prompts.md`) passes without the grant;
   any other HEAD is denied. The base is never `main`, `master` or the origin default, and it
   is not honoured while `origin/HEAD` is unreadable. A remote-tracking source is only
   `origin/<default>`, and `--ff-only` only for it: into a `captain/*` or base HEAD both sync
@@ -102,13 +102,13 @@ that writer by `SendMessage` (ДЛ3), before the ДЛ1 list. In doubt → delega
   service is tried.
 - Writing agent prompts.
 
-**ДЛ2 — delegate to a new agent:** every edit of a source, test, config or script file (and
+**DL2 — delegate to a new agent:** every edit of a source, test, config or script file (and
 of a plugin skill file); every commit, except the merge flow and the R18 TODO-only commit;
 every build, test suite, script run (also `memory-apply.py`, a `captain:runner` runs it),
 install, publish, delete, kill, codex/agy call or Codex job poll; every Bash call with `run_in_background` (except the timer `sleep`) or a `timeout`
 above 120 s.
 
-**ДЛ4:** main never reads an agent's `output_file` or transcript, not even with
+**DL4:** main never reads an agent's `output_file` or transcript, not even with
 `offset`/`limit` or through `cat`, `head`, `tail`, `git diff` or `Grep` (also by a relative
 `.output` name after `cd`, or a `Grep`, also one without `path` in its cwd, over a temp directory that holds
 `tasks/*.output`; `git diff --no-index` is denied); `stat -L` of it (mtime only) is
@@ -116,9 +116,9 @@ allowed. For details, `SendMessage` the agent or launch a diagnosis agent.
 
 - The audit (`scripts/audit-main.py`) is a non-adversarial compliance measure for this rule,
   not a security boundary.
-- The same check runs live: the plugin hook `hooks/guard.py` denies a ДЛ2 call while captain
+- The same check runs live: the plugin hook `hooks/guard.py` denies a DL2 call while captain
   mode is on (from `/captain` until `/captain off`, across the end of the time box) with "This
-  is agent work (R1, ДЛ2): delegate it to a captain:runner or the writer that owns the file."
+  is agent work (R1, DL2): delegate it to a captain:runner or the writer that owns the file."
   The guard's state files (the mode marker, `.merge`, `.base`) are written only by the guard,
   from `/captain` commands (`.base` also from the checked auto base): a `Write`/`Edit`, a Bash redirection or a `cp`/`mv`/`tee`/`rm`
   into the state directory is denied. Without the plugin (a symlinked skill) there is no
@@ -132,7 +132,7 @@ Launch agents with the `Agent` tool's `subagent_type`:
   Opus fallback reviewer, the Opus mini-consensus opinion.
 - `captain:deep` — Opus, effort `high`: the Opus voter of a 3amigos panel (R9, launched by
   main), and the fallback reviewer when the review is of a very complex spec or
-  implementation or assesses a critical action (ЕФ1).
+  implementation or assesses a critical action (EF1).
 
 - `captain:light-coder` — Sonnet, effort `high`: the writer of a task that passes the light
   test (`reference/experiment.md`), and one duel contestant.
@@ -187,11 +187,11 @@ directly without a timeout, the equivalent is `command codex exec …`.)
 Model id: `gpt-6-astra`. People say "astra", but the bare short name fails with HTTP 400 "The
 'astra' model is not supported when using Codex with a ChatGPT account" — always the full id.
 
-**Effort (ЕФ1):** `-c model_reasoning_effort=medium` by default; `high` only for a review of a
+**Effort (EF1):** `-c model_reasoning_effort=medium` by default; `high` only for a review of a
 very complex spec or implementation, the assessment of a critical action, and a full
-consensus vote (ЕФ2). The flag is always passed: `~/.codex/config.toml` defaults to `high`.
+consensus vote (EF2). The flag is always passed: `~/.codex/config.toml` defaults to `high`.
 Use Codex freely; there is no quota to save. Only the usage-limit fallback below applies.
-**Why:** 30.09.2026 the owner confirmed `medium` for astra reviews (ЕФ3): no source measures
+**Why:** 30.09.2026 the owner confirmed `medium` for astra reviews (EF3): no source measures
 review quality by effort, and the one index by level shows +1 point for +22% cost from
 `medium` to `high`.
 
@@ -219,7 +219,7 @@ LOG='<literal log prefix from step 1>'
   Only a review checks `Verdict:`; votes have their own contracts (below).
   The runner returns the verdict line, the count of findings (blocking / non-blocking), the
   path of the `-o` final file and the exit code; the findings go to the writer by that path,
-  never through main (КТ1).
+  never through main (KT1).
 - The runner's prompt ends with this line, unchanged:
   `Your final report (after re-invocation, not an interim one): the verdict line VERBATIM, the count of findings (blocking / non-blocking), the path of the -o final file, and the exit code. Not the findings themselves. No commentary.`
   A hand-back that says it waits on background work is interim: it carries no verdict. Main
@@ -286,7 +286,7 @@ LOG='<literal log prefix>'
 - The wrapper records the Codex session id from the log header.
 - Codex does not commit: in a git worktree the git metadata is outside the `workspace-write`
   root. The wrapper runs the check and commits the owned files by path.
-- The `workspace-write` sandbox has no network (ДУ3 in
+- The `workspace-write` sandbox has no network (DU3 in
   `reference/experiment.md`). The check runs outside the sandbox, with
   the wrapper's rights, before review — the same exposure as any writer's own check.
 

@@ -5,10 +5,10 @@ Wired in hooks.json to three events; reads the hook JSON on stdin:
   - UserPromptSubmit: a prompt that starts with `/captain` or `/captain:captain` turns
     captain mode on for this session; with the argument `off` it turns it off.
   - PostToolUse (Skill): the same for a Skill call of `captain` or `captain:captain` made by
-    the main session (the owner named the skill in words, e.g. "Капитане ...", "спри капитана").
+    the main session (the owner named the skill in words, e.g. "Captain, ...", "stop the captain").
   - PreToolUse: while captain mode is on, a main-session tool call outside the R1 light work
-    (ДЛ1: reads, search, git inspection, short read-only commands, edits of run state, TODO,
-    docs and the local settings) is agent work (ДЛ2) and is denied, with the reason fed back
+    (DL1: reads, search, git inspection, short read-only commands, edits of run state, TODO,
+    docs and the local settings) is agent work (DL2) and is denied, with the reason fed back
     to the model. The allow-list is the one scripts/audit-main.py checks after a run
     (`classify`), so the live guard and the audit agree. Subagent calls (they carry
     `agent_id`) always pass.
@@ -17,7 +17,7 @@ The merge flow (R1, R10) gets live checks the audit cannot make afterwards: a me
 command runs alone in its Bash call; `merge` and `commit --no-edit` land only on an allowed
 HEAD: a `captain/*` branch, the run's base branch for the same repository (set by the owner
 with a typed `/captain base <branch>` or `base=<branch>` among the start arguments, or by the
-model's Skill call `captain base <branch>` when the auto-base conditions АБ1–АБ6 hold, see
+model's Skill call `captain base <branch>` when the auto-base conditions AB1–AB6 hold, see
 `auto_base_problem`), or the branch of a live grant; never on a detached HEAD, and
 main/master/the origin default branch only with the grant. `commit --no-edit` and `merge --abort` only while a merge is in
 progress; `switch` and `push` only for the branch the owner named in a typed
@@ -59,12 +59,12 @@ SKILL_ROOT = PLUGIN_ROOT / "skills" / "captain"
 CAPTAIN_SKILLS = {"captain", "captain:captain"}
 SLASH = re.compile(r"^\s*/(?:captain:)?captain(?=\s|$)(.*)$", re.S)
 SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
-REASON = ("This is agent work (R1, ДЛ2): delegate it to a captain:runner or the writer that "
+REASON = ("This is agent work (R1, DL2): delegate it to a captain:runner or the writer that "
           "owns the file. Captain mode is on in this session, also after the time box ended. "
-          "Main does inline only the ДЛ1 light work of reference/tools.md: Read, Grep, Glob, "
+          "Main does inline only the DL1 light work of reference/tools.md: Read, Grep, Glob, "
           "read-only commands (cat, head, tail, wc, ls, find, date, stat, ps), git inspection, "
           "Write or Edit of tmp/captain/, TODO, docs/ and .claude/settings.local.json, and the "
-          "merge flow; never an agent's output_file (ДЛ4). A denial means delegate, never "
+          "merge flow; never an agent's output_file (DL4). A denial means delegate, never "
           "rewrite the call. Only the owner ends captain mode, with `/captain off`. "
           "Blocked: {detail}")
 MERGE_REASON = ("Captain merge flow (R1, R10): {detail}. The allowed forms are in "
@@ -88,10 +88,10 @@ WRITERS = {"cp", "mv", "tee", "ln", "install", "rsync", "touch", "dd", "truncate
 GRANT_MAX_SECONDS = 12 * 3600  # audit-main.py keeps the same backstop
 STATE_DENIAL = ("{name}: the captain state files are written only by the guard, from "
                 "`/captain` commands")
-FETCH_SECONDS = 15  # АБ2; hooks.json gives the PostToolUse entry 30 s in all
+FETCH_SECONDS = 15  # AB2; hooks.json gives the PostToolUse entry 30 s in all
 REMOTE_SECONDS = 10
-RUN_STATE = "tmp/captain"  # the run's own state, written before start step 5 (АБ6)
-LOCAL_SETTINGS = ".claude/settings.local.json"  # start step 3 writes it (АБ6)
+RUN_STATE = "tmp/captain"  # the run's own state, written before start step 5 (AB6)
+LOCAL_SETTINGS = ".claude/settings.local.json"  # start step 3 writes it (AB6)
 
 
 def state_dir() -> Path:
@@ -105,7 +105,7 @@ def grant_file(session: str) -> Path:
 
 def set_grant(session: str, args: str, cwd: str) -> None:
     """`/captain merge <branch>` typed by the owner in a repository: main may switch to, merge
-    into and push that branch of that repository for the rest of the run (МГ1)."""
+    into and push that branch of that repository for the rest of the run (MG1)."""
     match = MERGE_ARGS.match(args)
     if not match or not cwd or not os.path.isabs(cwd):
         return
@@ -144,13 +144,13 @@ def carry_grant(session: str, cwd: str) -> None:
     """R21 handoff: `/captain resume` in a new session takes over the run it continues. The
     candidates are the other sessions with a marker for the same working directory that hold a
     live grant (valid under that session's own run ID, typed in the same repository, the git
-    common dir) or a live base (`live_base`, ГН2). With exactly one candidate the successor
+    common dir) or a live base (`live_base`, GN2). With exactly one candidate the successor
     takes its run ID, its grant and its base, with their original time; the predecessor's copies
     are removed, so a grant or a base is never held twice and never carried twice. Two or more
-    candidates (ЗД2 r1 F1: also one grant beside another session's live base) → nothing; the
+    candidates (ZD2 r1 F1: also one grant beside another session's live base) → nothing; the
     owner types `/captain merge <branch>` or `/captain base <branch>` again. A carry never creates a grant
-    (МГ1). The pick is by cwd and repository, not by run ID: one captain run per checkout is
-    assumed, and a second or stale run there may lend its grant or base (ГН1, accepted)."""
+    (MG1). The pick is by cwd and repository, not by run ID: one captain run per checkout is
+    assumed, and a second or stale run there may lend its grant or base (GN1, accepted)."""
     identity = repo_identity(cwd) if cwd and os.path.isabs(cwd) else None
     if identity is None:
         return
@@ -202,7 +202,7 @@ def same_cwd_sessions(session: str, cwd: str) -> list[tuple[str, dict]]:
 def live_base(other: str, marker: dict, common_dir: str) -> dict | None:
     """The base `other` recorded in its current run for the repository `common_dir`, within
     GRANT_MAX_SECONDS, else None. A marker is removed only by `/captain off`, so an abandoned
-    session keeps its base; the run and the age keep such a base from being carried (ГН2)."""
+    session keeps its base; the run and the age keep such a base from being carried (GN2)."""
     try:
         base = json.loads(base_file(other).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -244,7 +244,7 @@ def base_arg(args: str) -> str | None:
 def set_base(session: str, args: str, cwd: str, typed: bool = True) -> str | None:
     """Record the run's base branch: main may merge into it without a grant. Typed by the owner
     (`/captain base <branch>`, or `base=<branch>` among the start arguments): any branch. Made
-    by the model (a Skill call `captain base <branch>`, БР1): only while АБ1–АБ6 hold, checked
+    by the model (a Skill call `captain base <branch>`, BR1): only while AB1–AB6 hold, checked
     now. main, master and the origin default are never recorded (they stay behind the grant).
     Returns a line for the model on the Skill path, else None."""
     branch = base_arg(args)
@@ -267,41 +267,41 @@ def set_base(session: str, args: str, cwd: str, typed: bool = True) -> str | Non
                                               "auto": not typed, "run": current_run(session),
                                               "since": int(time.time())}) + "\n",
                                   encoding="utf-8")
-    return None if typed else (f"captain guard: base `{branch}` recorded (АБ1–АБ6 hold).")
+    return None if typed else (f"captain guard: base `{branch}` recorded (AB1–AB6 hold).")
 
 
 def auto_base_problem(directory: str, branch: str) -> str | None:
-    """Why `branch` cannot become the run's base from a model Skill call now, else None (БР1).
+    """Why `branch` cannot become the run's base from a model Skill call now, else None (BR1).
     Every condition is checked at this moment, never from a cache; HEAD is read again after
     the network calls, right before the record (review r1 F1)."""
     head = head_branch(directory)
     if head is None:
-        return "АБ1: HEAD is detached or unreadable"
+        return "AB1: HEAD is detached or unreadable"
     if head != branch:
-        return f"АБ1: HEAD is `{head}`, not `{branch}`"
+        return f"AB1: HEAD is `{head}`, not `{branch}`"
     if origin_default(directory) is None:  # protected() would let captain/* through
-        return "АБ1: origin/HEAD is unreadable, the default branch is unknown"
+        return "AB1: origin/HEAD is unreadable, the default branch is unknown"
     remote = remote_state(directory, branch)  # the default origin names now (r1 F2)
     if remote is None:
-        return "АБ2: `git ls-remote --symref origin HEAD` failed or named no default branch"
+        return "AB2: `git ls-remote --symref origin HEAD` failed or named no default branch"
     default, remote_branch = remote
     if protected(directory, branch) or branch == default:
-        return f"АБ1: `{branch}` is main, master or the origin default"
+        return f"AB1: `{branch}` is main, master or the origin default"
     tip = fetched_tip(directory, default)
     if tip is None:
-        return f"АБ2: `git fetch origin {default}` failed"
+        return f"AB2: `git fetch origin {default}` failed"
     if git_out(directory, "rev-parse", "-q", "--verify", "HEAD^{commit}") != tip:
-        return f"АБ3: HEAD is not the fetched origin/{default} ({tip[:12]})"
+        return f"AB3: HEAD is not the fetched origin/{default} ({tip[:12]})"
     if remote_branch and remote_branch != tip:
-        return f"АБ4: origin/{branch} exists on another commit"
+        return f"AB4: origin/{branch} exists on another commit"
     if checked_out_elsewhere(directory, branch):
-        return f"АБ5: `{branch}` is checked out in another worktree"
+        return f"AB5: `{branch}` is checked out in another worktree"
     problem = dirty_problem(directory)
     if problem:
         return problem
     if head_branch(directory) != branch \
             or git_out(directory, "rev-parse", "-q", "--verify", "HEAD^{commit}") != tip:
-        return "АБ1: HEAD moved during the check"
+        return "AB1: HEAD moved during the check"
     return None
 
 
@@ -314,7 +314,7 @@ def head_branch(directory: str) -> str | None:
 
 
 def dirty_problem(directory: str) -> str | None:
-    """АБ6: any change refuses, except untracked files of the run's own state under
+    """AB6: any change refuses, except untracked files of the run's own state under
     tmp/captain/ (main writes recon and run.md before start step 5; bootstrap adds the
     exclude only later) and an untracked .claude/settings.local.json (start step 3 writes it).
     A tracked change to either still refuses."""
@@ -323,9 +323,9 @@ def dirty_problem(directory: str) -> str | None:
                               "--untracked-files=all"], capture_output=True, text=True,
                              timeout=10)
     except (OSError, subprocess.SubprocessError):
-        return "АБ6: `git status` failed"
+        return "AB6: `git status` failed"
     if out.returncode != 0:
-        return "АБ6: `git status` failed"
+        return "AB6: `git status` failed"
     entries = out.stdout.split("\0")
     while entries:
         entry = entries.pop(0)
@@ -335,7 +335,7 @@ def dirty_problem(directory: str) -> str | None:
         if "R" in code or "C" in code:
             entries.pop(0)  # the source path of a rename or copy
         if code != "??" or not (path.startswith(f"{RUN_STATE}/") or path == LOCAL_SETTINGS):
-            return f"АБ6: the working tree has changes ({code} {path})"
+            return f"AB6: the working tree has changes ({code} {path})"
     return None
 
 
@@ -345,7 +345,7 @@ def git_env() -> dict:
 
 
 def fetched_tip(directory: str, default: str) -> str | None:
-    """АБ2: `git fetch origin <default>` into a ref of its own, so no other fetch can change
+    """AB2: `git fetch origin <default>` into a ref of its own, so no other fetch can change
     the SHA it compares (FETCH_HEAD is shared, review r1 F3); the SHA, else None."""
     ref = f"refs/captain-guard/fetch-{os.getpid()}-{os.urandom(4).hex()}"
     try:
@@ -384,7 +384,7 @@ def remote_state(directory: str, branch: str) -> tuple[str, str] | None:
 
 
 def checked_out_elsewhere(directory: str, branch: str) -> bool:
-    """АБ5: another worktree of this repository has `branch` checked out. `-z` keeps paths
+    """AB5: another worktree of this repository has `branch` checked out. `-z` keeps paths
     with quotes or newlines verbatim (review r1 F5)."""
     listing = git_out(directory, "worktree", "list", "--porcelain", "-z")
     top = git_out(directory, "rev-parse", "--show-toplevel")
@@ -547,7 +547,7 @@ def merge_problem(audit, command: str, cwd: str | None, session: str) -> tuple[s
             args = args[1:]
     if not directory or not os.path.isabs(directory):
         return "the working directory of this git command is unknown", FORM_REASON
-    grant = granted_branch(session, directory)  # bound to this repository (МГ1)
+    grant = granted_branch(session, directory)  # bound to this repository (MG1)
     sub, rest = args[0], args[1:]
     if sub in {"switch", "push"}:
         if rest[-1] != grant:
@@ -750,7 +750,7 @@ def handle(event: dict) -> None:
                 end_grant(session)
             set_mode(session, not wants_off(args), cwd, audit.starts_run(args))
             if not wants_off(args):
-                note = set_base(session, args, cwd, typed=False)  # БР1: the auto base
+                note = set_base(session, args, cwd, typed=False)  # BR1: the auto base
                 if note:
                     print(json.dumps({"hookSpecificOutput": {
                         "hookEventName": "PostToolUse", "additionalContext": note}},

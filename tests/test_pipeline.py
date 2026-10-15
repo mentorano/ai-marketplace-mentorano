@@ -79,7 +79,7 @@ class TestBoardSkeleton(Pipeline):
     def test_measured_values_are_filled_in(self):
         _, md = self.to_md(sample_json())
         self.assertIn("- state: in review", md)
-        self.assertIn("- position: 3 напред / 7 назад от base-а", md)
+        self.assertIn("- position: 3 ahead / 7 behind the base", md)
         self.assertIn("+340 −20", md)
         self.assertIn("#42 OPEN", md)
 
@@ -94,14 +94,14 @@ class TestBoardSkeleton(Pipeline):
             "pr": {"number": 9, "state": "MERGED", "title": "t",
                    "isDraft": False, "url": "https://example.test/9"}}))
         self.assertIn("- state: landed", md)
-        self.assertIn("PR #9 е merged (squash", md)
+        self.assertIn("PR #9 is merged (squash", md)
 
     def test_a_branch_with_only_incidental_docs_is_said_to_have_no_plan(self):
         _, md = self.to_md(sample_json(branch={"plans": [{
             "path": "docs/setup.md", "kind": "incidental", "title": "Setup",
             "goal": "", "checkboxes": {"done": 0, "todo": 0}, "tasks": [],
             "tasks_done": 0, "flags": [], "lines": 5}]}))
-        self.assertIn("няма собствен план", md)
+        self.assertIn("no plan of its own", md)
         self.assertIn("docs/setup.md", md)
 
     def test_pointers_are_grouped_separately(self):
@@ -119,18 +119,18 @@ class TestBoardSkeleton(Pipeline):
 class TestRender(Pipeline):
     def test_the_markdown_is_the_source_not_the_json(self):
         _, md = self.to_md(sample_json())
-        edited = md.replace("- author: Jane Doe", "- author: Някой Друг")
+        edited = md.replace("- author: Jane Doe", "- author: Someone Else")
         page = self.to_html(edited)
-        self.assertIn("Някой Друг", page)
+        self.assertIn("Someone Else", page)
         self.assertNotIn("Jane Doe", page)
 
     def test_prose_written_into_the_markdown_reaches_the_page(self):
         _, md = self.to_md(sample_json())
         edited = md.replace(
-            "TODO: една честна линия — какво е това и докъде е стигнало.",
-            "Това е човешката линия.", 1)
+            "TODO: one honest line — what this is and how far it got.",
+            "This is the human line.", 1)
         page = self.to_html(edited)
-        self.assertIn("Това е човешката линия.", page)
+        self.assertIn("This is the human line.", page)
 
     def test_an_unanswered_todo_renders_visibly_rather_than_vanishing(self):
         _, md = self.to_md(sample_json())
@@ -253,22 +253,22 @@ class TestHandWrittenMarkdown(Pipeline):
     def board_with(self, extra):
         _, md = self.to_md(sample_json())
         return md.replace(
-            "TODO: една честна линия — какво е това и докъде е стигнало.",
-            "Човешката линия.\n\n" + extra, 1)
+            "TODO: one honest line — what this is and how far it got.",
+            "The human line.\n\n" + extra, 1)
 
     def test_a_bullet_under_a_branch_stays_with_that_branch(self):
-        page = self.to_html(self.board_with("- чакаме ревю от инфра"))
+        page = self.to_html(self.board_with("- waiting for an infra review"))
         import re
         intro = re.findall(r'<p class="section__intro[^"]*">(.*?)</p>', page)
-        self.assertNotIn("чакаме ревю от инфра", " ".join(intro),
+        self.assertNotIn("waiting for an infra review", " ".join(intro),
                          "the note was moved to the top of the section")
-        self.assertIn("чакаме ревю от инфра", page)
+        self.assertIn("waiting for an infra review", page)
 
     def test_a_colon_in_a_hand_written_note_does_not_make_it_a_field(self):
-        page = self.to_html(self.board_with("- бележка: чакаме ревю от инфра"))
+        page = self.to_html(self.board_with("- note: waiting for an infra review"))
         import re
         keys = re.findall(r'<div class="k">(.*?)</div>', page)
-        self.assertNotIn("бележка", keys,
+        self.assertNotIn("note", keys,
                          "a human note is rendered as a measured field")
 
 

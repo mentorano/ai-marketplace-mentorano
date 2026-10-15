@@ -128,7 +128,7 @@ class HookCase(unittest.TestCase):
 
 
 class BoundaryHookTest(HookCase):
-    def dispatch(self, transcript: Path, description="Implement ЗД3: the export page",
+    def dispatch(self, transcript: Path, description="Implement ZD3: the export page",
                  kind="captain:worker", env=None, **extra) -> subprocess.CompletedProcess:
         event = {"hook_event_name": "PreToolUse", "tool_name": "Agent", "session_id": SESSION,
                  "transcript_path": str(transcript), "cwd": str(self.home),
@@ -150,10 +150,10 @@ class BoundaryHookTest(HookCase):
         self.assertIn("~300k", reason)
         self.assertIn("threshold 250k", reason)
         self.assertIn("`~/.claude/kickoffs/proj-captain.md`", reason)
-        self.assertIn("Контекстът е 300k", reason)
+        self.assertIn("Context is 300k", reason)
         self.assertIn("/captain resume", reason)
         self.assertIsNone(self.denial(self.dispatch(tr)), "the same dispatch goes through on retry")
-        self.assertIsNotNone(self.denial(self.dispatch(tr, description="Implement ЗД4: the import page")),
+        self.assertIsNotNone(self.denial(self.dispatch(tr, description="Implement ZD4: the import page")),
                              "another task is held again")
 
     SUPACODE_ENV = {"TERM_PROGRAM": "supacode", "SUPACODE_WORKTREE_ID": "%2Frepo%2F"}
@@ -173,10 +173,10 @@ class BoundaryHookTest(HookCase):
 
     def assert_supacode_steps(self, reason: str):
         for needle in ("Successor terminal", "write no kickoff yet", "`ListAgents`", "scripts/successor-tab.py",
-                       "STARTED", "reply ACK", "TaskStop for fallback sleeps", "наследникът <name> потвърди",
+                       "STARTED", "reply ACK", "TaskStop for fallback sleeps", "successor <name> confirmed",
                        "TAB-DEAD", "closed=no", "not reachable"):
             self.assertIn(needle, reason)
-        self.assertNotIn("напиши /clear", reason)
+        self.assertNotIn("type /clear", reason)
         self.assertIn("STAND-DOWN to it first) the /clear steps with the kickoff at "
                       "`~/.claude/kickoffs/proj-captain.md`", reason, "the fallback keeps the kickoff")
 
@@ -215,12 +215,12 @@ class BoundaryHookTest(HookCase):
         self.config()
         for env in (self.cmux_on_path(), {**self.CMUX_ENV, "PATH": "/usr/bin:/bin"}):
             with self.subTest(env=sorted(env)):
-                self.assertIn("напиши /clear, после `/captain resume`", self.held_reason(env))
+                self.assertIn("type /clear, then `/captain resume`", self.held_reason(env))
 
     def test_none_beats_a_cmux_session(self):
         self.captain_mode()
         self.config(successor_terminal="none")
-        self.assertIn("напиши /clear, после `/captain resume`",
+        self.assertIn("type /clear, then `/captain resume`",
                       self.held_reason({**self.CMUX_ENV, **self.cmux_on_path()}))
 
     def test_without_the_key_and_outside_supacode_it_is_clear(self):
@@ -231,7 +231,7 @@ class BoundaryHookTest(HookCase):
             with self.subTest(env=sorted(env)):
                 reason = self.held_reason(env)
                 self.assertIn("`~/.claude/kickoffs/proj-captain.md`", reason)
-                self.assertIn("напиши /clear, после `/captain resume`", reason)
+                self.assertIn("type /clear, then `/captain resume`", reason)
                 self.assertNotIn("Supacode", reason)
 
     def test_none_or_an_unknown_value_means_clear_even_in_supacode(self):
@@ -240,7 +240,7 @@ class BoundaryHookTest(HookCase):
                 self.captain_mode()
                 self.config(successor_terminal=value)
                 reason = self.held_reason({**self.SUPACODE_ENV, **self.supacode_on_path()})
-                self.assertIn("напиши /clear, после `/captain resume`", reason)
+                self.assertIn("type /clear, then `/captain resume`", reason)
                 self.assertNotIn("Supacode", reason)
 
     def test_below_the_threshold_nothing_happens(self):
@@ -252,9 +252,9 @@ class BoundaryHookTest(HookCase):
         tr = self.transcript(150_000)
         self.assertIsNone(self.denial(self.dispatch(tr)))  # default 250k
         self.config(context_threshold=100_000)
-        self.assertIn("threshold 100k", self.denial(self.dispatch(tr, description="Implement ЗД5: a")))
+        self.assertIn("threshold 100k", self.denial(self.dispatch(tr, description="Implement ZD5: a")))
         self.assertIn("threshold 120k", self.denial(self.dispatch(
-            tr, description="Implement ЗД6: b", env={"HANDOFF_CONTEXT_THRESHOLD": "120k"})))
+            tr, description="Implement ZD6: b", env={"HANDOFF_CONTEXT_THRESHOLD": "120k"})))
 
     def test_a_percentage_threshold_follows_the_model_window(self):
         self.captain_mode()
@@ -263,7 +263,7 @@ class BoundaryHookTest(HookCase):
         reason = self.denial(self.dispatch(tr, env=self.claude_stub(500_000)))
         self.assertIn("threshold 225k", reason)
         self.assertEqual(self.probes(), 1)
-        self.assertIsNone(self.denial(self.dispatch(self.model_transcript(200_000), description="Implement ЗД7: c",
+        self.assertIsNone(self.denial(self.dispatch(self.model_transcript(200_000), description="Implement ZD7: c",
                                                     env=self.claude_stub(500_000))), "200k < 225k")
         self.assertEqual(self.probes(), 1, "the window is cached")
 
@@ -278,8 +278,9 @@ class BoundaryHookTest(HookCase):
     def test_work_inside_a_task_is_not_a_boundary(self):
         self.captain_mode()
         tr = self.transcript(300_000)
-        for description in ("Review ЗД3 round 2", "Verify ЗД3 on the real data", "Fix ЗД3 findings",
-                            "Интегрирай ЗД3 и ЗД4", "Ревю на ЗД3"):
+        for description in ("Review ZD3 round 2", "Verify ZD3 on the real data", "Fix ZD3 findings",
+                            # deliberately Bulgarian: the hook also matches descriptions in the owner's language
+                            "Интегрирай ZD3 и ZD4", "Ревю на ZD3"):
             self.assertIsNone(self.denial(self.dispatch(tr, description=description)), description)
         for kind in ("captain:runner", "captain:deep", "general-purpose", ""):
             self.assertIsNone(self.denial(self.dispatch(tr, kind=kind)), kind)
@@ -287,8 +288,9 @@ class BoundaryHookTest(HookCase):
     def test_a_conflict_resolver_is_never_held(self):
         self.captain_mode()
         tr = self.transcript(300_000)
-        for description in ("Resolve the conflict in ЗД3", "Conflict on a.txt", "Разреши конфликта в ЗД3",
-                            "Конфликт при сливане", "resolver for ЗД4"):
+        # the two Cyrillic descriptions are deliberately Bulgarian: the hook matches the owner's language too
+        for description in ("Resolve the conflict in ZD3", "Conflict on a.txt", "Разреши конфликта в ZD3",
+                            "Конфликт при сливане", "resolver for ZD4"):
             self.assertIsNone(self.denial(self.dispatch(tr, description=description)), description)
 
     def test_a_merge_in_progress_in_the_checkout_is_not_a_boundary(self):
@@ -315,7 +317,7 @@ class BoundaryHookTest(HookCase):
         merge_head = subprocess.run(["git", "-C", str(tree), "rev-parse", "--path-format=absolute",
                                      "--git-path", "MERGE_HEAD"], capture_output=True, text=True).stdout.strip()
         Path(merge_head).write_text("0" * 40 + "\n", encoding="utf-8")
-        self.assertIsNone(self.denial(self.dispatch(tr, description="Finish ЗД3", cwd=str(repo))))
+        self.assertIsNone(self.denial(self.dispatch(tr, description="Finish ZD3", cwd=str(repo))))
 
     def test_subagents_and_other_tools_pass(self):
         self.captain_mode()
@@ -545,7 +547,7 @@ class HandoffTextTest(unittest.TestCase):
     def test_reference_carries_both_templates_and_the_name_rule(self):
         text = (SKILL_DIR / "reference" / "handoff.md").read_text(encoding="utf-8")
         for needle in ("You ARE the <project> captain, the successor", "~/.claude/kickoffs/<session",
-                       "customTitle", "Never mid-operation", "Контекстът е Nk", "kickoff-used",
+                       "customTitle", "Never mid-operation", "Context is Nk", "kickoff-used",
                        "## Handoff template", "## Kickoff template"):
             self.assertIn(needle, text)
 
@@ -560,7 +562,7 @@ class HandoffTextTest(unittest.TestCase):
                        "handoff=<path> from=<FROM> name=<NEW>", "arm no timer until `ACK <NEW>` arrives",
                        "FAILED TAB-DEAD <tab id> in=<worktree id> after=<N>s closed=yes|no", "the marker `<NEW>.alive`", "utils:new-session-tab", "FAILED NO-UTILS",
                        "closed=no", "*not reachable*", "2026-10-07", "a177ba90a",
-                       "наследникът не тръгна: tab-ът се отвори без терминал"):
+                       "the successor did not start: the tab opened without a terminal"):
             self.assertIn(needle, text)
         self.assertNotIn("(it waits in the successor's queue if it is still starting)", text)
         self.assertNotIn("supacode tab new", text.split("**Why:**")[0], "the tab is opened by the script only")
@@ -572,7 +574,7 @@ class HandoffTextTest(unittest.TestCase):
                        "No pull request, opened or proposed, unless the owner asks for one."):
             self.assertIn(needle, skill)
         setup = (PLUGIN / "skills" / "captain-setup" / "SKILL.md").read_text(encoding="utf-8")
-        for needle in ('"successor_terminal":"supacode|cmux|none"', "command -v supacode", "a177ba90a", "command -v cmux", "„В нов cmux tab в същия workspace“",
+        for needle in ('"successor_terminal":"supacode|cmux|none"', "command -v supacode", "a177ba90a", "command -v cmux", '"In a new cmux tab in the same workspace"',
                        "question 5 skipped → leave the key out", "a Supacode tab when the session runs in Supacode"):
             self.assertIn(needle, setup)
         queue = (SKILL_DIR / "reference" / "queue.md").read_text(encoding="utf-8")
@@ -581,7 +583,7 @@ class HandoffTextTest(unittest.TestCase):
     def test_setup_asks_for_the_threshold(self):
         text = (PLUGIN / "skills" / "captain-setup" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn('"context_threshold":250000', text)
-        self.assertIn('„45% от контекста на модела“ (препоръчвам) → `"45%"`', text)
+        self.assertIn('"45% of the model\'s context" (recommended) → `"45%"`', text)
         self.assertIn("handoff_at_boundary.py", text)
 
 

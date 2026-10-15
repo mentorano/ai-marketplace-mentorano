@@ -23,6 +23,7 @@ STATE_DIR = os.path.expanduser("~/.claude/hooks/state")
 # A bare task code ("T1: ...") must be PR-prefixed to count as a task START: reviews and fix waves
 # inside an existing task are also dispatched with that task's own code (e.g. "T1: address review
 # comments"), and must not be mistaken for the task starting.
+# The Bulgarian alternates are matched words, not text: a task described in Bulgarian still counts.
 TASK_START = re.compile(r"^\s*(implement|имплементирай|имплементация)\b|^\s*PR\d+\s+T\d+\b", re.IGNORECASE)
 TAIL_BYTES = 4 * 1024 * 1024
 
@@ -125,13 +126,13 @@ def config_threshold(cwd):
 def handover_line(k, cwd):
     """What the session says after writing its handoff: to the owner, or, for a cmux lane, to coord."""
     # The role is not guessed from cwd: sessions often run from the primary checkout whatever their role.
-    manual = (f"Tell the user in one line: 'Контекстът е {k}k — handoff е готов в <path>; напиши /clear, после "
-              "<first message> — kickoff-ът се зарежда сам.', where <first message> is `/coord` if you are coord, "
-              "`/coord lane` if you are a coord lane, else „давай“; then stop. ")
+    manual = (f"Tell the user in one line: 'Context is at {k}k — the handoff is ready at <path>; type /clear, then "
+              "<first message> — the kickoff loads by itself.', where <first message> is `/coord` if you are coord, "
+              "`/coord lane` if you are a coord lane, else \"go\"; then stop. ")
     if not cmux_automation(cwd):
         return manual
     return ("This project runs `automation: cmux`. If you are a coord LANE or the sprint's design/prototype "
-            "session: tell coord one line ('handoff в <path>; kickoff готов') and do NOT ask the user to /clear - "
+            "session: tell coord one line ('handoff at <path>; kickoff ready') and do NOT ask the user to /clear - "
             "coord restarts you in place; stop and stay idle. If you are coord itself or outside the sprint: " + manual)
 
 

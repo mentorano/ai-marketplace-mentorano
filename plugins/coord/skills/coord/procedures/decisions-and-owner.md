@@ -15,9 +15,9 @@ Architecture and contract rulings go to a vote first (`votes.md`); coord then ac
 - A permission refusal in any session: never routed around via another session.
 
 ## Away mode (product questions decided by vote)
-- On: the owner says „тръгвам“, „away“, „няма ме до …“; or a product question has had no answer for 20 minutes. Sending a product question arms a one-shot 20-minute timer (`CronCreate`, minute pinned from `date`, `recurring: false`, prompt `coord: AWAY <question>`; fallback: background `sleep 1200`); an answer cancels it (`CronDelete`). Off: the owner's next message.
-- While on: product questions go to a vote (`votes.md`) instead of waiting; lanes never wait on the owner. Irreversible choices and destructive/outward actions still wait (the "Чакат теб" list).
-- On the owner's return, the FIRST reply is the brief (`templates/owner-batch.md` §Brief): per ГЛn — question, winner, votes, what has been built on it since, how hard to reverse. The owner ratifies (then it goes to the amendments doc as an owner decision) or reverses (the affected lanes get ОТГОВОР/ВНЕСИ).
+- On: the owner says "leaving", "away", "away until …"; or a product question has had no answer for 20 minutes. Sending a product question arms a one-shot 20-minute timer (`CronCreate`, minute pinned from `date`, `recurring: false`, prompt `coord: AWAY <question>`; fallback: background `sleep 1200`); an answer cancels it (`CronDelete`). Off: the owner's next message.
+- While on: product questions go to a vote (`votes.md`) instead of waiting; lanes never wait on the owner. Irreversible choices and destructive/outward actions still wait (the "Waiting on you" list).
+- On the owner's return, the FIRST reply is the brief (`templates/owner-batch.md` §Brief): per GLn — question, winner, votes, what has been built on it since, how hard to reverse. The owner ratifies (then it goes to the amendments doc as an owner decision) or reverses (the affected lanes get ANSWER/MERGE-IN).
 
 ## How to ask (`templates/owner-batch.md`)
 - [ ] One batch, not a drip. Each item: context in one line, options, **recommendation with reasoning**, what happens meanwhile (the safe default being built), deadline if any.
@@ -27,8 +27,8 @@ Architecture and contract rulings go to a vote first (`votes.md`); coord then ac
 
 ## Waiting on the owner
 Several sessions can be stuck on one owner action (a `/clear`, an approval, an answer) at once, and the owner cannot see that across tabs. Coord keeps the list and shows it.
-- [ ] An entry = session + the one action it needs, e.g. `app-api - /clear (handoff готов)`, `app-web - одобрение за миграция`. Add when a session reports it waits on the owner or coord asks the owner something that blocks a session; remove when the action happened.
-- [ ] Show it as the last line of a reply to the owner **only when it changed** since the last reply: "**Чакат теб:** <entry> · <entry>". Empty after a change: "**Чакат теб:** никой". Never repeat an unchanged list.
+- [ ] An entry = session + the one action it needs, e.g. `app-api - /clear (handoff ready)`, `app-web - approve the migration`. Add when a session reports it waits on the owner or coord asks the owner something that blocks a session; remove when the action happened.
+- [ ] Show it as the last line of a reply to the owner **only when it changed** since the last reply: "**Waiting on you:** <entry> · <entry>". Empty after a change: "**Waiting on you:** nobody". Never repeat an unchanged list.
 - [ ] Re-derive before showing: `ls ~/.claude/kickoffs/*.md` (a kickoff not yet moved to `kickoff-used/` = that session still waits for `/clear`) and `ListAgents`. Why: a remembered "waits for /clear" goes stale the moment the owner acts in another tab.
 - [ ] In cmux mode coord does lane restarts itself (`cmux-automation.md`); only coord's own `/clear` and non-restart actions land on the list.
 - [ ] A handoff does not carry the list (it is state); the successor rebuilds it with the commands above.

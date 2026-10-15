@@ -40,7 +40,7 @@ cd <worktree> && claude          # then: /rename <session name>
 Then the design session if any. Ask the owner to reply when all are open; do not message a lane that does not exist yet.
 
 ## 5. First wave
-- [ ] Expect СТАРТ from each lane; answer hotspot waits with ЧИСТО.
+- [ ] Expect START from each lane; answer hotspot waits with ALL-CLEAR.
 - [ ] A seam-hardening slice (registries made append-only, shared types extracted) lands first if proposed.
 - [ ] Switch to `operate.md`.
 

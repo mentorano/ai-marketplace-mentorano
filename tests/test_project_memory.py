@@ -188,7 +188,7 @@ class HealthTest(Case):
         self.assertEqual(rep["totals"]["files"], 0)
         [rec] = rep["files"]
         self.assertEqual((rec["file"], rec["kind"]), ("notes.txt", "other"))
-        self.assertTrue(rec["violations"][0].startswith("ФМ7"))
+        self.assertTrue(rec["violations"][0].startswith("FM7"))
 
     def test_readme_not_a_regular_file_is_fm7(self):
         (self.mem / "README.md").unlink()
@@ -196,7 +196,7 @@ class HealthTest(Case):
         (self.mem / "README.md" / "nested.md").write_text(topic("nested"), encoding="utf-8")
         rep = self.status()
         self.assertEqual(rep["level"], "due")
-        self.assertTrue(rep["files"][0]["violations"][0].startswith("ФМ7"))
+        self.assertTrue(rep["files"][0]["violations"][0].startswith("FM7"))
         p = self.run_memory("init")
         self.assertEqual(p.returncode, 1)
         self.assertIn("not a regular file", p.stderr)
@@ -241,64 +241,64 @@ class FormatTest(Case):
 
     def test_fm1_name_not_stem(self):
         self.write("alpha.md", topic("beta"))
-        self.assert_rule("alpha.md", "ФМ1")
+        self.assert_rule("alpha.md", "FM1")
 
     def test_fm1_no_frontmatter(self):
         self.write("plain.md", "just text\n")
-        self.assert_rule("plain.md", "ФМ1")
+        self.assert_rule("plain.md", "FM1")
 
     def test_fm2_bad_name(self):
         self.write("bad name.md", topic("bad name"))
-        self.assert_rule("bad name.md", "ФМ2")
+        self.assert_rule("bad name.md", "FM2")
         self.write(".hidden.md", topic(".hidden"))
-        self.assert_rule(".hidden.md", "ФМ2")
+        self.assert_rule(".hidden.md", "FM2")
 
     def test_fm3_case_twins(self):
         self.write("Deploy.md", topic("Deploy"))
         self.write("deploy.md", topic("deploy"))
         names = {r["file"] for r in self.status()["files"]}
         if len(names) == 2:
-            self.assert_rule("Deploy.md", "ФМ3")
-            self.assert_rule("deploy.md", "ФМ3")
+            self.assert_rule("Deploy.md", "FM3")
+            self.assert_rule("deploy.md", "FM3")
         # A case-insensitive file system cannot hold both files: check the rule itself.
         recs = [{"file": f, "kind": "file", "violations": []} for f in ("Deploy.md", "deploy.md", "x.md")]
         mem.mark_case_twins(recs)
         readme_twin = [{"file": "readme.md", "kind": "file", "violations": []}]
         mem.mark_case_twins(readme_twin)
-        self.assertTrue(readme_twin[0]["violations"][0].startswith("ФМ3"), readme_twin)
-        self.assertTrue(recs[0]["violations"][0].startswith("ФМ3"))
-        self.assertTrue(recs[1]["violations"][0].startswith("ФМ3"))
+        self.assertTrue(readme_twin[0]["violations"][0].startswith("FM3"), readme_twin)
+        self.assertTrue(recs[0]["violations"][0].startswith("FM3"))
+        self.assertTrue(recs[1]["violations"][0].startswith("FM3"))
         self.assertEqual(recs[2]["violations"], [])
 
     def test_fm4_description(self):
         self.write("long.md", topic("long", description="w" * 161))
-        self.assert_rule("long.md", "ФМ4")
+        self.assert_rule("long.md", "FM4")
         self.write("edge.md", topic("edge", description="w" * 160))
         self.assertEqual(self.violations("edge.md"), [])
         self.write("multi.md", "---\nname: multi\ndescription: >\n  one\n  two\n---\nbody\n")
-        self.assert_rule("multi.md", "ФМ4")
+        self.assert_rule("multi.md", "FM4")
         self.write("quoted.md", topic("quoted", description="'Read ''billing'' " + "x" * 160 + "'"))
-        self.assert_rule("quoted.md", "ФМ4")
+        self.assert_rule("quoted.md", "FM4")
         self.write("nodesc.md", "---\nname: nodesc\n---\nbody\n")
-        self.assert_rule("nodesc.md", "ФМ4")
+        self.assert_rule("nodesc.md", "FM4")
 
     def test_fm5_empty_paths(self):
         self.write("p.md", "---\nname: p\ndescription: Read first.\npaths:\n---\nbody\n")
-        self.assert_rule("p.md", "ФМ5")
+        self.assert_rule("p.md", "FM5")
 
     def test_fm6_source_updated(self):
         self.write("s.md", "---\nname: s\ndescription: Read first.\nsource: run-1\n"
                            "updated: 2026-01-01\nowner: kept\n---\nbody\n")
         found = self.violations("s.md")
-        self.assertEqual(sum(v.startswith("ФМ6") for v in found), 2, found)
+        self.assertEqual(sum(v.startswith("FM6") for v in found), 2, found)
 
     def test_fm7_subdirectory_and_symlink(self):
         (self.mem / "nested").mkdir()
         (self.mem / "nested" / "x.md").write_text(topic("x"), encoding="utf-8")
         self.write("real.md", topic("real"))
         os.symlink("real.md", self.mem / "alias.md")
-        self.assert_rule("nested", "ФМ7")
-        self.assert_rule("alias.md", "ФМ7")
+        self.assert_rule("nested", "FM7")
+        self.assert_rule("alias.md", "FM7")
         rep = self.status()
         self.assertEqual(rep["totals"]["files"], 1)
         self.assertEqual(rep["level"], "due")
@@ -310,8 +310,8 @@ class FormatTest(Case):
     def test_fm8_empty_and_frontmatter_only(self):
         self.write("empty.md", "  \n")
         self.write("fmonly.md", "---\nname: fmonly\ndescription: Read first.\n---\n\n")
-        self.assert_rule("empty.md", "ФМ8")
-        self.assert_rule("fmonly.md", "ФМ8")
+        self.assert_rule("empty.md", "FM8")
+        self.assert_rule("fmonly.md", "FM8")
 
     def test_broken_files_are_violations_not_crashes(self):
         self.write("binary.md", b"---\nname: binary\n\xff\xfe\n---\n")
@@ -521,7 +521,7 @@ class InitTest(Case):
         self.assertIn("parent directory is excluded", out)
 
     def test_old_readme_with_budget_kept_and_not_broken(self):
-        # A repo initialised before БЮ1 keeps its README; init and status do not flag it.
+        # A repo initialised before BYU1 keeps its README; init and status do not flag it.
         self.mem.mkdir()
         old = ("# Project memory\n\n**Budget and format.** At most 1-2 files per session; "
                "prefer editing an existing file.\n")
@@ -569,7 +569,7 @@ class ReadmeTextTest(unittest.TestCase):
             self.assertIn(phrase, text)
 
     def test_no_per_session_file_budget(self):
-        # Owner decision БЮ1: no count limit on memory files per session.
+        # Owner decision BYU1: no count limit on memory files per session.
         text = mem.README_TEXT
         for phrase in ("1-2", "1–2", "per session", "Budget", "At most"):
             self.assertNotIn(phrase, text)

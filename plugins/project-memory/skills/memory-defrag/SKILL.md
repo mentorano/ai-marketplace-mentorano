@@ -1,6 +1,6 @@
 ---
 name: memory-defrag
-description: Use when the user asks to defragment, consolidate, clean up or restructure the committed project memory in `.agent-memory/`, e.g. "/project-memory:memory-defrag", "defrag the project memory", "memory is overdue", „дефрагментирай паметта", „подреди .agent-memory", or after the project-memory session-start line reported the memory health as due or overdue and the user agreed. Dispatches one general-purpose subagent that merges, splits and trims the memory files, then prunes emptied files and shows the full diff. Never commits.
+description: Use when the user asks to defragment, consolidate, clean up or restructure the committed project memory in `.agent-memory/`, e.g. "/project-memory:memory-defrag", "defrag the project memory", "memory is overdue", or after the project-memory session-start line reported the memory health as due or overdue and the user agreed. Dispatches one general-purpose subagent that merges, splits and trims the memory files, then prunes emptied files and shows the full diff. Never commits.
 ---
 
 # Defragment project memory

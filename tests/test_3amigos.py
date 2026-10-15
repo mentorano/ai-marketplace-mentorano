@@ -177,13 +177,13 @@ class TallyTest(unittest.TestCase):
         self.assertEqual([r["kind"] for r in rows], ["agree", "agree"])
         self.assertEqual(rows[0]["decision"], {"verdict": ["a", "b"]})
 
-    def test_string_values_ignore_case_and_whitespace(self):  # ПД1
+    def test_string_values_ignore_case_and_whitespace(self):  # PD1
         _, rows = self.tally({"codex": [{"id": 1, "verdict": "Keep "}], "fable": [{"id": 1, "verdict": "keep"}],
                               "opus": [{"id": 1, "verdict": "cut"}]})
         self.assertEqual(rows[0]["kind"], "majority")
         self.assertEqual(rows[0]["decision"], {"verdict": "Keep "})  # as the first majority voter wrote it
 
-    def test_first_field_is_primary_and_secondary_fields_get_details(self):  # ПД2
+    def test_first_field_is_primary_and_secondary_fields_get_details(self):  # PD2
         def item(i, v, who):
             return {"id": i, "verdict": v, "assignee": who}
         summary, rows = self.tally({
@@ -208,7 +208,7 @@ class TallyTest(unittest.TestCase):
         votes = {v: {"verdict": x} for v, x in (("a", "keep"), ("b", "keep"), ("c", "cut"), ("d", "cut"))}
         self.assertEqual(tally.judge(votes, ["verdict"], 3)[0], "split")
 
-    def test_summary_lists_ids_each_voter_did_not_vote_on(self):  # ПД5
+    def test_summary_lists_ids_each_voter_did_not_vote_on(self):  # PD5
         summary, _ = self.tally({
             "codex": [{"id": 1, "verdict": "keep"}, {"id": 2, "verdict": "keep"}, {"id": 3, "verdict": "keep"}],
             "fable": [{"id": 1, "verdict": "keep"}, {"id": 3}],

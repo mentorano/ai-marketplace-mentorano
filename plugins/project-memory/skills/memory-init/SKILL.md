@@ -1,6 +1,6 @@
 ---
 name: memory-init
-description: Use when the user asks to set up, enable, initialise or repair committed project memory in this repository, e.g. "/project-memory:memory-init", "set up project memory", "enable .agent-memory", "repair the project-memory symlink", „включи project memory", „настрой паметта на проекта", or when the project-memory session-start line says the layout is broken. Creates `.agent-memory/`, its `README.md` with the write rules and the `.claude/rules/project-memory` symlink, only what is missing. Never commits.
+description: Use when the user asks to set up, enable, initialise or repair committed project memory in this repository, e.g. "/project-memory:memory-init", "set up project memory", "enable .agent-memory", "repair the project-memory symlink", or when the project-memory session-start line says the layout is broken. Creates `.agent-memory/`, its `README.md` with the write rules and the `.claude/rules/project-memory` symlink, only what is missing. Never commits.
 ---
 
 # Set up project memory

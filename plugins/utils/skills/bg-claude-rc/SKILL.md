@@ -1,6 +1,6 @@
 ---
 name: bg-claude-rc
-description: Use when the user asks to start a new Claude Code session in the background to continue there — usually because the current context is full or they are away from the laptop — e.g. "start a new claude in the background", "new session I can continue from my phone", "remote control session", „пусни нов claude в background", „нова сесия да продължа там", „пусни ми claude instance". Starts `claude --bg --remote-control` in the same repository with the name <repo-slug>-<YYYYMMDD>-rc<N> and returns the session link.
+description: Use when the user asks to start a new Claude Code session in the background to continue there — usually because the current context is full or they are away from the laptop — e.g. "start a new claude in the background", "new session I can continue from my phone", "remote control session". Starts `claude --bg --remote-control` in the same repository with the name <repo-slug>-<YYYYMMDD>-rc<N> and returns the session link.
 ---
 
 # New background Claude Code session with Remote Control

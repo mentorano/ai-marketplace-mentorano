@@ -52,12 +52,12 @@ All three job ids (or fallback task ids) go into `run.md` under `## Timers`.
 work in progress on your branch now, do not push or merge unreviewed work,
 and report." No new review starts after park (R6).
 **On deadline:** start R17. When nothing runs and only the owner's `!` commands wait
-(`reference/queue.md`), first say in one line what R17 does now (e.g. "Deadline: спирам
-всички timers и записвам реда в runs.jsonl; командите ти остават валидни"), then do it; or wait
+(`reference/queue.md`), first say in one line what R17 does now (e.g. "Deadline: stopping
+all timers and writing the runs.jsonl line; your commands stay valid"), then do it; or wait
 for the owner's next output.
 **Why:** 30.09.2026: at the deadline main deleted the health timer and launched a runs.jsonl
-agent without a word while the owner waited on `!` commands; the owner wrote "спри несщо се
-бъгана и не видях какво се случва".
+agent without a word while the owner waited on `!` commands; the owner wrote "stop, something
+got stuck and I did not see what is happening".
 
 ## Agent lifecycle (R13)
 
@@ -85,15 +85,15 @@ past ~20% of its window gets slower and starts to drop older instructions.
 
 - A new owner request while the writer is busy → a new `run.md` `## Tasks` row, state
   `queued`, and one line to the owner with its ID. Do not `SendMessage` it to the busy
-  writer. A correction or clarification of the task in progress ("не ги сливай, само ги
-  подреди") is not a new task: send it at once.
+  writer. A correction or clarification of the task in progress ("do not merge them, just
+  order them") is not a new task: send it at once.
 - The writer's completion notification → measure it:
   `python3 '<skill root>/scripts/agent-context.py' <agentId>`. The line ends in `keep` or
   `replace` (`replace` = at least 20% of a 1M-token window; `unknown replace` and
   `not found replace` = no measurement, treat it as full). Write it in the agent's `Context` column.
 - `keep` → `SendMessage` the next queued task, or the review findings (R6), to the same
   writer. A loop that ended clean (no FIX NOW) is merged first, either way: main merges at once
-  (`reference/queue.md`, the merge flow step 1), the `ЗДn` row becomes `merged`, a runner runs
+  (`reference/queue.md`, the merge flow step 1), the `ZDn` row becomes `merged`, a runner runs
   the tests on the merged head, and the R5 push gate comes after.
 - `replace` → `TaskStop` the writer if it has not ended, mark its row `replaced`, and launch
   a fresh `captain:worker` with the hand-off prompt (`reference/prompts.md`) and the next
@@ -112,11 +112,11 @@ agent running at a check → `CronDelete` the health job and blank its id in `##
 next agent launch re-arms it. A check with nothing to watch prints no empty line.
 
 **Output.** Every check ends with exactly one line to the owner, built from `run.md` in the
-R11 status format, e.g. `Минаха 42 от 120 минути; ЗД3 тече (12/35 мин); ЗД4 чака review.`
+R11 status format, e.g. `42 of 120 minutes gone; ZD3 running (12/35 min); ZD4 waiting for review.`
 This line is the explicit exception to R12's "one line per real event": it is printed even
-when nothing changed. It is not a report: no `Остава:` list, no next-step line. A correction
-or cut made in this check goes into this same line with its R19 ID (e.g. `ЗД3 стои 20 мин →
-пуснат отново (КР1)`), never a second line.
+when nothing changed. It is not a report: no `Remaining:` list, no next-step line. A correction
+or cut made in this check goes into this same line with its R19 ID (e.g. `ZD3 idle 20 min →
+restarted (KR1)`), never a second line.
 **Why:** 15 sessions, 09–13.10.2026: a silent health check drew 4 harness nags "Your previous
 response had no visible output"; 43 checks in 15 sessions also filled the context.
 
@@ -147,7 +147,7 @@ response had no visible output"; 43 checks in 15 sessions also filled the contex
 5. Re-arm the fallback `sleep 900` if it is in use and an agent still runs; arm the one-shot
    check for the earliest agent limit or park that falls before the next check.
 6. Print the one status line (above), with any correction or cut of this check and its R19
-   ID inside it. Nothing else: never "нищо ново", never a report.
+   ID inside it. Nothing else: never "nothing new", never a report.
 
 ## Correction ladder
 

@@ -90,7 +90,7 @@ path replaces the page at the same URL, so a link a colleague bookmarked keeps
 working as the board is re-run. Commit `BOARD.md`: its diff between two runs is
 a readable record of what moved.
 
-The page and the `BOARD.md` skeleton are in Bulgarian. The plan reader
+The page and the `BOARD.md` skeleton are in English. The plan reader
 understands goal and task headings in Bulgarian and English.
 
 What the collector guarantees, in one line each:
@@ -131,13 +131,13 @@ requests unless the user asks. The one exception is a dev or test target the
 user listed (`dev_targets` in the config, confirmed once): it runs after review,
 with the real endpoint checked first. Agents report once, in at most 8 lines;
 the 15-minute health check prints one status line; every status, park and end
-report ends with an `Остава:` list from the run state. A run that fixes a given
+report ends with a `Remaining:` list from the run state. A run that fixes a given
 list (`mode: fix-all`) uses TODO only as the last resort. Since 0.12.0 a reviewed agent branch is merged at once,
 without asking, into the run's feature branch and into a base branch the user
 confirmed by typing `/captain base <branch>` (never `main`, `master` or the default branch, which
 stay gated by `/captain merge <branch>`). In conversation and in status lines the
-coordinator is called „Капитана“ (address form „Капитане“); it may also be
-called „Капитан Петров“ — both names mean this role.
+coordinator is called the Captain („Капитана“, address form „Капитане“, also
+„Капитан Петров“) — all these names mean this role.
 
 It exists because the same failures kept coming back in long coordinated runs:
 the main session doing real work itself, reviews after the fact, two agents
@@ -155,7 +155,7 @@ writes `~/.claude/captain/config.json` and the wrapper
 
 The skill starts only when you name it (argument hint `[<timebox>] [away]`).
 Model invocation stays allowed, so asking Claude to "use the captain skill" or
-„пусни капитана за 30 минути" works as well as the slash command; the
+"start the captain for 30 minutes" works as well as the slash command; the
 description tells Claude never to start a run on its own. Invoke it
 as `/captain:captain [<timebox>] [away]`, e.g. `/captain:captain 30m` or
 `/captain:captain 1h away`; the arguments are order-free. Plain `/captain`
@@ -264,7 +264,7 @@ sessions: a coordinator (`/coord`) that alone merges into the integration
 branch, keeps one migration head, the contracts between lanes and a live board;
 implementer lanes (`/coord lane`), each in its own git worktree with its own
 test database and ports, that talk only to the coordinator through a small
-keyword protocol (СТАРТ, КАЦНА, ВЪПРОС, БЛОКИРАН, ПРИЕТО from lanes; СЛИТО, ВНЕСИ, ОТГОВОР, ЧИСТО, ПРИЕТО, СПРИ, ПАРК from coord); an optional
+keyword protocol (START, LANDED, QUESTION, BLOCKED, ACCEPTED from lanes; MERGED, MERGE-IN, ANSWER, ALL-CLEAR, ACCEPTED, STOP, PARK from coord); an optional
 design session; and the human owner, who gets product questions in batches,
 each with a recommendation.
 
@@ -290,7 +290,7 @@ on every lane push. Each rule in the skill names the incident that produced it.
   coord runs build + a ~3-minute smoke set per merge batch; full suites run at
   the end of a scope and for batches touching high-risk paths.
 - A scope can get a deadline: real one-shot timers fire a forecast at 50 %,
-  ПАРК (finish the slice, start nothing new) at 85 %, and merge + full suites +
+  PARK (finish the slice, start nothing new) at 85 %, and merge + full suites +
   report at the deadline.
 - Contested architecture/contract rulings, and product questions while the
   owner is away, go to a three-model vote (Codex via `scripts/vote.py`,

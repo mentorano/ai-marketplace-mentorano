@@ -36,7 +36,7 @@ context_threshold: 250000
 
 Others read owned data through the owner's service functions/API only.
 
-## Hotspots (append-only; name in СТАРТ)
+## Hotspots (append-only; name in START)
 - e.g. router list, model registry, job handler registry, route/nav array, dependency manifests.
 - e.g. a shared stylesheet: append-only for all; or give it one owner and list it under that lane's owned files instead of here.
 - Frozen files (extend via new per-feature files): ...

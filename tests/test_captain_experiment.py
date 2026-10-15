@@ -37,8 +37,8 @@ def contestant(agent: str, *, finished: bool = True, rounds: int = 1, minutes: f
 
 
 def duel(winner: str, a: dict, b: dict, c: dict) -> dict:
-    return {"date": "2026-09-30", "repo": "r", "run": "20260930", "task": "ЗД1 x",
-            "light_test": ["КЛ1"], "duel_reason": "test",
+    return {"date": "2026-09-30", "repo": "r", "run": "20260930", "task": "ZD1 x",
+            "light_test": ["KL1"], "duel_reason": "test",
             "contestants": {"A": a, "B": b, "C": c},
             "winner": winner, "judge_reason": "because", "reviewer": "codex"}
 

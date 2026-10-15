@@ -25,10 +25,10 @@ commands: see R7 and R8.
 | Product / scope | what to build, what to drop | present: the owner; away: full consensus (3amigos panel), every question | present: the question; away: `decisions.md` |
 
 **Present mode:** product and scope questions go to the owner one at a time with
-`AskUserQuestion`: the question with an R19 ID, options with their own IDs (`ОП1`, `ОП2`),
+`AskUserQuestion`: the question with an R19 ID, options with their own IDs (`OP1`, `OP2`),
 one marked recommended. When time allows (see Time below), main runs a 3amigos panel on the
 question first, and the panel result is the recommendation shown with the options
-(„препоръка след 3amigos: ОП2“). No time → main's own recommendation, marked as such. Act on
+("recommendation after 3amigos: OP2"). No time → main's own recommendation, marked as such. Act on
 each answer at once. An answer that touches files a running writer owns goes to that writer
 by `SendMessage`; otherwise launch an agent. Related follow-ups go to one agent.
 
@@ -78,7 +78,7 @@ the skill shows on load is the `<skill dir>` passed to the runner.
 
 **Mapping.** A captain question becomes a 3amigos triage task:
 
-- each decision ID (`ОВ1`, `ОВ2`) is one item; several open decisions go in one panel;
+- each decision ID (`OV1`, `OV2`) is one item; several open decisions go in one panel;
 - `verdict` is the option letter (`A`, `B`, `C`), the options listed per item in `data.md`;
 - `reason` is one sentence;
 - `tally.py --list items --id id --fields verdict --voters 3`;

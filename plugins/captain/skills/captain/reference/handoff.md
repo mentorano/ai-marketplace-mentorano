@@ -59,8 +59,8 @@ not as state.
 3. [ ] A `captain:runner` writes the kickoff (template below) to `~/.claude/kickoffs/<session
    name>.md`, and ONLY there. Main gives it the kickoff text and the name; the runner needs a
    `Write` permission for `~/.claude/kickoffs/` (R15 step 3; ask the owner once).
-4. [ ] Tell the owner one line, Bulgarian, then stop:
-   „Контекстът е Nk — handoff в <path>; напиши /clear, после `/captain resume`“.
+4. [ ] Tell the owner one line, in the owner's language, then stop:
+   "Context is Nk — handoff at <path>; type /clear, then `/captain resume`".
 5. The owner types `/clear`, then `/captain resume`. The kickoff hook injects the file and moves
    it to `~/.claude/kickoffs/kickoff-used/`; the owner's message starts the turn.
 
@@ -114,9 +114,10 @@ With a Supacode or cmux tab, after steps 1-2 and instead of steps 3-5:
      `FAILED TAB-DEAD <tab id> in=<worktree id> after=<N>s closed=yes|no`: the tab opened, but no
      marker came in N seconds, so nothing ran in it. The script has closed that tab
      (`closed=yes`); with `closed=no` give the owner the close command. The owner line names the
-     cause, e.g. „наследникът не тръгна: tab-ът се отвори без терминал (TAB-DEAD след 20 s, tab-ът
-     е затворен); вероятно екранът беше изключен — продължавам с /clear“ (`closed=no`: „затвори
-     tab-а с `! supacode tab close -w <worktree id> -t <tab id>`“ instead of „tab-ът е затворен“). (cmux has no such code; its failures are `NO-CMUX`,
+     cause, e.g. "the successor did not start: the tab opened without a terminal (TAB-DEAD after
+     20 s, the tab is closed); the display was probably off — continuing with /clear" (`closed=no`:
+     "close the tab with `! supacode tab close -w <worktree id> -t <tab id>`" instead of "the tab
+     is closed"). (cmux has no such code; its failures are `NO-CMUX`,
      `CMUX-ERROR`, `TAB-NEW-FAILED` and `TAB-DEAD` with `<surface ref> in=<workspace id or ->`,
      same `/clear` fallback.)
    The close command always names the worktree, since `tab close` without `-w` acts on the
@@ -144,11 +145,11 @@ With a Supacode or cmux tab, after steps 1-2 and instead of steps 3-5:
 5. [ ] `SendMessage` NEW: `ACK <NEW>`, then every owner instruction given since the handoff was
    written (mode, box, „I am away“), verbatim. End every timer in `run.md` `## Timers`
    (`CronDelete` per job id, `TaskStop` per fallback `sleep` task id, the step-4 sleep too). Tell
-   the owner one line, Bulgarian, then stop: „Контекстът е Nk — handoff в <path>; наследникът
-   <NEW> потвърди в <pwd>; този tab може да се затвори“.
+   the owner one line, in the owner's language, then stop: "Context is Nk — handoff at <path>;
+   successor <NEW> confirmed in <pwd>; this tab can be closed".
 
 The tab command is pure ASCII and all free text lives in the prompt file: Supacode's `-i`
-double-encodes UTF-8, so a Bulgarian prompt or an em dash arrives garbled (probe 2026-10-02).
+double-encodes UTF-8, so a non-ASCII prompt (Cyrillic text, an em dash) arrives garbled (probe 2026-10-02).
 The permission mode is mirrored (auto, acceptEdits, dontAsk; else the default) so the
 successor neither stops on approvals at night nor holds cross-session messages.
 
@@ -185,7 +186,7 @@ The kickoff file is named by the session, never by the directory: two sessions c
 cwd. The name is the one the owner gave with `/rename`; when the session was renamed later,
 the LAST `customTitle` / `agentName` record of its transcript wins. The hook resolves it and
 prints it in its denial, so use that name. A session with no name has no kickoff address: ask
-the owner „Дай име на сесията: `/rename <име>`“ before step 3. There is no repo-file fallback.
+the owner "Name the session: `/rename <name>`" before step 3. There is no repo-file fallback.
 
 ## Handoff template
 
@@ -206,7 +207,7 @@ Project memory: the `Project memory` line and `## Memory candidates` stay in run
 - **<id> - <title>.** <one or two lines: what it binds>.
 
 ## 2. Rulings and owner answers
-- **<id> - <the owner's words in Bulgarian, verbatim>.** <what it settled>.
+- **<id> - <the owner's words, verbatim>.** <what it settled>.
 
 ## 3. Open questions for the owner
 1. **<id>:** <question - recommendation - what waits on it>.
@@ -215,7 +216,7 @@ Project memory: the `Project memory` line and `## Memory candidates` stay in run
 - **<lesson>.** <the incident in one line, the rule>.
 
 ## 5. First action
-<the one concrete next step, e.g. "launch the writer for ЗД4 with the R3 frame">
+<the one concrete next step, e.g. "launch the writer for ZD4 with the R3 frame">
 ```
 
 ## Kickoff template
@@ -248,7 +249,7 @@ The run is not new: no bootstrap, no new run directory, no plan.
    session's working directory, as its environment states it>`, then end the turn. Launch
    nothing and arm no timer until `ACK <NEW>` arrives; its owner instructions bind like the
    handoff's. `STAND-DOWN`, also one already queued when this session starts → tell the owner
-   one line, „Спрях: <reason>; run-ът продължава в старата сесия“, and do nothing more.
+   one line, "Stopped: <reason>; the run continues in the old session", and do nothing more.
 3. Re-arm timers and monitors per the Resume bullet under Timers in `reference/health.md`: `CronList`,
    keep the matching jobs, create the missing ones, record the ids in `run.md`, re-check
    `date` against park and deadline. A box that has run out → R17.

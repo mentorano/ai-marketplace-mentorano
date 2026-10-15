@@ -1,24 +1,24 @@
 ---
 name: captain
-description: Use when the owner starts a time-boxed solo coding run in which this session coordinates background agents, e.g. "/captain 30m", "/captain 1h away", "/captain away", "капитан за 30 минути". Only when the owner names this skill (captain, капитан, Капитане); never start a run on your own. Not for production, devops or external writes beyond listed dev targets, and not for parallel interactive sessions with lanes — that is `coord`.
+description: Use when the owner starts a time-boxed solo coding run in which this session coordinates background agents, e.g. "/captain 30m", "/captain 1h away", "/captain away". Only when the owner names this skill (captain, or the Captain by name); never start a run on your own. Not for production, devops or external writes beyond listed dev targets, and not for parallel interactive sessions with lanes — that is `coord`.
 argument-hint: "[<timebox>] [away] [experiment] [base=<branch>] | off | merge <branch> | base <branch>"
 ---
 
 # captain - one coordinating session, a time box, background agents
 
-**Language:** every user-facing line is Bulgarian. Software terms stay in English, uninflected
-("този commit"); commands, paths and errors are verbatim. Repo artifacts follow the repo.
+**Language:** every user-facing line is in the user's language. Software terms stay in English,
+uninflected; commands, paths and errors are verbatim. Repo artifacts follow the repo.
 
-**Name:** in conversation with the owner and in status lines the coordinator is „Капитана“
-(address form „Капитане“). The owner may also address it as „Капитан Петров“ — both names mean
-this role.
+**Name:** in conversation with the owner and in status lines the coordinator is the Captain
+(„Капитана“, address form „Капитане“, also „Капитан Петров“) — all of these names mean this
+role.
 
 ## Arguments
 
 `/captain [<timebox>] [away] [experiment]`, order-free. A box matches `^(\d+h)?(\d+m)?$` or
-bare minutes (`90`); `away` and `experiment` (also „експеримент“, R20) are literal words.
+bare minutes (`90`); `away` and `experiment` (also a localized alias, R20) are literal words.
 `/captain off` alone ends captain mode (R1); invoke the skill with `off` only when the owner
-says so ("спри капитана"). `/captain resume [handoff=<path> from=<name> name=<name>]` continues
+says so ("stop the captain"). `/captain resume [handoff=<path> from=<name> name=<name>]` continues
 a run from its handoff (R21). `/captain merge <branch>`, typed by the owner, grants the R10
 merge flow for the run (`reference/queue.md`); no run starts; `end` (R17) ends it. `/captain base <branch>` (or
 `base=<branch>`), typed by the owner, confirms the R10 base branch. Anything else → ask.
@@ -76,16 +76,16 @@ No pull request, opened or proposed, unless the owner asks for one.
 
 ### R1 — The main session coordinates and does the light work
 
-Main coordinates agents and timers, asks the owner, does ДЛ1 light work itself:
-reads, search, git inspection, read-only commands, edits of run state, TODO, docs and memory (ПТ1). Code or
+Main coordinates agents and timers, asks the owner, does DL1 light work itself:
+reads, search, git inspection, read-only commands, edits of run state, TODO, docs and memory (PT1). Code or
 skill-file edits, commits, builds, tests, scripts, installs, codex/agy and background or
->120 s calls go to an agent (ДЛ2); a writer's files go to that writer. In doubt, delegate
+>120 s calls go to an agent (DL2); a writer's files go to that writer. In doubt, delegate
 (`reference/tools.md`). Main runs the merge flow without asking (`reference/queue.md`): a
 clean loop → merge at once; a conflict → an agent resolves, main commits. Main never reads an
 agent's `output_file`. A "done" without evidence (log path, result line, sha) goes back to
 its agent. Captain mode lasts the whole session, also after R17; only the owner's `/captain off` ends it, not a handoff (R21): the successor is the same captain. `hooks/guard.py`
-denies ДЛ2 calls; a denial means "delegate", never "rewrite the call", except a form/state fix (R16).
-**Why:** 4 of 9 sessions: main did the work ("Моя грешка: направих commit-а сам"); 27.09: main edited an app file for an hour; 02.10: merges denied; ДК1: 15 of 15 sessions lost turns on denied reads; full removal would bring the app-file hour back.
+denies DL2 calls; a denial means "delegate", never "rewrite the call", except a form/state fix (R16).
+**Why:** 4 of 9 sessions: main did the work ("My mistake: I made the commit myself"); 27.09: main edited an app file for an hour; 02.10: merges denied; DK1: 15 of 15 sessions lost turns on denied reads; full removal would bring the app-file hour back.
 
 ### R2 — Background agents; the checkout mode is chosen per run
 
@@ -103,20 +103,20 @@ parallel `worktree add` hit a locked `.git/config`; the owner chose default-bran
 ### R3 — Every agent prompt carries the same frame
 
 Use the frame in `reference/prompts.md` unchanged. An agent reports once, done or
-blocked, in ≤ 8 lines; review findings reach the writer by path (КТ1).
+blocked, in ≤ 8 lines; review findings reach the writer by path (KT1).
 **Why:** prompts with a hard limit met their boxes (5 fixers, ~5 min); 466 agent messages in 15 runs.
 
 ### R4 — Model choice
 
 Opus judges, reviews and decides: `captain:worker` (effort `medium`) by default, `captain:deep`
 (effort `high`) only for very complex specs or implementations, critical actions and full
-consensus (ЕФ1). A coding task goes to `captain:light-coder` (Sonnet, effort `high`) only
-when all six answers of its light test (КЛ1–КЛ6) are yes; else to `captain:worker`. A light
+consensus (EF1). A coding task goes to `captain:light-coder` (Sonnet, effort `high`) only
+when all six answers of its light test (KL1–KL6) are yes; else to `captain:worker`. A light
 coder's `ESCALATE`, or a trap mechanism under it, hands the task to a fresh `captain:worker`
 (hand-off prompt); inside a duel it ends that contestant instead. Sonnet never runs above
 `high`. Builds, tests, scripts: `captain:runner`. Without the plugin agent types:
 `model: opus` or `model: sonnet`, default effort, and no duel.
-**Why:** the owner, 25.09.2026: "ползвай Sonnet само за прости агенти"; 30.09: Sonnet 5.5 is
+**Why:** the owner, 25.09.2026: "use Sonnet only for simple agents"; 30.09: Sonnet 5.5 is
 strong at half the price but edits beyond scope on vague work.
 
 ### R5 — Review comes first
@@ -133,7 +133,7 @@ Commits up to the base SHA (an owner-chosen branch) are the owner's: not reviewe
 blocking. A new or unreviewed spec gets its review loop first; code writers start after its
 round 1 (`reference/prompts.md`).
 **Why:** a script ran on real data, and a docs commit was pushed, before review;
-30.09.2026: the owner asked „нали ще направим ревю на спека?“.
+30.09.2026: the owner asked "we will review the spec, right?".
 
 ### R6 — The review loop
 
@@ -148,7 +148,7 @@ when the time to park is shorter than its timeout. At the bound: commit, no push
 to TODO. Mechanics: `reference/triage.md`.
 One task per writer (others `queued`); a finished writer at ≥ 20% context (`agent-context.py`)
 → a fresh writer: `reference/health.md`.
-**Why:** the owner: "я ти ги провери всичките преди да ги слагаш и ако са ок ги оправяй";
+**Why:** the owner: "check them all before adding them, and fix the ones that hold up";
 27.09: a writer grew to 316k tokens over 20 requests; after round 1, 23 of 41 findings were
 defects of the previous fix; the verifier on real hardware found the real bugs.
 
@@ -158,7 +158,7 @@ Codex (`gpt-6-astra`, read-only, no web) reviews specs and code freely; do not r
 Codex off in the config `tools` → the default reviewer is `captain:deep` (very complex) or
 `captain:worker`, never the writer.
 Effort `medium`; `high` only for very complex specs or implementations, critical actions
-and full consensus (ЕФ1). A `captain:runner` waits for it; main never polls. A usage limit or
+and full consensus (EF1). A `captain:runner` waits for it; main never polls. A usage limit or
 an unrecoverable failure → a fresh Opus reviewer. Invocation, failures: `reference/tools.md`.
 **Why:** a review hung 27 min on web docs; one session idled 3h17m after the limit reset.
 
@@ -180,7 +180,7 @@ ACCEPT and TODO review findings get one line each there too; from round 2 the re
 carries them, and a re-raise without `NEW EVIDENCE:` is settled. A trap question (R6) in away
 mode goes to TODO, not to a vote, unless the current behaviour loses data in normal use.
 Mechanics: `reference/consensus.md`.
-**Why:** the owner: "такива въпроси ги преценявай сам след консултация"; 26.09: use Codex freely;
+**Why:** the owner: "judge such questions yourself after a consultation"; 26.09: use Codex freely;
 27.09: a rejected finding came back a round later and the writer gave in.
 
 ### R10 — Destructive and outward actions wait for the owner
@@ -192,25 +192,25 @@ others' commits, shared-DB changes, any external write. In-scope deletes are all
 to `queue.md`; consensus never unlocks one. List: `reference/queue.md`. The owner-confirmed
 base branch (not `main`/`master`/default) is a merge target without asking. A listed dev target
 (Scope) is not queued; another repo is written only if the owner names it for this run.
-**Why:** a pasted tip led to preparing a merge into main ("чакай ... да не пипаме маин?");
+**Why:** a pasted tip led to preparing a merge into main ("wait ... we are not touching main, are we?");
 05.10.2026, two real runs: 10× `/captain merge main`, 6 pushes rejected (fetch first), 3 `-m` form denials, 12+ `!` commands.
 
 ### R11 — The time box
 
 Deadline from the argument; else 60 min (complex) or 30 (smaller), with a reason, until
 `runs.jsonl` gives history; minimum 15; too big for 60 → ask the owner first. Status line from
-`date` and `run.md`: `Минаха 42 от 120 минути; ЗД3 тече (12/35 мин).` Timers: `reference/health.md`.
-**Why:** no analysed session tracked time; the owner asked "статус" 6+ times.
+`date` and `run.md`: `42 of 120 minutes gone; ZD3 running (12/35 min).` Timers: `reference/health.md`.
+**Why:** no analysed session tracked time; the owner asked "status" 6+ times.
 
 ### R12 — Status on request; one line per event
 
 Status only on request, from `run.md`. Otherwise one line per real event, in the
-same turn as the next action, plus the R13 health line; never "нищо ново", an offer to continue
-or non-blocking choices. Status, park and end reports end with `Остава:` and the next step;
+same turn as the next action, plus the R13 health line; never "nothing new", an offer to continue
+or non-blocking choices. Status, park and end reports end with `Remaining:` and the next step;
 formats and notify: `reference/queue.md`. Stop for the owner only for a product/scope question
 (present), an R10 item or an R16 denial. Every question has a recommendation; an open
 `AskUserQuestion` holds the timers, so dispatch independent work first. Away: decide, log it.
-**Why:** 14 and 5 empty "Няма нищо ново" replies; 26 of 34 status blocks in English;
+**Why:** 14 and 5 empty "Nothing new" replies; 26 of 34 status blocks in the wrong language;
 01.10: questions held the box 86 min; "what is left?" 7×.
 
 ### R13 — Health check: one status line
@@ -247,10 +247,10 @@ goes to the owner at once as one block of `!` commands (away: queued; `reference
 Memory on → the memory step first (`reference/queue.md`). An agent updates TODO and docs, commits and pushes the feature and base branches through the R5
 push gate (never unreviewed WIP), and lists held-back commits in the end report and TODO;
 cleanup (R14; report SKIPPED); delete every timer; skill call `end` (ends the grant); then the
-Bulgarian end report (TODO closed and added, "Дуели" when a duel ran, R20, `Остава:`) and one
+end report in the user's language (TODO closed and added, "Duels" when a duel ran, R20, `Remaining:`) and one
 `runs.jsonl` line. Shapes: `reference/queue.md`. Captain mode stays on (R1); a handoff (R21) may
 also happen.
-**Why:** the owner had to say "обнови си всички todos/docs комитни и пушни и спираме".
+**Why:** the owner had to say "update all your todos/docs, commit and push, and we stop".
 
 ### R18 — Cut scope to fit the time box
 
@@ -263,8 +263,8 @@ you add new TODOs".
 
 ### R19 — Topic IDs on every item shown to the owner
 
-Two Cyrillic letters plus a number (`ВР1`) on every item shown to the owner and every TODO entry;
-options get their own (`ОП1`); findings may keep `F1`. IDs persist; reuse the TODO file's.
+Two capital letters plus a number (`VR1`) on every item shown to the owner and every TODO entry;
+options get their own (`OP1`); findings may keep `F1`. IDs persist; reuse the TODO file's.
 Scheme: `reference/queue.md`.
 **Why:** plain numbers clashed with the TODO numbering; Latin prefixes carry no topic.
 

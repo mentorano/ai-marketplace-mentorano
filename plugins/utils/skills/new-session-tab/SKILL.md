@@ -1,6 +1,6 @@
 ---
 name: new-session-tab
-description: Use when the user asks to open a new terminal tab with a new Claude Code session, or to write a handover prompt and start a new session from it — usually because the context is full — e.g. "write a handover prompt and start a new session", "open a new tab with claude", "continue in a new session", „напиши handover prompt и пусни нова сесия", „нова сесия в нов tab". Opens a Supacode or cmux tab that runs `claude -n <name> "$(cat <prompt file>)"` in the given directory and reports TAB-OK only when a shell ran in it.
+description: Use when the user asks to open a new terminal tab with a new Claude Code session, or to write a handover prompt and start a new session from it — usually because the context is full — e.g. "write a handover prompt and start a new session", "open a new tab with claude", "continue in a new session". Opens a Supacode or cmux tab that runs `claude -n <name> "$(cat <prompt file>)"` in the given directory and reports TAB-OK only when a shell ran in it.
 ---
 
 # New Claude Code session in a new terminal tab

@@ -20,7 +20,7 @@ shortened. Earlier files (<paths>) are for lookup only; read one only where a li
 - **<ruling>.** <reasoning in one line>. <withdrawn earlier ruling, if any, and why>.
 
 ## 3. Open threads (verify each against git before acting)
-1. **Expected КАЦНА:** <branch + what it carries; exact sha if a lane withdrew later commits>. Verify with `git log origin/<branch>`.
+1. **Expected LANDED:** <branch + what it carries; exact sha if a lane withdrew later commits>. Verify with `git log origin/<branch>`.
 2. **OPEN for the owner:** <question - recommendation - deadline>.
 3. **Sessions:** <who should be woken/cleared at its next boundary - as intent, not status>.
 

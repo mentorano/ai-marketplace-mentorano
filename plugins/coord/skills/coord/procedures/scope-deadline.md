@@ -1,6 +1,6 @@
 # Scope deadlines
 
-The owner gives a scope a deadline: „обхват <X> до 18:00“, „за 3ч“. Why this file exists: a
+The owner gives a scope a deadline: "scope <X> by 18:00", "in 3h". Why this file exists: a
 deadline said only in conversation did not hold - nothing timed it, nothing stopped new work.
 
 ## Start
@@ -12,11 +12,11 @@ deadline said only in conversation did not hold - nothing timed it, nothing stop
 - [ ] Write scope, times and timer ids into the plan under `## Scope <X>`; tell the lanes the deadline once.
 
 ## 50 % - forecast
-- [ ] Per lane: what lands by the deadline (from КАЦНА so far and the lane's current slice).
+- [ ] Per lane: what lands by the deadline (from LANDED so far and the lane's current slice).
 - [ ] All fits: nothing to say. Not all: propose the cut (which slices to backlog) - owner present: one question with a recommendation; away: vote (`votes.md`).
 
-## 85 % - ПАРК
-- [ ] ПАРК to every lane with work in progress: finish the current slice, КАЦНА, start nothing new.
+## 85 % - PARK
+- [ ] PARK to every lane with work in progress: finish the current slice, LANDED, start nothing new.
 - [ ] Unfinished slices go to the backlog with ids; no new review round starts that cannot finish before the deadline.
 
 ## Deadline

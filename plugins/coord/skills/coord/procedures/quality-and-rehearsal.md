@@ -7,7 +7,7 @@
 - [ ] A control run (stash, re-run, compare) proves "not my diff", never "code is healthy"; exclude the environment first (migration current vs heads, env vars, DB freshness).
 - [ ] New tests are mutation-checked: break the behaviour, watch the test fail.
 - [ ] CI-only or local-only failures: widen the gap to reproduce; neither environment's green proves absence.
-- [ ] Known local-vs-CI mismatches are named in КАЦНА after a control run, and re-confirmed before trusting an old note.
+- [ ] Known local-vs-CI mismatches are named in LANDED after a control run, and re-confirmed before trusting an old note.
 
 ## Evidence discipline
 - Running code beats documents; get the document corrected.

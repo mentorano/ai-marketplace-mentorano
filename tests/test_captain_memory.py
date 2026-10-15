@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for captain's project-memory helper, scripts/memory-apply.py (ТС1-ТС3).
+"""Tests for captain's project-memory helper, scripts/memory-apply.py (TS1-TS3).
 
 Every test builds temporary git repos and passes the repo's own
 plugins/project-memory/scripts/memory.py through --memory-py, and a fixture
@@ -85,7 +85,7 @@ class MemoryRepoCase(unittest.TestCase):
 
 
 class DetectTest(MemoryRepoCase):
-    """ТС1."""
+    """TS1."""
 
     def test_no_agent_memory_is_off_without_reading_the_registry(self):
         self.installed.write_text("{not json")
@@ -153,7 +153,7 @@ class DetectTest(MemoryRepoCase):
 
 
 class CommitTest(MemoryRepoCase):
-    """ТС2."""
+    """TS2."""
 
     def setUp(self):
         super().setUp()
@@ -163,7 +163,7 @@ class CommitTest(MemoryRepoCase):
     def commit(self, files: str, branch: str = "captain/x") -> subprocess.CompletedProcess:
         return run("commit", f"--checkout={self.repo}", f"--branch={branch}",
                    f"--memory-py={MEMORY_PY}", f"--files={files}",
-                   "--message=docs(memory): add new.md (МК1)")
+                   "--message=docs(memory): add new.md (MK1)")
 
     def head(self) -> str:
         return git(self.repo, "rev-parse", "HEAD")
@@ -198,13 +198,13 @@ class CommitTest(MemoryRepoCase):
                 self.assert_refused(self.commit(files), before)
         (mem / "c.md").unlink()
         self.assert_refused(self.commit("a.md,b.md", branch="main"), before)
-        # a stray write by a subagent (ФР7): b.md changed but not listed
+        # a stray write by a subagent (FR7): b.md changed but not listed
         out = self.commit("a.md")
         self.assert_refused(out, before)
         self.assertIn("b.md", out.stdout)
 
     def test_no_file_budget(self):
-        # ТС2: a captain run has no 1-2 file budget; five files commit together
+        # TS2: a captain run has no 1-2 file budget; five files commit together
         mem = self.repo / ".agent-memory"
         names = [f"t{i}.md" for i in range(5)]
         for name in names:
@@ -223,7 +223,7 @@ class CommitTest(MemoryRepoCase):
         before = self.head()
         out = self.commit("bad.md")
         self.assert_refused(out, before)
-        self.assertIn("ФМ4", out.stdout)
+        self.assertIn("FM4", out.stdout)
         self.assertTrue((self.repo / ".agent-memory" / "bad.md").exists())
 
     def test_violation_in_an_untouched_file_is_printed_only(self):
@@ -235,12 +235,12 @@ class CommitTest(MemoryRepoCase):
         (self.repo / ".agent-memory" / "new.md").write_text(topic("new"))
         out = self.commit("new.md")
         self.assertEqual(out.returncode, 0, out.stdout)
-        self.assertIn("untouched old.md: ФМ4", out.stdout)
+        self.assertIn("untouched old.md: FM4", out.stdout)
 
 
 
 class RestoreTest(MemoryRepoCase):
-    """ТС3."""
+    """TS3."""
 
     def test_restore(self):
         self.init_memory({"old.md": topic("old")})

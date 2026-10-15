@@ -27,12 +27,12 @@ Commands (all take `--cwd <dir>`, default the current directory; the repo root i
                "violations": n},
     "files": [{"file": "x.md", "name": "x" | null, "kind": "file" | "dir" | "symlink" | "other",
                "bytes": n, "paths": [...], "has_frontmatter": bool, "has_content": bool,
-               "violations": ["ФМ4: ...", ...]}, ...]
+               "violations": ["FM4: ...", ...]}, ...]
   }
 
 Choices the design leaves open:
   - `files` lists every regular `*.md` file except README.md, plus every subdirectory, symlink,
-    non-regular entry or regular non-`.md` file (kind `other`), each an ФМ7 violation; a
+    non-regular entry or regular non-`.md` file (kind `other`), each an FM7 violation; a
     README.md that is not a regular file is listed the same way. Dotfiles that do not end in
     `.md` (`.DS_Store`, `.gitkeep`) are ignored.
   - `prune` refuses a before listing whose `memory_dir` is not the current memory directory.
@@ -247,7 +247,7 @@ def inspect_file(path: Path) -> dict:
            "has_frontmatter": False, "has_content": False, "violations": []}
     v = rec["violations"]
     if not valid_name(stem):
-        v.append("ФМ2: the file name may use only letters, digits, '.', '_' and '-', "
+        v.append("FM2: the file name may use only letters, digits, '.', '_' and '-', "
                  "with no leading or trailing dot and no extra .md")
     try:
         raw = path.read_bytes()
@@ -267,7 +267,7 @@ def inspect_file(path: Path) -> dict:
         return rec
     rec["has_content"] = bool(text.strip())
     if not rec["has_content"]:
-        v.append("ФМ8: the file is empty")
+        v.append("FM8: the file is empty")
         return rec
     try:
         fields, body, problems = parse_frontmatter(text)
@@ -276,34 +276,34 @@ def inspect_file(path: Path) -> dict:
         return rec
     v.extend(problems)
     if fields is None:
-        v.append("ФМ1: no frontmatter (`name`, `description`)")
+        v.append("FM1: no frontmatter (`name`, `description`)")
         return rec
     rec["has_frontmatter"] = True
     multiline = fields.pop("__multiline__", set())
     name = fields.get("name")
     rec["name"] = name if isinstance(name, str) and name else None
     if rec["name"] != stem:
-        v.append(f"ФМ1: `name` is {rec['name']!r}, not the file name stem {stem!r}" if rec["name"]
-                 else f"ФМ1: `name` is missing (expected {stem!r})")
+        v.append(f"FM1: `name` is {rec['name']!r}, not the file name stem {stem!r}" if rec["name"]
+                 else f"FM1: `name` is missing (expected {stem!r})")
     if rec["name"] and rec["name"] != stem and not valid_name(rec["name"]):
-        v.append("ФМ2: `name` may use only letters, digits, '.', '_' and '-', "
+        v.append("FM2: `name` may use only letters, digits, '.', '_' and '-', "
                  "with no leading or trailing dot and no .md")
     desc = fields.get("description")
     if not isinstance(desc, str) or not desc.strip():
-        v.append("ФМ4: `description` is missing")
+        v.append("FM4: `description` is missing")
     elif "description" in multiline or "\n" in desc:
-        v.append("ФМ4: `description` must be one line")
+        v.append("FM4: `description` must be one line")
     elif len(desc) > DESCRIPTION_MAX:
-        v.append(f"ФМ4: `description` is {len(desc)} characters (max {DESCRIPTION_MAX})")
+        v.append(f"FM4: `description` is {len(desc)} characters (max {DESCRIPTION_MAX})")
     if "paths" in fields:
         rec["paths"] = paths_of(fields)
         if not rec["paths"]:
-            v.append("ФМ5: `paths` is present but lists no glob")
+            v.append("FM5: `paths` is present but lists no glob")
     for k in ("source", "updated"):
         if k in fields:
-            v.append(f"ФМ6: drop the `{k}` key (git keeps author and date)")
+            v.append(f"FM6: drop the `{k}` key (git keeps author and date)")
     if not body.strip():
-        v.append("ФМ8: the file holds frontmatter only")
+        v.append("FM8: the file holds frontmatter only")
     return rec
 
 
@@ -341,20 +341,20 @@ def list_memory(mem: Path) -> list[dict]:
             what = {"symlink": "a symlink", "dir": "a subdirectory"}.get(kind, "not a regular file")
         out.append({"file": e.name, "name": None, "kind": kind, "bytes": 0, "paths": [],
                     "has_frontmatter": False, "has_content": False,
-                    "violations": [f"ФМ7: {what}; only regular *.md files may sit directly "
+                    "violations": [f"FM7: {what}; only regular *.md files may sit directly "
                                    f"in {MEMORY_DIR}/"]})
     mark_case_twins(out)
     return out
 
 
 def mark_case_twins(recs: list[dict]) -> None:
-    """ФМ3: names that differ only by letter case collide on macOS and Windows checkouts.
+    """FM3: names that differ only by letter case collide on macOS and Windows checkouts.
 
     README.md is a reserved name here even though it is not listed.
     """
     for rec in recs:
         if rec["file"] != README and rec["file"].lower() == README.lower():
-            rec["violations"].append(f"ФМ3: differs only by letter case from {README}")
+            rec["violations"].append(f"FM3: differs only by letter case from {README}")
     by_lower: dict[str, list[dict]] = {}
     for rec in recs:
         if rec["kind"] == "file":
@@ -363,7 +363,7 @@ def mark_case_twins(recs: list[dict]) -> None:
         if len(group) > 1:
             for rec in group:
                 others = ", ".join(r["file"] for r in group if r is not rec)
-                rec["violations"].append(f"ФМ3: differs only by letter case from {others}")
+                rec["violations"].append(f"FM3: differs only by letter case from {others}")
 
 
 # ── health (port of the upstream memoryHealth, file state only) ──────────────
@@ -587,7 +587,7 @@ def cmd_prune(cwd: str, before_arg: str) -> int:
         print("nothing to prune")
     for rec in list_memory(Path(mem)):
         for v in rec["violations"]:
-            if v.startswith("ФМ8: the file holds frontmatter only"):
+            if v.startswith("FM8: the file holds frontmatter only"):
                 print(f"left for the user: {MEMORY_DIR}/{rec['file']}: {v}")
     return 0
 

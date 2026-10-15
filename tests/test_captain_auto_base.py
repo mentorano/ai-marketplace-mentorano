@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Tests for the captain automatic base branch (БР1) in hooks/guard.py.
+"""Tests for the captain automatic base branch (BR1) in hooks/guard.py.
 
-A model-made Skill call `captain base <branch>` records the run's base only while АБ1–АБ6
+A model-made Skill call `captain base <branch>` records the run's base only while AB1–AB6
 hold at that moment: a named branch that is not the default, a working `git fetch origin
 <default>`, HEAD on the fetched tip, no other origin/<branch>, not checked out elsewhere, a
-clean tree. The owner's typed `/captain base <branch>` skips АБ2–АБ6. Every case runs on a
+clean tree. The owner's typed `/captain base <branch>` skips AB2–AB6. Every case runs on a
 temporary repository with a local bare origin; nothing reaches the network.
 
 Run:  python3 tests/test_captain_auto_base.py
@@ -29,7 +29,7 @@ GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAM
 
 
 class AutoBaseTest(unittest.TestCase):
-    """The table over АБ1–АБ6, for the Skill path and the typed path."""
+    """The table over AB1–AB6, for the Skill path and the typed path."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -98,7 +98,7 @@ class AutoBaseTest(unittest.TestCase):
         return self.repo, "feat"
 
     def case_linked_worktree_on_tip(self):
-        # sessions often run in a linked worktree; АБ5 must not count the session's own one
+        # sessions often run in a linked worktree; AB5 must not count the session's own one
         linked = self.root / "linked"
         self.git(self.repo, "worktree", "add", "-q", "-b", "feat2", str(linked), "origin/main")
         return linked, "feat2"
@@ -183,26 +183,26 @@ class AutoBaseTest(unittest.TestCase):
         self.git(self.repo, "switch", "-q", "-c", "captain/x")
         return self.repo, "captain/x"
 
-    # case, Skill path records?, АБ named in a refusal, typed path records?
+    # case, Skill path records?, AB named in a refusal, typed path records?
     TABLE = [
         ("on_tip", True, None, True),
         ("linked_worktree_on_tip", True, None, True),
-        ("with_a_commit", False, "АБ3", True),
-        ("behind", False, "АБ3", True),
-        ("default_branch", False, "АБ1", False),
-        ("detached_head", False, "АБ1", True),
-        ("fetch_failure", False, "АБ2", True),
-        ("remote_branch_ahead", False, "АБ4", True),
+        ("with_a_commit", False, "AB3", True),
+        ("behind", False, "AB3", True),
+        ("default_branch", False, "AB1", False),
+        ("detached_head", False, "AB1", True),
+        ("fetch_failure", False, "AB2", True),
+        ("remote_branch_ahead", False, "AB4", True),
         ("remote_branch_on_the_same_sha", True, None, True),
-        ("checked_out_elsewhere", False, "АБ5", True),
-        ("dirty_tree", False, "АБ6", True),
-        ("untracked_file", False, "АБ6", True),
+        ("checked_out_elsewhere", False, "AB5", True),
+        ("dirty_tree", False, "AB6", True),
+        ("untracked_file", False, "AB6", True),
         ("run_state_only", True, None, True),
-        ("tracked_change_under_run_state", False, "АБ6", True),
+        ("tracked_change_under_run_state", False, "AB6", True),
         ("local_settings_only", True, None, True),
-        ("tracked_local_settings", False, "АБ6", True),
-        ("other_branch_named", False, "АБ1", True),
-        ("no_origin_head", False, "АБ1", True),
+        ("tracked_local_settings", False, "AB6", True),
+        ("other_branch_named", False, "AB1", True),
+        ("no_origin_head", False, "AB1", True),
     ]
 
     def test_the_table(self):
@@ -217,7 +217,7 @@ class AutoBaseTest(unittest.TestCase):
                     if records:
                         self.assertEqual(base["branch"], branch, note)
                         self.assertTrue(base["auto"])
-                        self.assertIn("recorded (АБ1–АБ6 hold)", note)
+                        self.assertIn("recorded (AB1–AB6 hold)", note)
                     else:
                         self.assertIsNone(base, note)
                         self.assertIn(f"NOT recorded ({rule}", note)
@@ -234,7 +234,7 @@ class AutoBaseTest(unittest.TestCase):
                 self.git(self.repo, "switch", "-q", "-C", branch, "origin/main")
                 base, stdout = self.skill(f"base {branch}")
                 self.assertIsNone(base)
-                self.assertIn("NOT recorded (АБ1", self.note(stdout))
+                self.assertIn("NOT recorded (AB1", self.note(stdout))
         # the origin default under another name
         self.git(self.seed, "push", "-q", "origin", "main:trunk")
         self.git(self.repo, "fetch", "-q", "origin")
@@ -283,7 +283,7 @@ class AutoBaseTest(unittest.TestCase):
                     return tip
 
                 guard.fetched_tip = fetched
-                self.assertIn("АБ1", guard.auto_base_problem(str(self.repo), "feat") or "")
+                self.assertIn("AB1", guard.auto_base_problem(str(self.repo), "feat") or "")
         guard.fetched_tip = real
         self.git(self.repo, "switch", "-q", "feat")
         self.assertIsNone(guard.auto_base_problem(str(self.repo), "feat"))
@@ -295,7 +295,7 @@ class AutoBaseTest(unittest.TestCase):
         self.git(self.repo, "switch", "-q", "-c", "trunk")
         base, stdout = self.skill("base trunk")
         self.assertIsNone(base)
-        self.assertIn("NOT recorded (АБ1", self.note(stdout))
+        self.assertIn("NOT recorded (AB1", self.note(stdout))
 
     def test_another_fetch_cannot_change_the_compared_sha(self):  # r1 F3
         (self.repo / "a.txt").write_text("mine\n")
@@ -313,7 +313,7 @@ class AutoBaseTest(unittest.TestCase):
 
         guard.subprocess.run = run
         try:
-            self.assertIn("АБ3", guard.auto_base_problem(str(self.repo), "feat") or "")
+            self.assertIn("AB3", guard.auto_base_problem(str(self.repo), "feat") or "")
         finally:
             guard.subprocess.run = real
         self.assertEqual(self.git(self.repo, "for-each-ref", "refs/captain-guard"), "")

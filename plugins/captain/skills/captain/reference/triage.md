@@ -9,7 +9,7 @@
 - [Priority when rules overlap](#priority-when-rules-overlap)
 - [Data loss in normal use](#data-loss-in-normal-use)
 - [The fix-of-a-fix trap](#the-fix-of-a-fix-trap)
-- [`fix-all` runs - TODO is the last resort (ЗД1)](#fix-all-runs---todo-is-the-last-resort-зд1)
+- [`fix-all` runs - TODO is the last resort (ZD1)](#fix-all-runs---todo-is-the-last-resort-zd1)
 - [When the loop stops](#when-the-loop-stops)
 - [The register](#the-register)
 - [New work between rounds; the verifier](#new-work-between-rounds-the-verifier)
@@ -92,7 +92,7 @@ Apply the first that matches: (1) data loss in normal use → FIX NOW; (2) a ver
 FIX NOW; (3) the trap; (4) the round table. A verifier failure is an observed fact on real
 data, so it is reachable in normal use by definition. Its fix still adds no new mechanism: if
 it needs one, it goes to the owner (present) or TODO (away).
-**Why:** the owner's answer ВК2 (27.09): a verifier failure beats the trap; in that project the
+**Why:** the owner's answer VK2 (27.09): a verifier failure beats the trap; in that project the
 verifier found the real bugs and review rounds 2-4 did not.
 
 ## Data loss in normal use
@@ -123,10 +123,10 @@ does not iterate. It returns `MECHANISM: <name>`, what the code does now, and 2-
 upload", r3 F2 "15 s still loses", r4 F1 "the counter blocks forever". It should have been an
 owner question after r2.
 
-## `fix-all` runs - TODO is the last resort (ЗД1)
+## `fix-all` runs - TODO is the last resort (ZD1)
 
 **Set once, at start step 6.** Main decides whether the run fixes a given list: the task names
-items or TODO IDs to fix ("оправи всички", "fix ВР3–ВР7", a review's open findings). Then it
+items or TODO IDs to fix ("fix them all", "fix VR3–VR7", a review's open findings). Then it
 writes one line in `run.md`: `mode: fix-all — <reason>`; otherwise `mode: normal — <reason>`.
 Present: the line is shown with the plan, and the owner may flip it; away: inferred and logged
 in `decisions.md`. It does not change during the run unless the owner says so.
@@ -156,7 +156,7 @@ range, from the loop's base to its last fix commit, and the R5 push gate treats 
 passed. The bound of 3 re-reviews stays. After the first runs under these rules, the
 coordinator reports the round counts to the owner; only the owner decides to lower the bound.
 A clean loop → main merges at once (`reference/queue.md`, the merge flow step 1), without
-asking; the task's `ЗДn` row becomes `merged`; then a runner runs the tests on the merged head;
+asking; the task's `ZDn` row becomes `merged`; then a runner runs the tests on the merged head;
 the R5 push gate comes after.
 **Why:** in that project one loop's r2-r4 took ~26 min for fixes of fixes.
 
@@ -174,7 +174,7 @@ the R5 push gate comes after.
   the R17 TODO/docs commit. Never amend, never an empty commit (R5 would see an unreviewed one).
 
 **Why:** one run's r1 F8 came back as r2 F6 and the writer gave in; in another run's r2 the prompt said "do
-not re-raise" and F4 did not come back. The owner's answer ВК1 (27.09): accepted risks stay in
+not re-raise" and F4 did not come back. The owner's answer VK1 (27.09): accepted risks stay in
 git history even when a round has no fix commit; decisions.md lives in ignored tmp/.
 
 ## New work between rounds; the verifier

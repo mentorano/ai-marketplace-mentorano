@@ -7,12 +7,12 @@
 - [queue.md (R10)](#queuemd-r10)
 - [Dev targets (Scope, R10)](#dev-targets-scope-r10)
 - [Owner `!` commands (R16)](#owner--commands-r16)
-- [Memory step (R17, ПК2-ПК4) - only with `Project memory: on`](#memory-step-r17-пк2-пк4---only-with-project-memory-on)
+- [Memory step (R17, PK2-PK4) - only with `Project memory: on`](#memory-step-r17-pk2-pk4---only-with-project-memory-on)
 - [decisions.md (R9, R18)](#decisionsmd-r9-r18)
 - [TODO entry (R18)](#todo-entry-r18)
 - [TODO entry for a deferred finding (R6, R18)](#todo-entry-for-a-deferred-finding-r6-r18)
-- [Status, park and end reports - `Остава:` (R12)](#status-park-and-end-reports---остава-r12)
-- [End report (R17) - Bulgarian, in this order, every item with its ID](#end-report-r17---bulgarian-in-this-order-every-item-with-its-id)
+- [Status, park and end reports - `Remaining:` (R12)](#status-park-and-end-reports---remaining-r12)
+- [End report (R17) - in the user's language, in this order, every item with its ID](#end-report-r17---in-the-users-language-in-this-order-every-item-with-its-id)
 - [runs.jsonl (R17)](#runsjsonl-r17)
 
 All run state lives in `./tmp/captain/<YYYYMMDD-HHMMSS>/` in the repository.
@@ -20,26 +20,26 @@ The main session writes these files with `Write` (R1).
 
 ## R19 IDs
 
-Two Cyrillic letters plus a number on every item shown to the owner and every TODO
+Two capital letters plus a number on every item shown to the owner and every TODO
 entry the run writes. The letters name the area; items in one area count up;
 an item keeps its ID in later messages and later runs. Before choosing
 letters, read the IDs already in the TODO file and continue an area's letters
-from its highest number. Answer options get their own IDs (`ОП1`, `ОП2`),
+from its highest number. Answer options get their own IDs (`OP1`, `OP2`),
 unique within the reply. Review findings may keep `F1`, `F2`.
 
 Example area letters (this table is an example; the run never edits this file):
 
 | ID | Area |
 |---|---|
-| `ВР` | time box |
-| `ГР` | scope boundary |
-| `ПР` | pull request |
-| `КН` | consensus |
-| `ОП` | answer options |
-| `АР` | architecture / technical decisions |
-| `ЗД` | tasks of the plan split (`run.md` `## Tasks`) |
+| `VR` | time box |
+| `GR` | scope boundary |
+| `PR` | pull request |
+| `KN` | consensus |
+| `OP` | answer options |
+| `AR` | architecture / technical decisions |
+| `ZD` | tasks of the plan split (`run.md` `## Tasks`) |
 
-A new area: pick two letters from the area's Bulgarian name; record them in `run.md` under
+A new area: pick two letters from the area's name; record them in `run.md` under
 `## IDs`, and the TODO entries the agent writes carry them into the project for later runs.
 
 ## run.md
@@ -47,7 +47,7 @@ A new area: pick two letters from the area's Bulgarian name; record them in `run
 ```markdown
 # captain run <YYYYMMDD-HHMMSS>
 - Repo: <abs path>   Start branch: <branch>   Default branch: <name>
-- Feature branch: captain/<YYYYMMDD>-<slug>, based on <origin/<default> | <owner's branch>, chosen ОП2> | none: auto base (R2)
+- Feature branch: captain/<YYYYMMDD>-<slug>, based on <origin/<default> | <owner's branch>, chosen OP2> | none: auto base (R2)
 - Mode: present | away   Box: <N> min (<given | chosen: reason>)
 - Start: <HH:MM>   Park: <HH:MM>   Deadline: <HH:MM>
 - Uncommitted changes at start: <none | list, untouched>
@@ -59,9 +59,9 @@ A new area: pick two letters from the area's Bulgarian name; record them in `run
 - Tools: codex on/off, agy on/off   Notify: <method> | none
 - Codex: available | off in config | usage limit, resets at <time>
 - Experiment (R20): on | off   Agent types: plugin | fallback (no duel)
-- mode: fix-all | normal — <one-line reason> (ЗД1, start step 6; present: shown with the plan)
+- mode: fix-all | normal — <one-line reason> (ZD1, start step 6; present: shown with the plan)
 - Dev targets: <IDs confirmed for this repo | none>   Other repos named by the owner: <list | none>
-- Project memory (ПК6): on (<abs memory.py path>) | off: <reason>
+- Project memory (PK6): on (<abs memory.py path>) | off: <reason>
 
 ## Timers
 | Timer | Kind | Id |
@@ -78,8 +78,8 @@ A new area: pick two letters from the area's Bulgarian name; record them in `run
 ## Tasks
 | ID | Task | Agent | State |
 |---|---|---|---|
-| ЗД1 | <one line> | w-auth | todo / queued / running / review k/3 / merged / cut |
-| ЗД2 | <one line> · КЛ 6/6 · duel: yes — <reason> | duel A/B/C | running |
+| ZD1 | <one line> | w-auth | todo / queued / running / review k/3 / merged / cut |
+| ZD2 | <one line> · KL 6/6 · duel: yes — <reason> | duel A/B/C | running |
 
 The plan-split start step writes the plan here; every event updates the row. An owner request
 that arrives while its writer is busy gets a new row with state `queued` (R6). Status (R12) is
@@ -92,7 +92,7 @@ A coding task carries its light test and, with `Experiment: on`, its duel line
 ## Duels
 | Task | Letter | Agent | Worktree / branch | Codex session | State |
 |---|---|---|---|---|---|
-| ЗД2 | A | captain:light-coder | duel-<run-id>-ЗД2-A | - | review 1/3 / not finished: <reason> / winner / lost |
+| ZD2 | A | captain:light-coder | duel-<run-id>-ZD2-A | - | review 1/3 / not finished: <reason> / winner / lost |
 
 The letter mapping lives only here; no prompt names it.
 
@@ -116,7 +116,7 @@ duel record's `minutes`, R20).
 ## Memory candidates
 | ID | Candidate | From | Verdict |
 |---|---|---|---|
-| МК1 | `<abs draft path>` — <why, verbatim> | w-auth ЗД1 | open / accept → `<topic>.md` (new / edit / merged with МК3) / reject: <one-line reason> / not written: no time / not written: dirty .agent-memory |
+| MK1 | `<abs draft path>` — <why, verbatim> | w-auth ZD1 | open / accept → `<topic>.md` (new / edit / merged with MK3) / reject: <one-line reason> / not written: no time / not written: dirty .agent-memory |
 ```
 
 `## Memory candidates` exists only with `Project memory: on`; `off` → no section, no memory
@@ -134,8 +134,8 @@ to run.
 
 ```markdown
 # Queue for the owner
-- ГР1 | merge feature branch into <default> | `git -C <repo> merge --no-ff captain/<...>` | why: task done, reviewed
-- ГР2 | stopped at an external system: apply migration on staging DB | `<command>` | why: shared DB
+- GR1 | merge feature branch into <default> | `git -C <repo> merge --no-ff captain/<...>` | why: task done, reviewed
+- GR2 | stopped at an external system: apply migration on staging DB | `<command>` | why: shared DB
 ```
 
 A listed dev target is not queued (below); a write to another repository is queued unless the
@@ -146,7 +146,7 @@ owner-confirmed base branch is not queued: main runs it in the merge flow below.
 
 Never a pull request: not opened, not queued, not proposed in the end report, unless the owner
 asked for one. The way into the default branch is the merge line above.
-**Why:** the owner, 02.10.2026: „спираме да правим ПР … ПР само ако го е поискал човека“.
+**Why:** the owner, 02.10.2026: "we stop making PRs … a PR only if the person asked for it".
 
 ## Dev targets (Scope, R10)
 
@@ -154,7 +154,7 @@ A dev target is one command or script the owner allows against a dev or test env
 example a site deploy script for a shared dev instance. Two sources:
 
 - `~/.claude/captain/config.json` key `dev_targets` (written by `captain-setup`):
-  `{"<repo key>":[{"id":"ДЦ1","command":"<exact command or script path>","target":"<endpoint, account or project it must hit>","confirmed":"YYYY-MM-DD"}]}`.
+  `{"<repo key>":[{"id":"DTS1","command":"<exact command or script path>","target":"<endpoint, account or project it must hit>","confirmed":"YYYY-MM-DD"}]}`.
   The repo key is `<owner>/<repo>` from `git remote get-url origin` (no scheme, user, host or
   `.git`, so SSH and HTTPS clones match); no origin → the absolute git common dir.
 - The repo's own `CLAUDE.md`, a `captain` section listing the same fields. Such an entry counts
@@ -252,8 +252,8 @@ with no readable `origin/HEAD`, any branch outside `captain/*`, the base too), a
 push or switch denial (no grant, or a remote with a push mapping, mirror or `push.followTags`)
 and a classifier denial are final (R16): give the owner the `!` commands.
 **Why:** 02.10.2026: the classifier denied the integration agent's reviewed merge, the guard
-denied main's own `git merge`, and the owner ran it by hand 38 min later („ти що не ги мържнеш
-сам?“); in 5 of 8 sessions of 01–02.10 the owner merged or pushed reviewed work with `!`; 05.10.2026,
+denied main's own `git merge`, and the owner ran it by hand 38 min later ("why don't you merge them
+yourself?"); in 5 of 8 sessions of 01–02.10 the owner merged or pushed reviewed work with `!`; 05.10.2026,
 two real runs: `/captain merge main` typed 10 times, 6 pushes rejected (fetch first), 3 `-m`
 form denials, 12+ manual `!` commands.
 
@@ -301,11 +301,11 @@ owner pasted a command with the captain's prose after it ("not something we can 
 09.–13.10.2026: two handed-over `rm` commands stopped on an alias prompt, and one `!` with a
 leading space did not run.
 
-## Memory step (R17, ПК2-ПК4) - only with `Project memory: on`
+## Memory step (R17, PK2-PK4) - only with `Project memory: on`
 
 On receipt: a report with `Memory candidate: <abs draft path> — <why>` lines gets one row per
 draft in `## Memory candidates`, verdict `open`, in the same `run.md` edit as its `## Tasks`
-row; main does not read the draft yet. Letters `МК` under `## IDs`.
+row; main does not read the draft yet. Letters `MK` under `## IDs`.
 
 When: after the last merge into the feature branch (shared mode: the last writer's commit) and
 before the R17 agent that updates TODO and docs and pushes. Present and away mode alike: no
@@ -313,55 +313,55 @@ queue entry and no owner question. The step never pushes park or the deadline: f
 minutes to the deadline → skip it, a runner `restore`s any written but uncommitted file, and
 the kept rows get `not written: no time`.
 
-0. ЗП0 Clean check. Main runs `git -C '<abs run checkout>' status --porcelain --ignored
+0. ZP0 Clean check. Main runs `git -C '<abs run checkout>' status --porcelain --ignored
    --untracked-files=all -- .agent-memory` (`--ignored`: an ignored local file counts too). Any output → the memory step is skipped for the
    whole run: every open row gets `not written: dirty .agent-memory`, the drafts stay in the
    run directory; no write, no `restore`, no commit. So `restore` and `commit` only ever touch
    main's own changes.
-1. МШ1 Review. Main reads every open draft and the `name` and `description` of each
+1. MSH1 Review. Main reads every open draft and the `name` and `description` of each
    `.agent-memory/*.md`. Keep a draft only when it (a) cost a cycle, or would have cost the
    next session one (a trap found before it bit counts), or (b) contradicted an assumption,
    AND it is true next month. Reject with the named class: session summary, restated code,
    one-off task fact, already in CLAUDE.md / CONTRIBUTING / README, machine path or secret,
-   fact about the user, unverified guess, already in a memory file, `duplicate of МК<n>` (its
+   fact about the user, unverified guess, already in a memory file, `duplicate of MK<n>` (its
    source goes into the kept row's `From`). Every reject has a one-line reason in the row.
    Prefer editing an existing file; drafts on one topic may be merged into one file.
-2. МШ2 Write. Main writes each file itself with `Write` (new) or `Edit` (existing) at
+2. MSH2 Write. Main writes each file itself with `Write` (new) or `Edit` (existing) at
    `<abs run checkout>/.agent-memory/<topic>.md`: `name` = stem, one-line `description`
-   ≤ 160 characters saying *when*, `paths` when file-specific (ДЛ1, ПТ1).
-3. МШ3 Revalidate. One `captain:worker` (Opus), single pass, gets the memory revalidation
+   ≤ 160 characters saying *when*, `paths` when file-specific (DL1, PT1).
+3. MSH3 Revalidate. One `captain:worker` (Opus), single pass, gets the memory revalidation
    prompt (`reference/prompts.md`) and answers `keep`, `fix: <change>` or `drop: <reason>` per
    file; it writes nothing. Main applies it: `fix` → `Edit`; `drop` → a runner's `restore` of
    that file, and the row gets `reject: revalidation: <reason>`. This pass is the R5 review of
-   the memory commit: `## Reviews` records `Opus revalidation (МП1) | passed`.
-   No kept row after МШ1 → no write, no revalidation, no commit, no `## Reviews` row.
-4. МШ4 Commit, only when a file is left after МШ3 (all dropped → no commit, never
+   the memory commit: `## Reviews` records `Opus revalidation (MP1) | passed`.
+   No kept row after MSH1 → no write, no revalidation, no commit, no `## Reviews` row.
+4. MSH4 Commit, only when a file is left after MSH3 (all dropped → no commit, never
    `--files=''`). A `captain:runner` gets the memory commit prompt (`reference/prompts.md`). Exit
    1 → main fixes the file with `Edit`, the runner reruns `commit`. Main sets every row's
    verdict.
 
-Nothing about memory goes into the end report, status or `Остава:`; main shows the memory
+Nothing about memory goes into the end report, status or `Remaining:`; main shows the memory
 commit (`git show <sha>`) only when the owner asks.
 **Why:** a memory file is read as a rule by every later session, so it gets an independent
 check before the commit; writing after the merges keeps lessons from work that landed. The
-owner (МП1, МП2): memory is written in both modes without asking, one Opus pass instead of a
+owner (MP1, MP2): memory is written in both modes without asking, one Opus pass instead of a
 review loop.
 
 ## decisions.md (R9, R18)
 
 ```markdown
-- КН1 | tier: full | away: product | <question> | options: A <...> / B <...> / C <...>
+- KN1 | tier: full | away: product | <question> | options: A <...> / B <...> / C <...>
   | votes: Codex A, agy B, Fable A, Opus A | result: A (majority | no consensus) | reason: <...>
-- АР1 | tier: mini | <decision> | reason: <...> | rejected: <...> | second opinion: Codex agree
-- ВР2 | scope cut | <subtask> → TODO.md | reason: <...>
-- ЗД1 r2 F6 | ACCEPT artificial timing | <file:line> — <problem, one line>
-- ЗД1 r3 F2 | TODO owner decision → <TODO ID> | <file:line> — <problem, one line>
+- AR1 | tier: mini | <decision> | reason: <...> | rejected: <...> | second opinion: Codex agree
+- VR2 | scope cut | <subtask> → TODO.md | reason: <...>
+- ZD1 r2 F6 | ACCEPT artificial timing | <file:line> — <problem, one line>
+- ZD1 r3 F2 | TODO owner decision → <TODO ID> | <file:line> — <problem, one line>
 ```
 
 Review register (R6): one line per ACCEPT or TODO finding, `<task ID> r<k> F<n> | <class>
 <reason> | <file:line> — <problem>`. From round 2 the review prompt carries these lines
 verbatim. Refuted findings and nits live only here (`reference/triage.md`). In a duel (R20)
-the key carries the contestant letter, `<task ID>/<letter> r<k> F<n>` (e.g. `ЗД2/A r1 F1`),
+the key carries the contestant letter, `<task ID>/<letter> r<k> F<n>` (e.g. `ZD2/A r1 F1`),
 and each contestant's review prompt carries only its own letter's lines.
 
 ## TODO entry (R18)
@@ -390,29 +390,29 @@ and pushed without review, and the report marks it "pushed unreviewed"; it never
 through an unreviewed commit (R5 push gate). Code and other docs
 changes made after park are committed on their branch but not pushed or merged.
 
-## Status, park and end reports - `Остава:` (R12)
+## Status, park and end reports - `Remaining:` (R12)
 
 A status report (the owner asked), the park report and the end report end with two parts.
 
-1. `Остава:` — built from run state, never from memory: open rows of `run.md` `## Tasks`,
+1. `Remaining:` — built from run state, never from memory: open rows of `run.md` `## Tasks`,
    `queue.md` items, TODO entries added in this run, commits held back (R17), and cleanup
-   items that were skipped. One line each, with its ID. `Нищо не остава.` only when all five
+   items that were skipped. One line each, with its ID. `Nothing remains.` only when all five
    are empty.
-2. The last line says what happens next: `Продължавам с <ID>.` (only when that action starts
-   in the same turn), `Чакам те за <ID>.`, or at the end of the box
-   `Спирам; captain mode остава включен.`
+2. The last line says what happens next: `Continuing with <ID>.` (only when that action starts
+   in the same turn), `Waiting for you on <ID>.`, or at the end of the box
+   `Stopping; captain mode stays on.`
 
-The R13 health line is not a report: one line, no `Остава:`.
-**Why:** 15 sessions, 09–13.10.2026: the owner asked "статус?" 8 times and "what is left / are
+The R13 health line is not a report: one line, no `Remaining:`.
+**Why:** 15 sessions, 09–13.10.2026: the owner asked "status?" 8 times and "what is left / are
 we done" 7 times.
 
 **Notify (R12).** `~/.claude/captain/notify.sh "<message>"`: present mode for a waiting
 question and the end report; away mode for the end report only. If it fails, the message stays
 in the chat.
 
-## End report (R17) - Bulgarian, in this order, every item with its ID
+## End report (R17) - in the user's language, in this order, every item with its ID
 
-Items blocked on the owner come first. The TODO count line, `TODO: добавени <n>, затворени <m>`,
+Items blocked on the owner come first. The TODO count line, `TODO: added <n>, closed <m>`,
 names added first; when added > 0 it is the report's first line, with each new entry and its
 one-line reason under it (`reference/triage.md`, `fix-all`); else it goes into item 6.
 
@@ -428,10 +428,10 @@ one-line reason under it (`reference/triage.md`, `fix-all`); else it goes into i
    any timer fired; a TODO-only change pushed unreviewed after park, if any; a missing
    config in away mode (nothing created, notify none, tools from `command -v`); the
    `audit-main.py` exit code if it was run.
-7. Дуели (R20), when any ran: one line per duel with its ID, the winner (letter and agent)
+7. Duels (R20), when any ran: one line per duel with its ID, the winner (letter and agent)
    or `none`, and the judge's reason; branches, worktrees, logs and Codex session ids that
    stayed (`reference/experiment.md`, cleanup by outcome).
-8. `Остава:` and the last line (above).
+8. `Remaining:` and the last line (above).
 
 After the report, one `~/.claude/captain/notify.sh "<one-line summary>"` call (R12), in both
 modes; the wrapper decides whether the owner is away.
@@ -453,7 +453,7 @@ with open(os.path.expanduser("~/.claude/captain/runs.jsonl"), "a") as out:
 ```
 
 ```json
-{"date": "2026-09-26", "repo": "<name>", "task": "<one line>", "box_min": 30, "box_reason": "given", "actual_min": 32, "outcome": "partly", "cut": ["ВР3"], "review_rounds": 2, "codex_available": true}
+{"date": "2026-09-26", "repo": "<name>", "task": "<one line>", "box_min": 30, "box_reason": "given", "actual_min": 32, "outcome": "partly", "cut": ["VR3"], "review_rounds": 2, "codex_available": true}
 ```
 
 Duels add one line each to `~/.claude/captain/experiments.jsonl` with the same append

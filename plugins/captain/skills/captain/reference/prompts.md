@@ -92,7 +92,7 @@ House rules:
   only set or unset, never the value) and the repo's env files before you report it missing.
 - An artifact that exists: read it first and publish with its `url`; a new file path creates a
   second page.
-- Owner constraints from the kickoff, verbatim: <e.g. „тестовете един след друг“; the repo's
+- Owner constraints from the kickoff, verbatim: <e.g. "the tests one after another"; the repo's
   canonical test command with its env variables; or "none">.
 
 Approvals: <e.g. "commit on <agent-branch> allowed; push to feature branch <x> allowed;
@@ -102,7 +102,7 @@ with unlock, a delete) is listed here with the owner's words verbatim, in the fi
 Messages: send one message, when done or blocked; never routine progress. Send at once only
 for: blocked, ESCALATE, a permission denial, a data risk, a time limit reached. Review rounds
 (triage and fix reports) are not progress messages.
-Report in Bulgarian (software terms in English), at most 8 lines, numbered, in this order
+Report in the owner's language (software terms in English), at most 8 lines, numbered, in this order
 (review, mini-consensus and full-consensus prompts and the revalidation message replace this
 report section with their own exact output contract, below); detail (full logs, long lists, per-file notes) goes to
 '<abs run dir>/reports/<agent name>-<task ID>.md', and the report names that path:
@@ -110,7 +110,7 @@ report section with their own exact output contract, below); detail (full logs, 
 2. done, each item with evidence (log path + result line, commit sha);
 3. not done; 4. files changed; 5. commits (sha); 6. processes left running;
 7. decisions; 8. not confirmed (and where you looked).
-<only with "Project memory: on" in run.md (ПК6):> Project memory: never create, edit or
+<only with "Project memory: on" in run.md (PK6):> Project memory: never create, edit or
 delete anything under `.agent-memory/` or `.claude/rules/project-memory/`; main decides what
 goes there. When you learned something that meets the write trigger in
 `.agent-memory/README.md`, write it as a draft memory file, one per topic, to
@@ -136,7 +136,7 @@ run a new test file; the writer needed one more task and one more review for it.
 **Why (evidence, secret, artifact, constraints, approvals):** 01–02.10.2026: a runner handed
 back "placeholder" twice; an agent stopped twice on a key the owner had exported in the shell;
 a publish from a new path made a second page; a runner ran the suites in parallel against
-„един след друг“ and without the test DB variable; an agent refused a cleanup the owner had
+"one after another" and without the test DB variable; an agent refused a cleanup the owner had
 asked for, because its first prompt forbade the unlock, and the consent had to be relayed.
 
 **Spec first (R5).** A run that starts from a new spec, or from one no review loop has passed,
@@ -144,7 +144,7 @@ makes the spec's Codex review loop (R6) its first task. Code writers start after
 their prompt carries the round-1 approved change list, one line per change, with the
 "authoritative" line above. A later spec round that changes a writer's part goes to that
 writer as a correction of the task in progress (R6).
-**Why:** 30.09.2026: the owner asked „нали ще направим ревю на спека?“; the code writers
+**Why:** 30.09.2026: the owner asked "we will review the spec, right?"; the code writers
 started after spec round 1 and the spec loop ended (r3 approve) while they worked.
 
 ## Sol frame variant (R20) - to `captain:light-coder-sol`
@@ -177,15 +177,15 @@ stopping started processes), the scope and the report shape.
 Before bootstrap, main compares the name of the session's current branch with the task (the
 prompt, the handover, the spec). Clear match → `base: <branch> — <one-line reason>` in
 `run.md`, then the Skill call `captain` with args `base <branch>`. `hooks/guard.py` records the
-base only while these hold at that moment: АБ1 HEAD is that named branch, not `main`, `master`,
-the origin default or detached; АБ2 `git fetch origin <default>` succeeds; АБ3 HEAD is the
-fetched tip (no commits of its own); АБ4 origin has no `<branch>`, or has it on the same SHA;
-АБ5 it is not checked out in another worktree; АБ6 the tree is clean (untracked run state under
+base only while these hold at that moment: AB1 HEAD is that named branch, not `main`, `master`,
+the origin default or detached; AB2 `git fetch origin <default>` succeeds; AB3 HEAD is the
+fetched tip (no commits of its own); AB4 origin has no `<branch>`, or has it on the same SHA;
+AB5 it is not checked out in another worktree; AB6 the tree is clean (untracked run state under
 `tmp/captain/` and an untracked `.claude/settings.local.json` aside). Only the hook's line ``captain guard: base `<branch>` recorded`` in the
 context counts; any other result, also no line at all (no plugin hook, a hook timeout), means
 not recorded. Use the args form `base <branch>`: `base=<branch>` is a start argument and
 begins a new run. Recorded → one line to the owner,
-`Base branch: <branch> (автоматично: нов branch над origin/<default>, <reason>)`, and bootstrap
+`Base branch: <branch> (automatic: a new branch on top of origin/<default>, <reason>)`, and bootstrap
 gets `auto base <branch>`. Not recorded, or a match main is not sure of →
 present: one question with a recommendation (the base question below); away: the normal
 bootstrap with a new `captain/*` branch. With an auto base the run works on the base: no
@@ -232,19 +232,19 @@ checkout, and do not touch uncommitted changes.
    is checked out (`git -C '<abs repo>' worktree list`), or none.
 8. python3 '<skill root>/scripts/memory-apply.py' detect --checkout='<abs run checkout>'
    Report its one line verbatim.
-Report in Bulgarian: branch, uncommitted changes (full list), default branch, base of the
+Report in the owner's language: branch, uncommitted changes (full list), default branch, base of the
 feature branch and its base SHA, feature branch, excludes added, run worktree path (every
 mode) and its RECORDED line, remotes and tracking, captain versions in the cache, base-branch
 candidates, the step 8 line.
 ```
 
-Main copies the step 8 line into `run.md` (`Project memory (ПК6): ...`).
+Main copies the step 8 line into `run.md` (`Project memory (PK6): ...`).
 
 After the report: uncommitted changes in present mode → one `AskUserQuestion` to the owner before
 any code agent starts (they are never touched either way); in away mode → note them in
 `run.md` and the end report. Bootstrap stopped at step 2 (the owner's branch has commits not in
-`origin/<default>`) → present mode: one `AskUserQuestion` with an R19 ID — `ОП1` base on
-`origin/<default>` (recommended) or `ОП2` base on that branch — then `SendMessage` the bootstrap
+`origin/<default>`) → present mode: one `AskUserQuestion` with an R19 ID — `OP1` base on
+`origin/<default>` (recommended) or `OP2` base on that branch — then `SendMessage` the bootstrap
 agent to go on with that base. Away mode: base on the default branch; `run.md` and the end
 report note the skipped branch. Worktree-mode agent branches start from the feature branch.
 
@@ -276,7 +276,7 @@ Check and commit the project-memory files main wrote. Run, logged to
 python3 '<skill root>/scripts/memory-apply.py' commit --checkout='<abs run checkout>' \
   --branch='<feature branch | auto base branch>' --memory-py='<abs memory.py>' \
   --files='<topic>.md[,<topic>.md...]' \
-  --message='docs(memory): <add|update> <topic>.md[, ...] (<МК IDs>)'
+  --message='docs(memory): <add|update> <topic>.md[, ...] (<MK IDs>)'
 Report the exit code, the `new`/`edit`, `violation`, `untouched` and `health` lines and the
 commit SHA. Exit 1 → report the lines; do not edit or create memory files yourself.
 <a `drop`, or no time only:> python3 '<skill root>/scripts/memory-apply.py' restore \
@@ -284,7 +284,7 @@ commit SHA. Exit 1 → report the lines; do not edit or create memory files your
 ```
 
 **Why:** main writes memory itself (the project-memory rule: only the main session writes);
-commits and scripts stay agent work (ДЛ2), and the script checks with the plugin's own rules.
+commits and scripts stay agent work (DL2), and the script checks with the plugin's own rules.
 
 ## Memory revalidation prompt (R5) - one `captain:worker`, single pass
 
@@ -293,7 +293,7 @@ replaces the report section with its own output contract and carries no draft pa
 
 ```text
 Revalidate the project-memory files main just wrote in '<abs run checkout>/.agent-memory/':
-<topic>.md (<new | edit>, from МК<n>), ... Read each file, its diff (git -C '<abs run
+<topic>.md (<new | edit>, from MK<n>), ... Read each file, its diff (git -C '<abs run
 checkout>' diff -- .agent-memory; a new file: the file), the other `.agent-memory/*.md` and
 '<abs run checkout>/.agent-memory/README.md'. Check each file: every claim is true against
 the repo now (open the code, run read-only commands); it meets the README write trigger and
@@ -305,7 +305,7 @@ any file; you write nothing. Reply in English, one line per file, then nothing e
 ```
 
 **Why:** memory is read as a rule by every later session, so a wrong line costs more than a
-wrong TODO; one independent Opus pass checks it without a review loop (owner, МП1).
+wrong TODO; one independent Opus pass checks it without a review loop (owner, MP1).
 
 ## Verification prompt (R6) - separate `captain:worker` agent, real local data
 
@@ -365,7 +365,7 @@ Sibling files: fill the sibling line above. A merge of the sibling into the feat
 alone does not help: the writer's checkout still lacks the files, and a two-dot diff against
 the new feature head shows them as deleted.
 **Why:** 30.09.2026: the review of the skill-text branch reported the script from the sibling
-script branch as missing (F1, F2: "липсва", `--total` not supported): two false findings.
+script branch as missing (F1, F2: "missing", `--total` not supported): two false findings.
 
 ## Revalidation message (R6) - by SendMessage to the writer's agentId
 
@@ -393,7 +393,7 @@ normal use (with steps) > a verifier failure > the trap > the round table. The t
 mechanism with findings in an earlier round of this loop → return MECHANISM: <name>, what the
 code does now, and 2-3 options, instead of a fix. A fix that needs a new mechanism → the same
 MECHANISM report.
-Report in Bulgarian, at most 8 lines: the triage file path, then one entry per finding,
+Report in the owner's language, at most 8 lines: the triage file path, then one entry per finding,
 several per line: `F<n> <normal|artificial|not shown>/<impact>/<mechanism or ->/<origin> →
 <class>`; a MECHANISM report adds its name and options in one line each.
 ```
@@ -405,7 +405,7 @@ Fix now, round <k>/3: <F-list>. Start at once; report once, when the fixes are c
 not answer this message with a report first. Keep each fix minimal. Commit on your branch, do not push or
 merge. In the commit body, list each real risk accepted on purpose under "Accepted risks:",
 one line each: - <loop> r<k> F<n> <risk> (in <sha of the commit that holds the risk>),
-including risks accepted in earlier rounds that had no fix commit. Report in Bulgarian with
+including risks accepted in earlier rounds that had no fix commit. Report in the owner's language with
 the finding IDs and evidence per fix.
 Classed ACCEPT or TODO (no change): <F-list with class and reason>.
 ```
@@ -455,7 +455,7 @@ different cause to try>. This is the last writer for this mechanism; the loop's 
 count does not reset (round <k>/3).
 ```
 
-After an `ESCALATE` of a light coder (R4 МР3; never inside a duel), add to the block:
+After an `ESCALATE` of a light coder (R4 MR3; never inside a duel), add to the block:
 
 ```text
 The previous writer stopped with ESCALATE: <reason>.
@@ -475,20 +475,20 @@ run on the head SHA in a clean checkout, the changed and uncommitted paths vs th
 and the review register (findings per round and class).
 A: <paths or inline>   B: <...>   C: <...>
 Score each letter:
-СД1 the clean-checkout check passes and the last review left no FIX NOW (yes|no);
-СД2 files touched outside the owned list, committed or not (count);
-СД3 review rounds until clean (count); СД4 FIX NOW findings in total (count);
-СД5 code quality and fit with repo patterns (1-5); СД6 test quality (1-5).
-Winner: СД1 yes; ties → fewer СД3, then the smaller diff (added + removed lines from
---shortstat), then the higher СД5 + СД6; still tied → pick one and say why. No letter with
-СД1 yes → none.
+SD1 the clean-checkout check passes and the last review left no FIX NOW (yes|no);
+SD2 files touched outside the owned list, committed or not (count);
+SD3 review rounds until clean (count); SD4 FIX NOW findings in total (count);
+SD5 code quality and fit with repo patterns (1-5); SD6 test quality (1-5).
+Winner: SD1 yes; ties → fewer SD3, then the smaller diff (added + removed lines from
+--shortstat), then the higher SD5 + SD6; still tied → pick one and say why. No letter with
+SD1 yes → none.
 Output exactly, one line per letter, then one Winner line:
-<L>: <СД1 yes|no> <СД2 n> <СД3 n> <СД4 n> <СД5 1-5> <СД6 1-5>
+<L>: <SD1 yes|no> <SD2 n> <SD3 n> <SD4 n> <SD5 1-5> <SD6 1-5>
 Winner: <L|none> — <reason, one sentence>
 ```
 
 Invalid output (a letter missing, a value out of range, no `Winner:` line, a winner with
-СД1 no) → one retry, then no winner.
+SD1 no) → one retry, then no winner.
 
 ## Mini-consensus prompt (R9) - Codex (medium), else Fable, else `captain:worker`
 

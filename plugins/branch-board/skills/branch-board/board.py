@@ -23,7 +23,7 @@ STATE_RULES = (
     ("open", lambda b: True),
 )
 
-TODO = "TODO: една честна линия — какво е това и докъде е стигнало."
+TODO = "TODO: one honest line — what this is and how far it got."
 
 
 def state_of(b):
@@ -35,7 +35,7 @@ def state_of(b):
 
 def size_of(b):
     if not b["ahead"]:
-        return "няма собствени commits"
+        return "no commits of its own"
     bits = [f"{b['ahead']} commits", f"{b['files']} files"]
     if b["insertions"] or b["deletions"]:
         bits.append(f"+{b['insertions']} −{b['deletions']}")
@@ -45,12 +45,12 @@ def size_of(b):
 def evidence_of(b):
     """Say what makes the state true, never just that it is true."""
     if b["landed_by"] == "ancestor":
-        return "върхът е ancestor на base-а"
+        return "the tip is an ancestor of the base"
     if b["landed_by"] == "pr":
-        return f"PR #{b['pr']['number']} е merged (squash — commits не съвпадат)"
+        return f"PR #{b['pr']['number']} is merged (squash — the commits do not match)"
     if b["pr"]:
         return f"PR #{b['pr']['number']} {b['pr']['state']}"
-    return "няма PR"
+    return "no PR"
 
 
 def field(key, value):
@@ -64,11 +64,11 @@ def render_branch(b):
     out.append(field("author", b["author"]))
     out.append(field("last", f"{b['last_date']} ({b['in_window_by']})"))
     out.append(field("size", size_of(b)))
-    out.append(field("position", f"{b['ahead']} напред / {b['behind']} назад от base-а"))
+    out.append(field("position", f"{b['ahead']} ahead / {b['behind']} behind the base"))
     if b["role"] == "pointer":
-        out.append(field("role", "pointer — сочи в base-а, няма собствена работа"))
+        out.append(field("role", "pointer — points into the base, no work of its own"))
     if b["local_only"]:
-        out.append(field("local-only", "написан и никога не push-нат"))
+        out.append(field("local-only", "written and never pushed"))
     if b["top_dirs"]:
         dirs = ", ".join(f"{d['path']} ({d['files']})" for d in b["top_dirs"])
         out.append(field("dirs", dirs))
@@ -81,15 +81,15 @@ def render_branch(b):
     if plans:
         for p in plans:
             cb = p["checkboxes"]
-            ticks = f"{cb['done']}/{cb['done'] + cb['todo']} отметнати" if cb["done"] + cb["todo"] else "без чекбокси"
+            ticks = f"{cb['done']}/{cb['done'] + cb['todo']} ticked" if cb["done"] + cb["todo"] else "no checkboxes"
             out.append(field("plan", f"`{p['path']}` — {ticks}"))
             if p["goal"]:
                 out.append(field("goal", p["goal"]))
     elif incidental:
-        out.append(field("plan", "няма собствен план — докоснатите документи са мимоходом "
+        out.append(field("plan", "no plan of its own — the touched documents are incidental "
                                  f"({', '.join('`' + p['path'] + '`' for p in incidental)})"))
     else:
-        out.append(field("plan", "няма собствен план"))
+        out.append(field("plan", "no plan of its own"))
 
     out.append("\n" + TODO + "\n")
 
@@ -98,7 +98,7 @@ def render_branch(b):
             out.append("\n> " + f.replace("\n", " ") + "\n")
 
     if b["commits"]:
-        out.append("\n### последни commits\n\n")
+        out.append("\n### recent commits\n\n")
         for c in b["commits"][:5]:
             out.append(f"- `{c['sha']}` {c['date']} — {c['subject']}\n")
     out.append("\n")
@@ -118,17 +118,17 @@ def main():
     out = ["---\n"]
     out.append(field("repo", m["repo_name"]))
     out.append(field("base", f"{m['base']} @ {m['base_sha']}"))
-    out.append(field("window", f"{m['days']} дни"))
+    out.append(field("window", f"{m['days']} days"))
     out.append(field("generated", m["generated"]))
     out.append(field("branches", str(len(d["branches"]))))
-    out.append(field("gh", "да" if m["gh"] else "не — PR състоянието липсва"))
-    out.append(field("pruned", "да" if m["pruned"] else "НЕ"))
+    out.append(field("gh", "yes" if m["gh"] else "no — the PR state is missing"))
+    out.append(field("pruned", "yes" if m["pruned"] else "NO"))
     for w in m["warnings"]:
         out.append(field("warning", w))
     out.append("---\n\n")
 
     out.append(f"# Branch Board — {m['repo_name']}\n\n")
-    out.append("TODO: два-три реда какво показва бордът точно сега.\n\n")
+    out.append("TODO: two or three lines on what the board shows right now.\n\n")
 
     work = [b for b in d["branches"] if b["role"] == "work"]
     pointers = [b for b in d["branches"] if b["role"] != "work"]
@@ -138,12 +138,12 @@ def main():
 
     if pointers:
         out.append("# Pointers\n\n")
-        out.append("Тези сочат в base-а и нямат собствени commits. Git не различава "
-                   "release pointer от merge-нат branch — и двата изглеждат така.\n\n")
+        out.append("These point into the base and have no commits of their own. Git cannot tell "
+                   "a release pointer from a merged branch — both look like this.\n\n")
         for b in pointers:
             out.append(render_branch(b))
 
-    out.append("# Откъде идват числата\n\n")
+    out.append("# Where the numbers come from\n\n")
     for c in m["commands"]:
         out.append(f"- `{c}`\n")
 
@@ -153,7 +153,7 @@ def main():
     else:
         with open(a.out, "w", encoding="utf-8") as f:
             f.write(text)
-        print(f"написан: {a.out}", file=sys.stderr)
+        print(f"written: {a.out}", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ RUN_MD = """# captain run {run_id}
 ## Tasks
 | ID | Task | Agent | State |
 |---|---|---|---|
-| ЗД1 | demo | w-running | running |
+| ZD1 | demo | w-running | running |
 
 ## Agents
 | Name | agentId | Task id (TaskStop) | Task | Checkout (abs) | Model | Limit | Period start | Minutes | output_file | notified | Context |

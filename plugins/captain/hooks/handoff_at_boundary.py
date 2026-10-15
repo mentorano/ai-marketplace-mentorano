@@ -33,7 +33,8 @@ import handoff_common as common  # noqa: E402
 
 WRITERS = {"worker", "light-coder", "light-coder-sol"}
 # Inside a task, not a start: reviews, verification, votes, fixes, merges and their conflicts, cleanup,
-# diagnosis, recon.
+# diagnosis, recon. The Cyrillic alternates are deliberate: they match the same words in Bulgarian
+# task descriptions, since the captain writes descriptions in the owner's language.
 INSIDE_TASK = re.compile(r"review|ревю|ревизи|verif|верифи|vote|глас|judge|съдия|fix|поправ|integrat|интегр|"
                          r"merge|слей|слив|conflict|конфликт|resolv|разреш|clean|почист|diagnos|диагно|"
                          r"recon|разузна|bootstrap", re.IGNORECASE)
@@ -141,14 +142,14 @@ def successor_steps(where: str, k: int) -> str:
                 "runs `scripts/successor-tab.py --dir --handoff --from --name`; on TAB-OK wait up to 3 minutes "
                 "for the successor's STARTED message, check its pwd, reply ACK with any owner words since the "
                 "handoff, end your timers (CronDelete, TaskStop for fallback sleeps), tell the owner one line "
-                f"„Контекстът е {k}k — handoff в <path>; наследникът <name> потвърди в <pwd>; този tab може да "
-                "се затвори“, then stop. TERMINAL-NONE, FAILED (TAB-DEAD: nothing ran in the tab; the script "
+                f"\"Context is {k}k — handoff at <path>; successor <name> confirmed in <pwd>; this tab can be "
+                "closed\", then stop. TERMINAL-NONE, FAILED (TAB-DEAD: nothing ran in the tab; the script "
                 "closed it, or with closed=no give the owner the close command) or no STARTED → (once a tab "
                 f"exists, a STAND-DOWN to it first) the /clear steps with the kickoff at {where}. A STAND-DOWN "
                 "that is not reachable means no successor exists: no retry, no more waiting.")
     return (f"have a `captain:runner` write the successor's kickoff to {where}; the kickoff-on-clear hook "
-            f"injects it after /clear. Tell the owner one line: „Контекстът е {k}k — handoff в <path>; напиши "
-            "/clear, после `/captain resume`“; then stop.")
+            f"injects it after /clear. Tell the owner one line: \"Context is {k}k — handoff at <path>; type "
+            "/clear, then `/captain resume`\"; then stop.")
 
 
 if __name__ == "__main__":

@@ -268,7 +268,7 @@ class AuditFixturesTest(unittest.TestCase):
         self.assertNotIn("gradlew", result.stdout)
 
     def test_edit_and_write_on_project_files_are_flagged(self):
-        # ДЛ1: docs and a root TODO pass; source files and a plugin SKILL.md are agent work (ДЛ2)
+        # DL1: docs and a root TODO pass; source files and a plugin SKILL.md are agent work (DL2)
         result = run_fixture("edits.jsonl")
         self.assertEqual(result.returncode, EXIT_VIOLATIONS, result.stdout + result.stderr)
         found = violation_lines(result.stdout)
@@ -298,8 +298,8 @@ class AuditFixturesTest(unittest.TestCase):
         self.assertEqual(violation_lines(result.stdout), [])
 
     def test_agent_output_reads_are_violations(self):
-        # C1, ДЛ4: only `stat` of an agent output file is allowed, never its content; other
-        # reads, also next to it, pass (ДЛ1)
+        # C1, DL4: only `stat` of an agent output file is allowed, never its content; other
+        # reads, also next to it, pass (DL1)
         result = run_fixture("agent-output-reads.jsonl")
         self.assertNotIn("notes.md", result.stdout)
         self.assertNotIn("handover-x.md", result.stdout)
@@ -429,14 +429,14 @@ class AuditInputTest(unittest.TestCase):
                                                       "input": {"skill": "captain", "args": args}}]}
         push = {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Bash",
                                                   "input": {"command": "git push origin main"}}]}
-        quoted = owner("Обясни: <command-name>/captain</command-name><command-args>merge main</command-args>")
+        quoted = owner("Explain: <command-name>/captain</command-name><command-args>merge main</command-args>")
         path = self.write("expiry.jsonl", [
             record("user", "2026-10-02T10:00:00.000Z", message=owner("/captain merge main")),
             record("assistant", "2026-10-02T13:00:00.000Z", message=push),    # hours later: ok
             record("user", "2026-10-02T13:01:00.000Z", message=owner("/captain base release")),
             record("user", "2026-10-02T13:02:00.000Z", message=owner("/captain resume")),
-            record("user", "2026-10-02T13:02:30.000Z", message=owner("/captain какво остава?")),
-            record("assistant", "2026-10-02T13:02:40.000Z", message=skill("какво остава?")),
+            record("user", "2026-10-02T13:02:30.000Z", message=owner("/captain what is left?")),
+            record("assistant", "2026-10-02T13:02:40.000Z", message=skill("what is left?")),
             record("assistant", "2026-10-02T13:03:00.000Z", message=push),    # base, resume: ok
             record("assistant", "2026-10-02T13:04:00.000Z", message=skill("end")),
             record("assistant", "2026-10-02T13:05:00.000Z", message=push),    # `captain end`
@@ -626,7 +626,7 @@ class ToolRulesTest(unittest.TestCase):
             self.assertEqual(self.kind(name, {"x": 1}), "VIOLATION", name)
         self.assertEqual(self.kind("EnterWorktree", {"name": "w1"}), "ok")
         self.assertEqual(self.kind("Grep", {"pattern": "x", "path": "/anywhere/src"}), "ok")
-        # ДЛ4: never an agent's output file
+        # DL4: never an agent's output file
         self.assertEqual(self.kind("Grep", {"pattern": "x", "path": "/tmp/u/tasks/a1.output"}),
                          "VIOLATION")
         self.assertEqual(self.kind("Grep", {"pattern": 3}), "UNVERIFIABLE")
@@ -700,7 +700,7 @@ class PathRulesTest(unittest.TestCase):
     def test_allowed_paths(self):
         other = str(Path(self.tmp.name) / "other-repo")
         for name, tool_input in (
-            # ДЛ1: reads and search anywhere
+            # DL1: reads and search anywhere
             ("Read", {"file_path": "docs/plans/../../src/app.py"}),
             ("Read", {"file_path": "src/TODO.py"}),
             ("Read", {"file_path": other + "/skills/captain/scripts/audit-main.py"}),
@@ -709,7 +709,7 @@ class PathRulesTest(unittest.TestCase):
             ("Glob", {"pattern": "TODO*", "path": other}),
             ("Glob", {"pattern": "**/TODO*"}),
             ("Glob", {"pattern": "src/**"}),
-            # ДЛ1: edits of run state, root TODO, docs and the local settings
+            # DL1: edits of run state, root TODO, docs and the local settings
             ("Write", {"file_path": "TODO-next.md"}),
             ("Write", {"file_path": "docs/notes/2026-10-13-x.md"}),
             ("Write", {"file_path": str(self.repo / "docs" / "README.txt")}),
@@ -731,7 +731,7 @@ class PathRulesTest(unittest.TestCase):
             ("Write", {"file_path": other + "/tmp/captain/x.py"}),
             ("Write", {"file_path": str(self.repo) + "-old/tmp/captain/x.md"}),
             ("Write", {"file_path": "src/TODO.md"}),
-            # ДЛ2: code, config, scripts, README and plugin skill files, also under docs/
+            # DL2: code, config, scripts, README and plugin skill files, also under docs/
             ("Write", {"file_path": "README.md"}),
             ("Write", {"file_path": "docs/conf.py"}),
             ("Write", {"file_path": "docs-old/x.md"}),
@@ -740,7 +740,7 @@ class PathRulesTest(unittest.TestCase):
             ("Write", {"file_path": "plugins/captain/skills/captain/SKILL.md"}),
             ("Write", {"file_path": "plugins/captain/skills/captain/reference/tools.md"}),
             ("Write", {"file_path": "docs/../src/x.md"}),
-            # ДЛ4: never an agent's output file
+            # DL4: never an agent's output file
             ("Read", {"file_path": "/private/tmp/u/tasks/a1.output"}),
         ):
             with self.subTest(name=name, tool_input=tool_input):
@@ -754,7 +754,7 @@ class PathRulesTest(unittest.TestCase):
         (self.repo / "docs" / "link").symlink_to(self.repo / "src")
         self.assertEqual(self.kind("Edit", {"file_path": "docs/link/x.md", "old_string": "a",
                                             "new_string": "b"}), "VIOLATION")
-        # ДЛ1: a Glob only lists names, so it passes anywhere
+        # DL1: a Glob only lists names, so it passes anywhere
         self.assertEqual(self.kind("Glob", {"pattern": "tmp/captain/link/*"}), "ok")
 
     def test_recursive_glob_is_ok(self):
@@ -773,7 +773,7 @@ class PathRulesTest(unittest.TestCase):
 
 
 class AgentMemoryPathTest(unittest.TestCase):
-    """ТС6 (ПТ1): main may Write/Edit `.agent-memory/<topic>.md` of the repo or the run
+    """TS6 (PT1): main may Write/Edit `.agent-memory/<topic>.md` of the repo or the run
     worktree, nothing else of the memory layout."""
 
     @classmethod
@@ -878,7 +878,7 @@ class SetupActionsTest(unittest.TestCase):
                 self.assertEqual(self.kind(name, {"file_path": path}), "VIOLATION")
 
     def test_main_never_writes_the_notify_wrapper(self):
-        # Codex kp1 r1 F2 (owner ОП1): main could write notify.sh, then run it; a runner writes it
+        # Codex kp1 r1 F2 (owner OP1): main could write notify.sh, then run it; a runner writes it
         wrapper = self.HOME + "/.claude/captain/notify.sh"
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -905,11 +905,11 @@ class SetupActionsTest(unittest.TestCase):
             "codex --help", "agy --help",
             "~/.local/bin/agy --help >/dev/null 2>&1",
             "chmod +x ~/.claude/captain/notify.sh", "chmod +x " + self.HOME + "/.claude/captain/notify.sh",
-            "CAPTAIN_NOW=06:00 ~/.claude/captain/notify.sh 'captain-setup: тест'",
+            "CAPTAIN_NOW=06:00 ~/.claude/captain/notify.sh 'captain-setup: test'",
             "CAPTAIN_NOW=12:00 " + self.HOME + "/.claude/captain/notify.sh hi",
             "CAPTAIN_NOW=00:00 ~/.claude/captain/notify.sh hi",
             "CAPTAIN_NOW=23:59 ~/.claude/captain/notify.sh hi",
-            "CAPTAIN_NOW=12:00 CAPTAIN_SEND_NOW=1 ~/.claude/captain/notify.sh 'captain-setup: тест'",
+            "CAPTAIN_NOW=12:00 CAPTAIN_SEND_NOW=1 ~/.claude/captain/notify.sh 'captain-setup: test'",
         ):
             with self.subTest(command=command):
                 self.assertEqual(self.bash(command), "ok")
@@ -1020,7 +1020,7 @@ class BashClassificationTest(unittest.TestCase):
             "ps aux | grep 'a|b' # comment",
             # catching up with origin/<default>: the live guard checks which default
             "git merge --ff-only origin/main", "git merge --no-ff --no-edit origin/main",
-            # ДЛ1: read-only commands with file operands and git inspection
+            # DL1: read-only commands with file operands and git inspection
             "command cat src/app.py", "cat ~/.claude/captain/config.json", "head -n 20 docs/x.md",
             "tail -n 5 tmp/claude-logs/b.log", "wc -l a.md b.md", "ls -la tmp/captain",
             "find docs -name '*.md'", "stat -f %m /tmp/u/tasks/a1.output",
@@ -1035,7 +1035,7 @@ class BashClassificationTest(unittest.TestCase):
         self.assertEqual(self.kind("sleep 300", background=True), "ok")
         self.assertEqual(self.kind("sleep 300"), "VIOLATION")
         self.assertEqual(self.kind("sleep 300 &"), "VIOLATION")
-        # ДЛ2: a background call other than the lone timer `sleep` is agent work
+        # DL2: a background call other than the lone timer `sleep` is agent work
         self.assertEqual(self.kind("date & sleep 300", background=True), "VIOLATION")
 
     def test_forbidden_commands(self):
@@ -1054,7 +1054,7 @@ class BashClassificationTest(unittest.TestCase):
             "./gradlew build", "./build-dev.sh",
             "git merge --ff-only topic", "git merge --ff-only --no-edit origin/main",
             "git merge --ff-only origin/main extra", "git merge --ff-only",
-            # ДЛ2 and ДЛ4: a build, a following tail, a find that acts, an output file, a refspec
+            # DL2 and DL4: a build, a following tail, a find that acts, an output file, a refspec
             "npm test", "python3 -m pytest tests -q", "tail -f x.log", "tail -n 5 -F x.log",
             "tail --follow=name x.log", "find . -delete", "find . -name x -exec rm '{}' ';'",
             "cat /tmp/u/tasks/a1.output", "head -n 5 tmp/tasks/a2.output",
@@ -1111,6 +1111,7 @@ class PluginTextTest(unittest.TestCase):
                 manifest.pop("author", None)
                 text = json.dumps(manifest, ensure_ascii=False, indent=1)
             for number, line in enumerate(text.splitlines(), 1):
+                # the Cyrillic spelling is deliberate: the name must not appear in either script
                 if re.search(r"ivan|иван", line, re.I):
                     found.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()[:80]}")
         self.assertEqual(found, [], "\n".join(found))
@@ -1513,7 +1514,7 @@ class GuardHookTest(unittest.TestCase):
         self.assertTrue(self.denied(self.pre(*self.EDIT)))
 
     def test_agent_memory_topic_passes_readme_does_not(self):
-        # ТС6 live: ПТ1 in the hook; a subagent call passes as today for any path (ФР7)
+        # TS6 live: PT1 in the hook; a subagent call passes as today for any path (FR7)
         (self.repo / ".agent-memory").mkdir()
         self.prompt("/captain 30m")
         topic = {"file_path": str(self.repo / ".agent-memory" / "topic.md"), "content": "x"}
@@ -1541,7 +1542,7 @@ class GuardHookTest(unittest.TestCase):
     def test_mode_outlives_the_time_box(self):
         # the run's end (R17) does not end captain mode; the next morning's edit is still denied
         self.prompt("/captain 2h")
-        self.prompt("добро утро пусни го локално да го тествам")
+        self.prompt("good morning, run it locally so I can test it")
         self.assertTrue(self.denied(self.pre("Bash", {"command": "PORT=8444 node server.js"})))
         self.assertTrue(self.denied(self.pre("Bash", {"command": "python3 - <<'EOF'\nx\nEOF"})))
 
@@ -1708,9 +1709,9 @@ class GuardHookTest(unittest.TestCase):
         self.prompt("/captain base release")
         self.prompt("/captain resume")
         self.skill("captain:captain", "resume")
-        # free text, typed or from the model, is no new start (ДК8)
-        self.skill("captain:captain", "какво остава?")
-        self.prompt("/captain какво остава?")
+        # free text, typed or from the model, is no new start (DK8)
+        self.skill("captain:captain", "what is left?")
+        self.prompt("/captain what is left?")
         self.assertFalse(self.merge_denied(self.bash(push)))
         # the model's `captain end` call before the end report (R17) ends it
         self.assertFalse(self.blocked(self.pre("Skill", {"skill": "captain", "args": "end"})))
@@ -1778,7 +1779,7 @@ class GuardHookTest(unittest.TestCase):
             with self.subTest(name=name, tool_input=tool_input):
                 result = self.pre(name, tool_input)
                 self.assertTrue(self.denied(result))
-                self.assertIn("This is agent work (R1, ДЛ2): delegate it to a captain:runner",
+                self.assertIn("This is agent work (R1, DL2): delegate it to a captain:runner",
                               result.stdout)
 
     def test_main_never_writes_the_state_files_through_bash(self):
@@ -1892,7 +1893,7 @@ class GuardHookTest(unittest.TestCase):
         self.assertFalse(self.merge_denied(self.bash("git merge --no-ff topic")))
 
     def test_the_todo_only_commit_runs_on_a_run_branch_with_a_tracked_todo(self):
-        # Codex kp1 r1 F8: the R18 TODO-only commit (КП1) passes the guard on a run branch
+        # Codex kp1 r1 F8: the R18 TODO-only commit (KP1) passes the guard on a run branch
         self.branches()
         (self.repo / "TODO.md").write_text("- x\n")
         self.git("add", "TODO.md")
@@ -1922,7 +1923,7 @@ class GuardHookTest(unittest.TestCase):
         self.assertTrue(self.form_denied(self.bash(commit)))
 
     def test_a_handoff_successor_takes_over_the_grant_of_the_run(self):
-        # Codex kp1 r1 F6: МГ1 carries the grant to the R21 successor of the same run
+        # Codex kp1 r1 F6: MG1 carries the grant to the R21 successor of the same run
         self.branches()
         self.git("checkout", "-q", "main")
         self.prompt("/captain 1h")
@@ -2014,7 +2015,7 @@ class GuardHookTest(unittest.TestCase):
     def test_the_base_comes_only_from_a_typed_prompt(self):
         self.branches()
         self.git("branch", "release")
-        # a model Skill call records it only under АБ1-АБ6 (test_captain_auto_base.py); here HEAD is not release
+        # a model Skill call records it only under AB1-AB6 (test_captain_auto_base.py); here HEAD is not release
         self.skill("captain:captain", "base release")
         self.skill("captain:captain", "1h base=release")
         self.assertIsNone(self.base())
@@ -2311,7 +2312,7 @@ class CaptainModeTextTest(unittest.TestCase):
 
 
 class ConsensusTextTest(unittest.TestCase):
-    """Captain 0.15.0 (АМ1): the full consensus is a 3amigos panel run by main."""
+    """Captain 0.15.0 (AM1): the full consensus is a 3amigos panel run by main."""
 
     CONSENSUS_MD = SKILL_DIR / "reference" / "consensus.md"
 
@@ -2329,7 +2330,7 @@ class ConsensusTextTest(unittest.TestCase):
                        "`no consensus`", "never unlocks an R10 action",
                        "tmp/captain/<run>/amigos-<ID>/", "min(300 s, park − 5 min)",
                        "starts at once", "## Fallback without 3amigos",
-                       "„препоръка след 3amigos: ОП2“", "a subagent cannot nest them",
+                       '"recommendation after 3amigos: OP2"', "a subagent cannot nest them",
                        "park − 5 min is under 60 s", "absent from `tally.json`",
                        "no `ok` answer at all", "not in `data.md`"):
             with self.subTest(needle=needle):
@@ -2449,13 +2450,13 @@ class RunLessonsTextTest(unittest.TestCase):
         self.assertIn("only the owner's `!` commands wait", read_text(self.REFERENCE / "health.md"))
 
     def test_astra_review_effort_has_a_why_line(self):
-        self.assertIn("confirmed `medium` for astra reviews (ЕФ3)", read_text(TOOLS_MD))
+        self.assertIn("confirmed `medium` for astra reviews (EF3)", read_text(TOOLS_MD))
 
 
 
 class FewerStopsTextTest(unittest.TestCase):
-    """Captain 0.15.0: dev targets (ДП1), fix-all (ЗД1), the health line (ТХ1),
-    `Остава:` (СТ1) and short agent reports (КТ1)."""
+    """Captain 0.15.0: dev targets (DP1), fix-all (ZD1), the health line (TH1),
+    `Remaining:` (ST1) and short agent reports (KT1)."""
 
     REFERENCE = SKILL_DIR / "reference"
 
@@ -2498,7 +2499,7 @@ class FewerStopsTextTest(unittest.TestCase):
         self.assertIn("`mode: fix-all — <reason>`", text)
         self.assertIn("in `fix-all`, TODO is the last resort", text)
         triage = self.flat(self.REFERENCE / "triage.md")
-        for needle in ("## `fix-all` runs - TODO is the last resort (ЗД1)",
+        for needle in ("## `fix-all` runs - TODO is the last resort (ZD1)",
                        "limit plus one re-review timeout", "a new hypothesis",
                        "It does not reset the loop's re-review count",
                        "carries a one-line reason",
@@ -2509,7 +2510,7 @@ class FewerStopsTextTest(unittest.TestCase):
         self.assertNotIn("Time does not cover it → the owner question", triage)
         queue = self.flat(self.REFERENCE / "queue.md")
         self.assertIn("- mode: fix-all | normal — <one-line reason>", queue)
-        self.assertIn("`TODO: добавени <n>, затворени <m>`", queue)
+        self.assertIn("`TODO: added <n>, closed <m>`", queue)
         self.assertIn("when added > 0 it is the report's first line", queue)
         self.assertIn("New hypothesis to test first:", read_text(PROMPTS_MD))
 
@@ -2533,14 +2534,14 @@ class FewerStopsTextTest(unittest.TestCase):
         self.assertNotIn("a separate R12 event line", health)
 
     def test_every_report_ends_with_what_is_left(self):
-        self.assertIn("end with `Остава:`", " ".join(read_text(SKILL_MD).split()))
+        self.assertIn("end with `Remaining:`", " ".join(read_text(SKILL_MD).split()))
         queue = self.flat(self.REFERENCE / "queue.md")
-        for needle in ("## Status, park and end reports - `Остава:` (R12)",
-                       "`Нищо не остава.` only when all five are empty",
-                       "`Продължавам с <ID>.`", "`Чакам те за <ID>.`",
-                       "`Спирам; captain mode остава включен.`",
+        for needle in ("## Status, park and end reports - `Remaining:` (R12)",
+                       "`Nothing remains.` only when all five are empty",
+                       "`Continuing with <ID>.`", "`Waiting for you on <ID>.`",
+                       "`Stopping; captain mode stays on.`",
                        "The R13 health line is not a report",
-                       "8. `Остава:` and the last line"):
+                       "8. `Remaining:` and the last line"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, queue)
 
@@ -2572,7 +2573,7 @@ class FewerStopsTextTest(unittest.TestCase):
 
 
 class ImplicitNoIndexAndCarriedGrantTest(unittest.TestCase):
-    """ИФ1: a plain `git diff` that git turns into --no-index; АУ1: the grant presumed after
+    """IF1: a plain `git diff` that git turns into --no-index; AU1: the grant presumed after
     an R21 `/captain resume`."""
 
     @classmethod
@@ -2689,7 +2690,7 @@ class ImplicitNoIndexAndCarriedGrantTest(unittest.TestCase):
     RESUME = {"role": "user", "content": "/captain resume handoff=/h.md from=a name=a-r2"}
 
     def test_a_force_push_after_resume_stays_a_violation(self):
-        # АУ1 F2: no grant allows a force push, carried or not
+        # AU1 F2: no grant allows a force push, carried or not
         found = self.audit_rows([
             self.record("user", "2026-10-02T10:00:00.000Z", self.RESUME),
             self.record("assistant", "2026-10-02T10:01:00.000Z",
@@ -2702,7 +2703,7 @@ class ImplicitNoIndexAndCarriedGrantTest(unittest.TestCase):
         self.assertEqual([line.split()[1][11:16] for line in found], ["10:01", "10:02", "10:03"])
 
     def test_the_presumed_grant_ends_at_captain_end(self):
-        # АУ1 F3: the model's `captain end` call (and an owner's `/captain off`) ends it too
+        # AU1 F3: the model's `captain end` call (and an owner's `/captain off`) ends it too
         skill = {"role": "assistant", "content": [{"type": "tool_use", "id": "s1", "name": "Skill",
                                                    "input": {"skill": "captain", "args": "end"}}]}
         found = self.audit_rows([
@@ -2720,7 +2721,7 @@ class ImplicitNoIndexAndCarriedGrantTest(unittest.TestCase):
 
 
 class GuardBaseCarryTest(unittest.TestCase):
-    """ГН2: `/captain resume` carries the run's recorded base with the grant, or alone."""
+    """GN2: `/captain resume` carries the run's recorded base with the grant, or alone."""
 
     A = "a0000000-0000-4000-8000-00000000000a"
     B = "b0000000-0000-4000-8000-00000000000b"
@@ -2825,7 +2826,7 @@ class GuardBaseCarryTest(unittest.TestCase):
         self.assertIsNotNone(self.record(self.A, ".merge"))
 
     def test_one_grant_beside_another_live_base_carries_nothing(self):
-        # ЗД2 r1 F1: a grant does not outvote another session's live base
+        # ZD2 r1 F1: a grant does not outvote another session's live base
         self.prompt(self.A, "/captain 1h base=release")
         self.prompt(self.C, "/captain 1h base=release")
         self.prompt(self.A, "/captain merge main")
@@ -2864,7 +2865,7 @@ class GuardBaseCarryTest(unittest.TestCase):
 
 
 MEMORY_PY = ROOT / "plugins" / "project-memory" / "scripts" / "memory.py"
-MEMORY_OPEN = '<only with "Project memory: on" in run.md (ПК6):>'
+MEMORY_OPEN = '<only with "Project memory: on" in run.md (PK6):>'
 MEMORY_CLOSE = "No such lesson → no draft, no line."
 MEMORY_WORDS = (".agent-memory", "Memory candidate", "Project memory", "memory-drafts")
 
@@ -2884,7 +2885,7 @@ def memory_paragraph(lines: list[str]) -> tuple[int, int]:
 
 
 class MemoryFrameTextTest(unittest.TestCase):
-    """Captain 0.16.0 (ПК1, ПК6): ТС4 the frame paragraph, ТС5 an `off` frame is today's."""
+    """Captain 0.16.0 (PK1, PK6): TS4 the frame paragraph, TS5 an `off` frame is today's."""
 
     @classmethod
     def setUpClass(cls):
@@ -2949,19 +2950,19 @@ class MemoryFrameTextTest(unittest.TestCase):
 
     def test_queue_and_run_state_name_the_memory_step(self):
         queue = read_text(SKILL_DIR / "reference" / "queue.md")
-        for needle in ("- Project memory (ПК6): on (<abs memory.py path>) | off: <reason>",
+        for needle in ("- Project memory (PK6): on (<abs memory.py path>) | off: <reason>",
                        "## Memory candidates", "## Memory step (R17",
-                       "МШ3 Revalidate. One `captain:worker` (Opus), single pass",
-                       "`Opus revalidation (МП1) | passed`", "not written: no time",
-                       # ТС3a: ЗП0, a dirty .agent-memory skips the whole step
-                       "ЗП0 Clean check", "--ignored\n   --untracked-files=all -- .agent-memory`",
-                       "No kept row after МШ1 → no write, no revalidation, no commit",
+                       "MSH3 Revalidate. One `captain:worker` (Opus), single pass",
+                       "`Opus revalidation (MP1) | passed`", "not written: no time",
+                       # TS3a: ZP0, a dirty .agent-memory skips the whole step
+                       "ZP0 Clean check", "--ignored\n   --untracked-files=all -- .agent-memory`",
+                       "No kept row after MSH1 → no write, no revalidation, no commit",
                        "all dropped → no commit, never",
                        "not written: dirty .agent-memory", "no write, no `restore`, no commit",
                        '"memory": {"candidates": <n>'):
             with self.subTest(needle=needle):
                 self.assertIn(needle, queue)
-        self.assertNotIn("Памет:", queue)  # МП2: no memory section in the end report
+        self.assertNotIn("Memory:", queue)  # MP2: no memory section in the end report
         self.assertIn("Memory on → the memory step first", read_text(SKILL_MD))
         self.assertIn("## Memory candidates", read_text(SKILL_DIR / "reference" / "handoff.md"))
 

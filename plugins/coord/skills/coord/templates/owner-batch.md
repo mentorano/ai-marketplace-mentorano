@@ -1,4 +1,4 @@
-<Project> - <N> въпроса за решение + <M> решения на coord за потвърждение
+<Project> - <N> questions for decision + <M> coord rulings for ratification
 
 ## For decision (each blocks or shapes work)
 1. **<short title>** - <context in one line>.
@@ -16,7 +16,7 @@
 - <at most 3 lines; skip the section if empty>
 
 ## Brief (first reply after away mode)
-Докато те нямаше — <N> решения с гласуване:
-- **ГЛn <short title>** — <question in one line>. Реши: <winner> (<Codex X, Opus Y, Fable Z>; contested|single voter|—). Построено върху него: <slices/sha or nothing yet>. Обръщане: <easy / costs X>.
-Чакат теб: <destructive/irreversible items>.
-Отговори само за тези, които обръщаш; останалите ги ратифицирам.
+While you were away — <N> decisions by vote:
+- **GLn <short title>** — <question in one line>. Decided: <winner> (<Codex X, Opus Y, Fable Z>; contested|single voter|—). Built on it since: <slices/sha or nothing yet>. Reversal: <easy / costs X>.
+Waiting on you: <destructive/irreversible items>.
+Reply only for the ones you reverse; I ratify the rest.

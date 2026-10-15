@@ -19,20 +19,20 @@ Roots:
     plugin's skill directory when auditing a session that loaded another copy).
 Paths are checked for containment after `..` and symlinks are resolved.
 
-What it checks (R1: ДЛ1 passes, ДЛ2 is agent work, ДЛ4 never):
+What it checks (R1: DL1 passes, DL2 is agent work, DL4 never):
   - tools: Agent (and Task, its old name), SendMessage, ListAgents, TaskStop, AskUserQuestion,
     ToolSearch, CronCreate, CronDelete, CronList, ReadNotifications, EnterWorktree pass when
     their required input is present; Skill passes only for the exact names captain,
     captain:captain, captain-setup, captain:captain-setup, 3amigos, 3amigos:3amigos; every
     other tool is a violation;
   - Read, Grep and Glob pass anywhere, except an agent output file (<dir>/tasks/<id>.output),
-    which only `stat` may touch (ДЛ4);
+    which only `stat` may touch (DL4);
   - Write and Edit: <repo>/tmp/captain/**, <repo>/TODO (or TODO* with a doc suffix), <repo>/docs/** with a doc suffix
     (.md .mdx .markdown .txt .rst .adoc; never a SKILL.md or a path with a `skills` part),
     <repo>/.claude/settings.local.json and the auto memory,
     <home>/.claude/projects/<project>/memory/*.md; Artifact with action `open` and a url;
   - Bash with run_in_background (except a lone `sleep N`, the timer) or a timeout above
-    120000 ms is a violation (ДЛ2);
+    120000 ms is a violation (DL2);
   - Bash, as an allow-list grammar: simple commands joined by ; && || & or newline, and
     pipelines into status filters; words plain or in '...' / "..." without $, and without
     unquoted { } * ? [; no VAR=value prefix; redirections only 2>&1 and >/dev/null (also
@@ -107,13 +107,13 @@ REQUIRED_INPUT = {
     "ReadNotifications": (), "ListAgents": (), "EnterWorktree": (),
 }
 ANY_OF_INPUT = {"SendMessage": ("to", "recipient"), "TaskStop": ("task_id", "shell_id")}
-# the captain skill, its setup, and the 3amigos panel main runs itself (АМ1)
+# the captain skill, its setup, and the 3amigos panel main runs itself (AM1)
 ALLOWED_SKILLS = {"captain", "captain:captain", "captain-setup", "captain:captain-setup",
                   "3amigos", "3amigos:3amigos"}
-READ_COMMANDS = {"cat", "head", "tail", "wc", "ls", "find"}  # ДЛ1 read-only Bash, file operands
+READ_COMMANDS = {"cat", "head", "tail", "wc", "ls", "find"}  # DL1 read-only Bash, file operands
 FIND_ACTIONS = re.compile(r"^-(exec|execdir|ok|okdir|delete|fprint\w*|fls|fprintf)$")
 DOC_SUFFIXES = {".md", ".mdx", ".markdown", ".txt", ".rst", ".adoc"}
-MAX_TIMEOUT_MS = 120_000  # ДЛ2: a longer Bash call is agent work
+MAX_TIMEOUT_MS = 120_000  # DL2: a longer Bash call is agent work
 # the run's timer is the one background call main keeps (R11, R13)
 BACKGROUND_TIMER = re.compile(r"^\s*(command\s+)?sleep\s+\d+[smhd]?\s*$")
 RECORD_TYPES = {
@@ -149,7 +149,7 @@ GIT_STATUS_FLAGS = re.compile(r"^(-s|-b|-sb|-bs|--short|--branch|--porcelain(=v[
 HOME = os.path.expanduser("~")
 NOTIFY = f"{HOME}/.claude/captain/notify.sh"  # the per-user wrapper from captain-setup
 # captain-setup's own actions (see the docstring)
-# never notify.sh: main must not write the wrapper it may run (Codex kp1 r1 F2, owner ОП1)
+# never notify.sh: main must not write the wrapper it may run (Codex kp1 r1 F2, owner OP1)
 SETUP_WRITES = {f"{HOME}/.claude/captain/config.json"}
 SETUP_READS = {f"{HOME}/.claude/captain/config.json", f"{HOME}/.claude/skills/msg-notify/SKILL.md"}
 SETUP_TOOLS = {"codex", "agy"}
@@ -448,7 +448,7 @@ DIFF_FLAGS = re.compile(
 
 def names_output(arg: str) -> bool:
     """An operand that names an agent output file: a `.output` name, relative or not, so a
-    `cd` into the tasks directory does not hide it (ДЛ4, Codex kp1 r1 F4)."""
+    `cd` into the tasks directory does not hide it (DL4, Codex kp1 r1 F4)."""
     return agent_output(arg) or os.path.basename(arg.rstrip("/")).endswith(".output")
 
 
@@ -495,7 +495,7 @@ def _diff_paths(rest: list[str], base: Path | None) -> list[Path]:
 
 
 def _diff_kind(args: list[str], cwd: Path | None) -> str:
-    """ИФ1: a plain `git diff <a> <b>` acts like --no-index when an operand lies outside the
+    """IF1: a plain `git diff <a> <b>` acts like --no-index when an operand lies outside the
     work tree or git runs outside any repository, and it reads a whole directory operand.
     Every path operand stays inside the work tree of the directory git runs in and is no
     directory above agent output files. hooks/guard.py runs this check live."""
@@ -531,7 +531,7 @@ def _fetch_ok(rest: list[str]) -> bool:
     return all(a in FETCH_FLAGS if a.startswith("-") else valid_ref(a) for a in rest)
 
 
-GIT_READS = {  # ДЛ1 git inspection
+GIT_READS = {  # DL1 git inspection
     "branch": lambda rest: set(rest) <= {"-v", "-vv", "-a", "-r", "--show-current"},
     "worktree": lambda rest: rest in (["list"], ["list", "--porcelain"]),
     "remote": lambda rest: rest == ["-v"],
@@ -636,7 +636,7 @@ def _date_kind(args: list[str]) -> str:
 
 
 def agent_output(path: str) -> bool:
-    """An agent's output file (<tmp>/tasks/<id>.output): main never reads it (ДЛ4)."""
+    """An agent's output file (<tmp>/tasks/<id>.output): main never reads it (DL4)."""
     for candidate in (Path(os.path.expanduser(path)), Path(os.path.realpath(os.path.expanduser(path)))):
         if candidate.suffix == ".output" and candidate.parent.name == "tasks":
             return True
@@ -644,8 +644,8 @@ def agent_output(path: str) -> bool:
 
 
 def _read_kind(name: str, args: list[str]) -> str:
-    """ДЛ1 read-only commands with file operands: cat, head, tail, wc, ls, find. Never an
-    agent output file (ДЛ4), never `tail -f` (a process that outlives the call), never a find
+    """DL1 read-only commands with file operands: cat, head, tail, wc, ls, find. Never an
+    agent output file (DL4), never `tail -f` (a process that outlives the call), never a find
     action that runs or deletes."""
     if any(names_output(a) for a in args if not a.startswith("-")):
         return VIOLATION
@@ -783,7 +783,7 @@ def _inside(path: Path, base: Path) -> bool:
 
 
 def _writable(path: Path, root: Path) -> bool:
-    """ДЛ1 edits: run state, TODO files at the repo root, docs and the local settings. A plugin
+    """DL1 edits: run state, TODO files at the repo root, docs and the local settings. A plugin
     skill file (SKILL.md, anything under a `skills` directory) is product code: agent work."""
     real_root = Path(os.path.realpath(root))
     if _inside(path, real_root / "tmp" / "captain") \
@@ -815,10 +815,10 @@ def _memory_file_name(path: Path) -> bool:
 
 
 def _agent_memory_file(lexical: Path, real: Path, root: Path) -> bool:
-    """ПТ1: main writes `.agent-memory/<topic>.md` of the repo or of the captain run worktree.
+    """PT1: main writes `.agent-memory/<topic>.md` of the repo or of the captain run worktree.
     Both the written path and its realpath must name a flat `.md` file (never README.md) in an
     existing, real `.agent-memory/` directory; so `.claude/rules/project-memory/` (the same
-    files through a symlink), agent worktrees and repos without memory stay ДЛ2."""
+    files through a symlink), agent worktrees and repos without memory stay DL2."""
     if not (_memory_file_name(lexical) and _memory_file_name(real)):
         return False
     if os.path.islink(lexical.parent) or not lexical.parent.is_dir():
@@ -875,8 +875,8 @@ def escape(text: str) -> str:
 
 def _classify_path(name: str, tool_input: dict, root: Path | None, skill_root: Path,
                    cwd: Path | None = None):
-    """Read, Glob and Grep pass anywhere except an agent output file (ДЛ4); Write passes on the
-    ДЛ1 paths and captain-setup's own files."""
+    """Read, Glob and Grep pass anywhere except an agent output file (DL4); Write passes on the
+    DL1 paths and captain-setup's own files."""
     key = {"Glob": "pattern", "Grep": "pattern"}.get(name, "file_path")
     value, base = tool_input.get(key), tool_input.get("path")
     if not isinstance(value, str) or not value or not isinstance(base, (str, type(None))):
@@ -890,13 +890,13 @@ def _classify_path(name: str, tool_input: dict, root: Path | None, skill_root: P
         if name == "Grep" and not base and cwd:  # a path-less Grep searches cwd (kp1 r2 F3)
             base = str(cwd)
         if target and agent_output(target) or name == "Grep" and _greps_outputs(tool_input, base):
-            return VIOLATION, escape(f"an agent output_file (ДЛ4): {target or value}")
+            return VIOLATION, escape(f"an agent output_file (DL4): {target or value}")
         return OK, ""
     return _classify_write(value, root, cwd)
 
 
 def _greps_outputs(tool_input: dict, base: str | None) -> bool:
-    """A Grep over a `tasks` directory or with a glob of output files reads them all (ДЛ4)."""
+    """A Grep over a `tasks` directory or with a glob of output files reads them all (DL4)."""
     pattern = tool_input.get("glob")
     if isinstance(pattern, str) and ".output" in pattern:
         return True
@@ -945,7 +945,7 @@ def _classify_write(value: str, root: Path | None, cwd: Path | None):
 
 
 def _classify_edit(tool_input: dict, root: Path | None, cwd: Path | None):
-    """Edit: the auto memory and the ДЛ1 paths (run state, TODO, docs, local settings)."""
+    """Edit: the auto memory and the DL1 paths (run state, TODO, docs, local settings)."""
     value = tool_input.get("file_path")
     if _memory_path(value):
         return OK, ""
@@ -984,11 +984,11 @@ def classify(name: str, tool_input, root: Path | None, skill_root: Path,
         timeout = tool_input.get("timeout")
         if isinstance(timeout, (int, float)) and not isinstance(timeout, bool) \
                 and timeout > MAX_TIMEOUT_MS:
-            return VIOLATION, escape(f"a timeout above 120 s is agent work (ДЛ2): {command}")
+            return VIOLATION, escape(f"a timeout above 120 s is agent work (DL2): {command}")
         if background and not BACKGROUND_TIMER.match(command):
-            return VIOLATION, escape(f"run_in_background is agent work (ДЛ2): {command}")
+            return VIOLATION, escape(f"run_in_background is agent work (DL2): {command}")
         if any(token == ("OP", "&") for token in _Lexer(command, strict=False).run()):
-            return VIOLATION, escape(f"a shell `&` runs in the background: agent work (ДЛ2): {command}")
+            return VIOLATION, escape(f"a shell `&` runs in the background: agent work (DL2): {command}")
         try:
             bad = bash_violation(command, background, skill_root, grant, cwd)
         except Unverifiable as error:
@@ -1053,6 +1053,7 @@ def first_word(args: str) -> str:
     return words[0].lower() if words else ""
 
 
+# `експеримент` is deliberate: the Bulgarian spelling of `experiment`, accepted as a start word (R20).
 START_WORD = re.compile(r"^((\d+h)?(\d+m)?|\d+|away|experiment|експеримент|base=\S+)$", re.I)
 
 
@@ -1063,7 +1064,7 @@ def starts_run(args: str) -> bool:
 
 
 def ends_grant(args: str, typed: bool = True) -> bool:
-    """The `/captain <args>` that end the merge grant (МГ1), the one place for the end signals
+    """The `/captain <args>` that end the merge grant (MG1), the one place for the end signals
     of the live guard and this audit. Typed by the owner: `off`, a new start and a new `merge`
     (which then grants its own branch), `end`. Made by the model (a Skill call): `end`, right
     before the end report (R17), a hook cannot see the report itself; `off`; a new start. A
@@ -1145,7 +1146,7 @@ def carried_grant_call(name, tool_input, root: Path | None, skill_root: Path,
     """A merge-flow `git switch`/`git push` that a grant for its own branch would allow: after
     an R21 `/captain resume` it may run on a grant carried from the predecessor, which this
     transcript cannot show (kp1 r2 F4). A call no grant allows (a force push) is no such call
-    (АУ1)."""
+    (AU1)."""
     command = tool_input.get("command") if name == "Bash" and isinstance(tool_input, dict) else None
     if not isinstance(command, str):
         return False
@@ -1186,7 +1187,7 @@ def audit(lines, repo: Path | None, skill_root: Path):
         if kind == "user" and entry.get("isSidechain") is not True:
             args = owner_captain_args(entry)
             resumed = resumed or (args is not None and first_word(args) == "resume")
-            resumed = resumed and not (args is not None and ends_grant(args))  # АУ1 F3
+            resumed = resumed and not (args is not None and ends_grant(args))  # AU1 F3
             typed_grant = typed_grant or (args is not None and first_word(args) == "merge")
             grant = grant if args is None else next_grant(grant, args, record_repo(entry, repo),
                                                           entry.get("timestamp"))
@@ -1218,7 +1219,7 @@ def audit(lines, repo: Path | None, skill_root: Path):
                     args = tool_input.get("args")
                     args = args if isinstance(args, str) else ""
                     grant = next_grant(grant, args, None, timestamp, typed=False)
-                    resumed = resumed and not ends_grant(args, typed=False)  # АУ1 F3
+                    resumed = resumed and not ends_grant(args, typed=False)  # AU1 F3
                 if result == VIOLATION and resumed and not typed_grant \
                         and carried_grant_call(name, tool_input, root, skill_root, cwd):
                     result, detail = UNVERIFIABLE, f"grant may be carried, R21: {detail}"

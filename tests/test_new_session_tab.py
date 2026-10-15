@@ -123,7 +123,7 @@ class NewSessionTabTest(unittest.TestCase):
             path.mkdir(parents=True)
         self.prompt = self.repo / "tmp" / "handover-next-20261002.md"
         self.prompt.parent.mkdir(parents=True)
-        self.prompt.write_text("Продължи със следващата задача.\n", encoding="utf-8")
+        self.prompt.write_text("Continue with the next task (café).\n", encoding="utf-8")
         self.log = root / "supacode.log"
         self.rows = [worktree_row(root), worktree_row(self.repo), worktree_row(self.other)]
 
@@ -172,7 +172,7 @@ class NewSessionTabTest(unittest.TestCase):
         self.assertEqual(command, f'cd {self.dir} && : > {marker} && {self.bin / "claude"} -n proj-c5-r2 '
                                   f'"$(cat {prompt})"', "the marker is written before claude starts")
         self.assertNotIn("close", [c[1] for c in self.calls() if len(c) > 1], "a live tab is never closed")
-        self.assertEqual(prompt.read_text(encoding="utf-8"), "Продължи със следващата задача.\n", "the prompt is left as is")
+        self.assertEqual(prompt.read_text(encoding="utf-8"), "Continue with the next task (café).\n", "the prompt is left as is")
 
     def test_without_the_key_a_supacode_session_is_detected(self):
         result = self.run_tab(terminal="auto", env={"TERM_PROGRAM": "supacode",
@@ -281,7 +281,7 @@ class NewSessionTabTest(unittest.TestCase):
         self.assertTrue(result.stdout.startswith("FAILED CMUX-ERROR cmux new-surface rc=2"), result.stdout)
 
     def test_cmux_refuses_a_non_ascii_directory_and_a_backslash(self):
-        for name in ("проба", "back\\slash"):
+        for name in ("café-tést", "back\\slash"):
             with self.subTest(name=name):
                 directory = self.repo / name
                 directory.mkdir()
@@ -311,7 +311,7 @@ class NewSessionTabTest(unittest.TestCase):
                     self.assertNotIn("--permission-mode", command)
 
     def test_a_non_ascii_directory_is_refused_before_any_tab(self):
-        directory = self.repo / "проба"
+        directory = self.repo / "café-tést"
         directory.mkdir()
         result = self.run_tab(terminal="supacode", directory=directory)
         self.assertEqual(result.returncode, 1)

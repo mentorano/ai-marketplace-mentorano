@@ -5,6 +5,11 @@ test says what it used to answer, because a test that only asserts the right
 answer does not explain why the assertion is worth keeping.
 
 Run: python3 tests/test_collect.py
+
+The plan headings in these fixtures (`## Цел`, `## Какво НЕ се строи`,
+`## Задача 1`, ...) are deliberately Bulgarian: the collector reads plans
+written in Bulgarian, and these tests pin that detection. The prose around
+the headings is English.
 """
 import os
 import shutil
@@ -285,22 +290,22 @@ class TestPlanParsing(Base):
     def test_a_real_flagged_paragraph_is_still_found(self):
         p = self.plan_branch(
             "# Plan\n\n## Цел\n\nGoal.\n\n"
-            "Стъпка три е ⏸ паркирана, докато миграцията не мине.\n")
+            "Step three is ⏸ parked until the migration lands.\n")
         self.assertEqual(len(p["flags"]), 1)
-        self.assertIn("паркирана", p["flags"][0])
+        self.assertIn("parked", p["flags"][0])
 
     def test_a_table_cell_is_not_a_flag(self):
         p = self.plan_branch(
             "# Plan\n\n## Цел\n\nGoal.\n\n"
-            "| Стъпка | Състояние |\n|---|---|\n| миграция | ✅ готова |\n")
+            "| Step | State |\n|---|---|\n| migration | ✅ done |\n")
         self.assertEqual(p["flags"], [])
 
     def test_a_negative_scope_section_is_not_the_goal(self):
         p = self.plan_branch(
             "# Spec\n\n## Какво НЕ се строи\n\n"
-            "Не пипаме billing и не мигрираме базата.\n\n"
-            "## Цел\n\nДобавяме един endpoint за търсене.\n")
-        self.assertEqual(p["goal"], "Добавяме един endpoint за търсене.")
+            "We do not touch billing and do not migrate the database.\n\n"
+            "## Цел\n\nWe add one search endpoint.\n")
+        self.assertEqual(p["goal"], "We add one search endpoint.")
 
     def test_an_explicit_goal_heading_beats_an_earlier_overview(self):
         p = self.plan_branch(
@@ -359,7 +364,7 @@ class TestBrokenGhIsDeclared(Base):
     raises a warning. The per-branch `gh pr list --head ... --state all` call —
     the ONE thing that catches a squash merge — did neither. `meta.commands`
     listed it as if it had run, `meta.gh` said "yes", and the board printed
-    "няма PR" as a fact about a branch whose PR was never read.
+    "no PR" as a fact about a branch whose PR was never read.
     """
 
     def squashed_repo(self):
@@ -385,7 +390,7 @@ class TestBrokenGhIsDeclared(Base):
     def test_a_failed_per_branch_pr_lookup_raises_a_warning(self):
         data = collect(self.squashed_repo(), "--no-fetch", gh_stub="gh-broken")
         self.assertTrue(
-            any("PR" in w and ("squash" in w or "не може" in w or "could not read" in w)
+            any("PR" in w and ("squash" in w or "could not read" in w)
                 for w in data["meta"]["warnings"]),
             f"a squash merge is invisible and nothing says so: {data['meta']['warnings']}")
 
@@ -438,8 +443,8 @@ class TestFenceClosing(Base):
 
     BODY = ("# Plan\n\n## Цел\n\nGoal.\n\n"
             "```\nprint('sample')\n````\n\n"      # legal CommonMark: closing fence may be longer
-            "- [x] стъпка едно\n- [ ] стъпка две\n\n"
-            "Стъпка три е ⏸ паркирана, докато миграцията не мине.\n")
+            "- [x] step one\n- [ ] step two\n\n"
+            "Step three is ⏸ parked until the migration lands.\n")
 
     def test_a_longer_closing_fence_still_closes_the_block(self):
         p = self.plan_branch(self.BODY)
@@ -456,8 +461,8 @@ class TestFenceClosing(Base):
         # syntax counted the example headings as real tasks
         p = self.plan_branch(
             "# Plan\n\n## Цел\n\nGoal.\n\n"
-            "```markdown\n## Задача 1 — примерна ✅ готова\n## Задача 2 — примерна\n```\n\n"
-            "## Задача 1 — истинската задача\n")
+            "```markdown\n## Задача 1 — example ✅ done\n## Задача 2 — example\n```\n\n"
+            "## Задача 1 — the real task\n")
         self.assertEqual([t["n"] for t in p["tasks"]], [1])
         self.assertEqual(p["tasks_done"], 0)
 
@@ -518,12 +523,13 @@ class TestOrdering(Base):
 
 
 class TestNegativeHeadingInTheOtherDirection(Base):
-    """Regression: NEGATIVE_HEAD_RE rejects a heading containing any of
-    "не", "няма", "not", "no". It was written for "## Какво НЕ се строи", but it
-    also silences real goal headings. GOAL_HEADS deliberately ranks
-    "проблем"/"problem" as the second-best goal source — and a problem is almost
-    always stated in the negative, so that whole group is unusable in Bulgarian.
-    "No" is also an ordinary abbreviation for a number in both languages.
+    """Regression: NEGATIVE_HEAD_RE rejected a heading containing any bare
+    negation word, Bulgarian or English ("not", "no"). It was written for the
+    Bulgarian "## What is NOT built" heading, but it also silenced real goal
+    headings. GOAL_HEADS deliberately ranks "problem" as the second-best goal
+    source — and a problem is almost always stated in the negative, so that
+    whole group was unusable in Bulgarian. "No" is also an ordinary
+    abbreviation for a number in both languages.
     """
 
     def plan_branch(self, body):
@@ -537,19 +543,19 @@ class TestNegativeHeadingInTheOtherDirection(Base):
     def test_a_problem_statement_stated_in_the_negative_is_still_the_goal(self):
         p = self.plan_branch(
             "# Spec\n\n## Проблем: не се вижда кой какво прави\n\n"
-            "Никой не чете списъка с branches.\n")
-        self.assertIn("Никой", p["goal"])
+            "Nobody reads the list of branches.\n")
+        self.assertIn("Nobody", p["goal"])
 
     def test_no_as_a_number_abbreviation_does_not_reject_a_goal_heading(self):
-        p = self.plan_branch("# Spec\n\n## Цел No 2\n\nДобавяме search endpoint.\n")
-        self.assertEqual(p["goal"], "Добавяме search endpoint.")
+        p = self.plan_branch("# Spec\n\n## Цел No 2\n\nWe add a search endpoint.\n")
+        self.assertEqual(p["goal"], "We add a search endpoint.")
 
     def test_a_genuine_negative_scope_heading_is_still_rejected(self):
         # positive control: the guard this regex exists for must keep working
         p = self.plan_branch(
-            "# Spec\n\n## Какво НЕ се строи\n\nНе пипаме billing.\n\n"
-            "## Цел\n\nДобавяме един endpoint.\n")
-        self.assertEqual(p["goal"], "Добавяме един endpoint.")
+            "# Spec\n\n## Какво НЕ се строи\n\nWe do not touch billing.\n\n"
+            "## Цел\n\nWe add one endpoint.\n")
+        self.assertEqual(p["goal"], "We add one endpoint.")
 
 
 

@@ -12,9 +12,9 @@ until git shows the merge; coord reconciles against git on resume and after each
 ## Update (on protocol events only)
 | Event | Writes |
 |---|---|
-| СТАРТ | task `status: wip`, `branch` |
-| КАЦНА | task `status: ready`, `sha`, `tryIt` |
-| БЛОКИРАН | task `status: blocked`, `waiting` |
+| START | task `status: wip`, `branch` |
+| LANDED | task `status: ready`, `sha`, `tryIt` |
+| BLOCKED | task `status: blocked`, `waiting` |
 | merge batch pushed | each task `status: landed`, `mergedAs`; `meta/state.integrationSha`, `updatedAt` |
 | deploy | task `status: deployed`; `meta/state.deployedSha` |
 | deferred item | new `tasks/BL<n>` with `lane: backlog`, `status: todo` |

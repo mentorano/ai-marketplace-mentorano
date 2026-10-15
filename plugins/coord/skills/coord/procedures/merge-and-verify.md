@@ -7,12 +7,12 @@
 
 ## Batch cycle
 1. [ ] `git -C <repo> fetch -q`; confirm the primary checkout is clean (`git status`): a staged merge from before must be finished first.
-2. [ ] For each queued КАЦНА, check the ancestor FIRST: `git merge-base --is-ancestor origin/<integration> <branch@sha>`. Not an ancestor -> ВНЕСИ to the lane, drop from batch. Why: a verification of a branch tens of commits behind is thrown away.
+2. [ ] For each queued LANDED, check the ancestor FIRST: `git merge-base --is-ancestor origin/<integration> <branch@sha>`. Not an ancestor -> MERGE-IN to the lane, drop from batch. Why: a verification of a branch tens of commits behind is thrown away.
 3. [ ] Merge the reported sha, not the branch head: `git merge --no-ff --no-commit <sha>`; inspect `git diff --cached --stat`; commit with a message naming what changed, why, the slice id, `<branch>@<sha>`, and decisions it implements. Repeat per slice (several merge commits, one push).
    - Only ONE migration-bearing branch per batch; re-check heads after it (config's heads command) - exactly one.
    - Conflicts: assemble the real result from both parents; deleting markers is not resolving (an empty test "passes").
    - Never make any other commit while a merge is staged. Why: the next commit completes the merge under its message.
-4. [ ] While the long suite runs, more КАЦНА may join; frontend-only branches may join until the frontend phase starts.
+4. [ ] While the long suite runs, more LANDED may join; frontend-only branches may join until the frontend phase starts.
 5. [ ] Verify the combined tree ONCE, by tier (`SKILL.md` rule 3):
    - Every batch: build + the config's `smoke_commands`. No `smoke_commands` in the config yet: build only, and ask the owner once which 3-5 critical paths form the smoke set.
    - Full (the config's test commands, every flag; pytest-style before e2e, each e2e on a clean DB): when the batch touches `high_risk_paths` (migrations, auth/roles, personal data), and at the end of a scope (`scope-deadline.md`).
@@ -24,7 +24,7 @@
    - [ ] Two lanes touched one file? read the combined hunks; zero conflicts can still break.
    - [ ] Slow I/O under a shared write lock? pattern: authorize under lock -> commit -> slow work outside -> re-lock, re-check, write.
 7. [ ] Push once. CI runs on the integration branch (`ci-budget.md`).
-8. [ ] СЛИТО to each owning lane (with the explicit next action); ВНЕСИ only to lanes the change touches; board batch.
+8. [ ] MERGED to each owning lane (with the explicit next action); MERGE-IN only to lanes the change touches; board batch.
 
 ## When the merged tree fails
 - [ ] Environment first: migration current vs heads, required env vars, DB freshness. Mass errors in one module's tests -> schema; scattered assertion failures -> code.
@@ -36,7 +36,7 @@
 ## Migrations
 - Numbering per the config: reserved ranges per lane, or simply the next number in one linear chain. The invariant is ONE head, not the range.
 - Each migration round-trips (upgrade -> downgrade -1 -> upgrade); migration tests read the parent from the chain, never hardcode it.
-- Coord may re-point a migration's parent at merge ONLY if it carries no copy of a shared SQL object; otherwise the owning lane refreshes the body from the CURRENT full definition, re-points, and names the exact head in КАЦНА.
+- Coord may re-point a migration's parent at merge ONLY if it carries no copy of a shared SQL object; otherwise the owning lane refreshes the body from the CURRENT full definition, re-points, and names the exact head in LANDED.
 - Re-provision restricted role fixtures after migrations that touch their objects. Rebuild DBs after any re-point.
 
 ## Contracts

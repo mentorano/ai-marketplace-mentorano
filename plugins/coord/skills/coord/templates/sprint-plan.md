@@ -15,7 +15,7 @@ Integration branch: `<branch>`. Owner decisions: `<amendments path>`. Coord deci
 ## 3. Hotspots (shared files)
 | File | Rule | Owner of structural changes |
 |---|---|---|
-| e.g. `main.py` router list | append-only, one line per lane, СТАРТ names it | coord |
+| e.g. `main.py` router list | append-only, one line per lane, START names it | coord |
 
 ## 4. Contracts between lanes
 | Producer → Consumer | Contract (types/functions/endpoints/statuses) | Where it is defined | Types-only commit first? |

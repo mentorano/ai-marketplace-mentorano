@@ -24,17 +24,17 @@ All of these were verified on 05.10.2026 with codex-cli 0.153.
 
 ## Task template: triage
 
-The templates are in Bulgarian, as used so far; write the task in the owner's language. `panel.py`
-appends the data under an `=== DATA ===` header.
+Write the task in the owner's language. `panel.py` appends the data under an
+`=== DATA ===` header.
 
 ```
-Ти си един от трима независими експерти (<роля>), които гласуват за <продукт/цел>.
-По-долу в DATA са <N> елемента и <рамката, към която се разпределят>.
-За ВСЕКИ елемент реши: "<вариант1>" | "<вариант2>" | "<вариант3>" (+ поле <x> при <вариант1>).
-Бъди строг: <очакване, напр. значителна част отпада>.
-Пиши на български. Върни САМО валиден JSON, без markdown:
-{"items":[{"id":"...","verdict":"...","<x>":"... или null","reason":"едно изречение"}]}
-items трябва да съдържа точно <N> записа.
+You are one of three independent experts (<role>) voting on <product/goal>.
+Below, DATA holds <N> items and <the frame they are sorted into>.
+For EVERY item decide: "<option1>" | "<option2>" | "<option3>" (+ field <x> for <option1>).
+Be strict: <expectation, e.g. a large share is cut>.
+Write in the user's language. Return ONLY valid JSON, no markdown:
+{"items":[{"id":"...","verdict":"...","<x>":"... or null","reason":"one sentence"}]}
+items must contain exactly <N> entries.
 ```
 
 Run it with `--require items=<N>`, then `tally.py --list items --id id --fields verdict,<x>`.
@@ -43,11 +43,11 @@ Run it with `--require items=<N>`, then `tally.py --list items --id id --fields 
 ## Task template: ideas
 
 ```
-Ти си един от трима независими експерти (<роли>). Контекст: <продукт, публика, цел, срок>.
-Задача: <какво да се предложи>, с изисквания: <конкретно, запленяващо, реалистично, ...>.
-За всеки <обект> от DATA дай ЕДНО предложение. / Предложи до <K> нови <неща>.
-Пиши на български. Върни САМО валиден JSON по схемата: {"<key>":[{...полета...}]}
-<key> трябва да съдържа точно <N> записа.
+You are one of three independent experts (<roles>). Context: <product, audience, goal, deadline>.
+Task: <what to propose>, with requirements: <concrete, compelling, realistic, ...>.
+For each <object> in DATA give ONE proposal. / Propose up to <K> new <things>.
+Write in the user's language. Return ONLY valid JSON matching the schema: {"<key>":[{...fields...}]}
+<key> must contain exactly <N> entries.
 ```
 
 The synthesizer never sees who wrote an answer. The main thread copies the ok answers, in a

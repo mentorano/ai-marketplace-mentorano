@@ -1,6 +1,6 @@
 ---
 name: 3amigos
-description: Use when the owner says "3amigos", "тримата амигоси", "свикай амигосите", or asks for independent second opinions on ideas, a shortlist, a triage of many items (keep/cut/assign) or a creative proposal. Convenes a one-round panel of three independent experts (Codex, a Claude Opus agent and a Claude Fable agent) that each answer the same brainstorm or triage task as JSON, then one non-voting Opus synthesizer merges the answers by majority and agreement. A voter that fails or misses its deadline is replaced by a second Fable voter with its own framing instead of being waited for. Captain uses it for its complex decisions: full consensus and away-mode product questions. Not for code review (one Codex review covers that).
+description: Use when the owner says "3amigos", asks to convene the amigos, or asks for independent second opinions on ideas, a shortlist, a triage of many items (keep/cut/assign) or a creative proposal. Convenes a one-round panel of three independent experts (Codex, a Claude Opus agent and a Claude Fable agent) that each answer the same brainstorm or triage task as JSON, then one non-voting Opus synthesizer merges the answers by majority and agreement. A voter that fails or misses its deadline is replaced by a second Fable voter with its own framing instead of being waited for. Captain uses it for its complex decisions: full consensus and away-mode product questions. Not for code review (one Codex review covers that).
 ---
 
 # 3amigos: a panel for ideas and triage
@@ -82,7 +82,7 @@ everything it produces is a proposal.
      item, it picks the best version or merges the best parts, and keeps the strongest
      rejected alternative with its label. After the merge, map the labels back to authors.
      Ideas that two voters proposed independently are the strongest signal; mark them with
-     the real authors from `labels.json`, for example "Codex + Opus (независимо)". A stand-in is credited as Fable (stand-in), never as the
+     the real authors from `labels.json`, for example "Codex + Opus (independently)". A stand-in is credited as Fable (stand-in), never as the
      voter it replaced.
 6. **Deliver:**
    - write the proposals where the owner works (board, document);

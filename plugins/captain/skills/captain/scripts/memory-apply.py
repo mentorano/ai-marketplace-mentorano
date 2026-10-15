@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Project memory in a captain run (ПК3, ПК6): detect, then check and commit memory files.
+"""Project memory in a captain run (PK3, PK6): detect, then check and commit memory files.
 
-A `captain:runner` runs it (scripts are agent work, ДЛ2). It never writes memory text itself:
+A `captain:runner` runs it (scripts are agent work, DL2). It never writes memory text itself:
 main writes `.agent-memory/<topic>.md`; this script validates the files with the
 project-memory plugin's own `memory.py` and commits them by path.
 
   detect      --checkout=<c> [--installed-json=<f>]
               one line, exit 0: `on <memory.py>` | `off: <reason>`
   commit      --checkout=<c> --branch=<b> --memory-py=<m> --files=<a.md[,b.md...]> --message=<m>
-              check the listed files (ФМ1-ФМ8) and commit them alone, by path
+              check the listed files (FM1-FM8) and commit them alone, by path
   restore     --checkout=<c> --files=<a.md[,b.md...]>
               put the listed files back to HEAD; a new file is removed (a `drop`, no time)
 
@@ -46,7 +46,7 @@ def git_ok(cwd: str, *args: str) -> str:
     return result.stdout.strip()
 
 
-# ── detect (ПК6) ──────────────────────────────────────────────────────────────
+# ── detect (PK6) ──────────────────────────────────────────────────────────────
 
 def version_key(value) -> tuple:
     return tuple(int(n) for n in re.findall(r"\d+", value)) if isinstance(value, str) else ()
@@ -54,7 +54,7 @@ def version_key(value) -> tuple:
 
 def registered_memory_py(installed_json: str) -> str | None:
     """memory.py of the installed project-memory plugin, else None. Any unexpected shape of
-    installed_plugins.json is None, never an error (РС3)."""
+    installed_plugins.json is None, never an error (RS3)."""
     try:
         with open(os.path.expanduser(installed_json), encoding="utf-8") as handle:
             data = json.load(handle)
@@ -119,7 +119,7 @@ def detect(checkout: str, installed_json: str) -> str:
 # ── shared checks ─────────────────────────────────────────────────────────────
 
 def topic_names(files: str | list[str]) -> list[str]:
-    """Validated memory file names: `<name>.md`, never README.md (ФМ2)."""
+    """Validated memory file names: `<name>.md`, never README.md (FM2)."""
     names = [n.strip() for n in files.split(",")] if isinstance(files, str) else list(files)
     names = [n for n in names if n]
     if not names:

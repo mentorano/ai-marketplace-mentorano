@@ -49,21 +49,24 @@ def have_gh():
 
 
 # Goal headings, best first. A heading that states the goal outright beats one
-# that merely introduces the document, so "## Цел" wins over an earlier
-# "## Overview" no matter which comes first in the file.
+# that merely introduces the document, so "## Goal" wins over an earlier
+# "## Overview" no matter which comes first in the file. The Bulgarian keywords
+# in these tuples and in the patterns below let the reader parse plans written
+# in Bulgarian; they are functionality, not text to translate.
 GOAL_HEADS = (
     ("цел", "goal", "objective", "задача"),
     ("проблем", "problem", "why", "защо"),
     ("обхват", "scope", "overview", "summary", "резюме", "какво"),
 )
-# "## Какво НЕ се строи" is a goal-shaped heading that introduces the opposite
+# "## What is NOT built" is a goal-shaped heading that introduces the opposite
 # of the goal. Reading its body as the goal yields a confident wrong answer.
 #
-# Matched on scope-negation IDIOMS, not on any occurrence of "не"/"no". A bare
-# negation fires in the wrong direction: GOAL_HEADS ranks "проблем"/"problem"
-# as the second-best goal source, and a problem is almost always stated in the
-# negative ("## Проблем: не се вижда кой какво прави"), so the whole group went
-# silent. "No" is also an ordinary abbreviation for a number ("## Цел No 2").
+# Matched on scope-negation IDIOMS, not on any occurrence of a bare "not"/"no".
+# A bare negation fires in the wrong direction: GOAL_HEADS ranks "problem" as
+# the second-best goal source, and a problem is almost always stated in the
+# negative ("## Problem: nobody can see who is doing what"), so the whole group
+# went silent. "No" is also an ordinary abbreviation for a number
+# ("## Goal No 2").
 NEGATIVE_HEAD_RE = re.compile(
     r"(\bnon-?goals?\b"
     r"|out of scope|извън\s+обхват"
@@ -137,7 +140,7 @@ def parse_plan(path, text):
     # blocks blanked out. Title, goal, checkboxes and flags all did — but the
     # numbered tasks and the title were taken from the RAW lines, so a plan that
     # documents its own heading syntax had the example headings counted as real
-    # tasks, and `# Заглавие` inside a ```markdown block became the title.
+    # tasks, and a `# Title` inside a ```markdown block became the title.
     prose = strip_fences(text)
     prose_lines = prose.splitlines()
     title = next((l[2:].strip() for l in prose_lines if l.startswith("# ")),
@@ -364,7 +367,7 @@ def main():
             seen[key]["in_window_by"] = why
 
     # A per-branch `gh pr list --head` that fails is the one thing that could
-    # have caught a squash merge. Swallowing it lets the page print "няма PR"
+    # have caught a squash merge. Swallowing it lets the page print "no PR"
     # as a fact about a branch whose PR was never read.
     pr_lookup_failed = False
 

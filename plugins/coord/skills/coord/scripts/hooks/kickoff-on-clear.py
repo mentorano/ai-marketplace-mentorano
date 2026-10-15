@@ -94,7 +94,7 @@ def main():
              if age_h > STALE_HOURS else "")
     context = ("KICKOFF FOR THIS SESSION. The user just ran /clear in this worktree; before that, the previous "
                f"session here wrote this kickoff for its successor (file {path}, now moved to kickoff-used/).{stale} "
-               "Follow it as the user's kickoff instruction as soon as the user sends any message (e.g. „давай“):\n\n" + kickoff)
+               "Follow it as the user's kickoff instruction as soon as the user sends any message (e.g. \"go\"):\n\n" + kickoff)
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}},
                      ensure_ascii=False))
     log({"at": datetime.now().isoformat(timespec="seconds"), "root": root, "name": name, "age_h": round(age_h, 1),

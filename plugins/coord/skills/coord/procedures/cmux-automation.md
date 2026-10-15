@@ -23,22 +23,22 @@ $C send-key --surface "$S" Enter
 - [ ] Verify with `$C read-screen --surface "$S" --lines 20` that the name shows in the prompt box and the session started.
 
 ## Restart a lane after its handoff (replaces the owner's `/clear` + message)
-Applies to every sprint session in the config's session table except coord itself: lanes and the design/prototype session. The first message after `/clear` is the one the owner would type: `/coord lane` for a lane, `/coord design` for a design session that uses the skill, „давай“ for a session that does not (its kickoff is injected by the hook). Why: a design session without the skill was once left to the owner because only `/coord lane` was allowed.
+Applies to every sprint session in the config's session table except coord itself: lanes and the design/prototype session. The first message after `/clear` is the one the owner would type: `/coord lane` for a lane, `/coord design` for a design session that uses the skill, "go" for a session that does not (its kickoff is injected by the hook). Why: a design session without the skill was once left to the owner because only `/coord lane` was allowed.
 Preconditions, all of them:
-- [ ] The session sent its handoff line to coord ("handoff в <path>; kickoff готов").
+- [ ] The session sent its handoff line to coord ("handoff at <path>; kickoff ready").
 - [ ] `~/.claude/kickoffs/<session name>.md` exists and is fresh (minutes, not hours).
-- [ ] The lane is idle: `ListAgents` shows it idle AND `read-screen` shows an empty prompt with no "esc to interrupt". Why: `/clear` typed into a busy session wipes its working context mid-task. The lane's "ГОТОВ ЗА CLEAR" is not idle: Stop hooks still run after its last reply ("Working… running Stop hooks", `ListAgents` shows `shell`). Subscribe with `SendMessage(to=<lane>, notify_when_idle=true)` (no message) and send `/clear` after the notice.
+- [ ] The lane is idle: `ListAgents` shows it idle AND `read-screen` shows an empty prompt with no "esc to interrupt". Why: `/clear` typed into a busy session wipes its working context mid-task. The lane's "READY FOR CLEAR" is not idle: Stop hooks still run after its last reply ("Working… running Stop hooks", `ListAgents` shows `shell`). Subscribe with `SendMessage(to=<lane>, notify_when_idle=true)` (no message) and send `/clear` after the notice.
 Then:
 ```sh
 $C send --surface "$S" "/clear";       $C send-key --surface "$S" Enter
 # wait until read-screen shows the line "❯ /clear" (poll, do not sleep blindly; took ~2 s on the first live restart)
-$C send --surface "$S" "<first message>"; $C send-key --surface "$S" Enter   # /coord lane | /coord design | давай
+$C send --surface "$S" "<first message>"; $C send-key --surface "$S" Enter   # /coord lane | /coord design | go
 ```
 - [ ] Confirm with `read-screen` that the kickoff was picked up (the session names its handoff files). On the first live restart the lane was already reading its handoff 40 s after `/coord lane`; no permission prompt appeared on either side, no retry was needed.
-- [ ] Tell the owner one line: "Рестартирах <name> след handoff (Nk → нов контекст)."
+- [ ] Tell the owner one line: "Restarted <name> after handoff (Nk → fresh context)."
 
 ## Hard limits
-- **Only coord** drives other tabs, and **only** `/clear`, the first message above (`/coord lane`, `/coord design`, or „давай“ for a session without the skill whose fresh kickoff exists) and the start command above. Never task content, never answers to a session's questions, never `/exit` on a live lane. Why: typing into another session's terminal acts with the owner's authority.
+- **Only coord** drives other tabs, and **only** `/clear`, the first message above (`/coord lane`, `/coord design`, or "go" for a session without the skill whose fresh kickoff exists) and the start command above. Never task content, never answers to a session's questions, never `/exit` on a live lane. Why: typing into another session's terminal acts with the owner's authority.
 - **A session never drives its own tab.** The auto-mode classifier blocks self-driving (tested: a session scheduling its own `/clear` was refused as "self drive"). Coord's own handoff stays manual: coord writes its kickoff and asks the owner for `/clear` + `/coord`.
 - **Never two live sessions with one name.** Opening a successor in a NEW tab while the old one lives is forbidden; restart in place (same tab) instead.
 - A lane never uses these commands - not on coord, not on another lane.

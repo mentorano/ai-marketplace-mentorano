@@ -325,7 +325,8 @@ class HandoffAtBoundaryTest(unittest.TestCase):
             "Implement PL2-B: wire up the API client",
             "PR2 T1 fix the header",
             "implement the thing",
-            "Имплементирай задача 2",
+            "IMPLEMENT task 2",
+            "Имплементирай задача 2",  # deliberately Bulgarian: the hook matches it too
         ]
         should_not = [
             "Review Task 3",
@@ -360,13 +361,13 @@ class HandoffAtBoundaryTest(unittest.TestCase):
 
     def test_f11_manual_line_names_all_three_first_messages(self):
         # The role is not guessed from cwd (sessions often run from the primary checkout),
-        # so the manual line lists /coord, /coord lane and „давай“ for the session to pick.
+        # so the manual line lists /coord, /coord lane and "go" for the session to pick.
         with tempfile.TemporaryDirectory() as td:
             repo = init_repo(Path(td) / "repo")
             (repo / ".coord").mkdir()
             (repo / ".coord" / "project.md").write_text("automation: manual\n")
             line = self.mod.handover_line(300, str(repo))
-            for first in ("`/coord`", "`/coord lane`", "„давай“"):
+            for first in ("`/coord`", "`/coord lane`", '"go"'):
                 self.assertIn(first, line)
             self.assertNotIn("tell coord one line", line)
             (repo / ".coord" / "project.md").write_text("automation: cmux\n")

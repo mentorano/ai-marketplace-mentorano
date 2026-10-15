@@ -147,7 +147,7 @@ def render_record(rec):
         parts.append(f'<blockquote class="flag">{inline(f)}</blockquote>')
     if rec["commits"]:
         items = "".join(f"<li>{inline(v)}</li>" for _, v in rec["commits"] if v)
-        parts.append(f'<details class="commits"><summary>последни commits</summary>'
+        parts.append(f'<details class="commits"><summary>recent commits</summary>'
                      f'<ul>{items}</ul></details>')
     parts.append("</article>")
     return "".join(parts)
@@ -326,7 +326,7 @@ def build(meta, sections):
            f"<style>{CSS}</style>",
            '<div class="wrap">',
            '<header class="masthead">',
-           '<p class="eyebrow">състояние на branches</p>',
+           '<p class="eyebrow">branch status</p>',
            f"<h1>{html.escape(repo)}</h1>",
            '<dl class="meta">']
     for k, v in shown:
@@ -334,12 +334,12 @@ def build(meta, sections):
                    f'<dd class="v">{inline(v)}</dd></div>')
     out.append("</dl>")
     for w in warnings:
-        out.append(f'<p class="banner"><strong>внимание:</strong> {inline(w)}</p>')
+        out.append(f'<p class="banner"><strong>warning:</strong> {inline(w)}</p>')
     out.append("</header>")
 
     for idx, sec in enumerate(sections):
         title = sec["title"]
-        is_cmds = title.lower().startswith("откъде")
+        is_cmds = title.lower().startswith("where the numbers")
         out.append('<section class="section">')
         # the first section's title repeats the masthead; the records are the point
         if idx > 0 or not sec["records"]:
@@ -359,9 +359,9 @@ def build(meta, sections):
                 out.append(render_record(rec))
         out.append("</section>")
 
-    out.append(f'<p class="foot">Всяко число тук идва от команда, изброена по-горе. '
-               f'Страницата е изход на <code>BOARD.md</code>, не се редактира на ръка. '
-               f'Генерирана {html.escape(mdict.get("generated", "—"))}.</p>')
+    out.append(f'<p class="foot">Every number here comes from a command listed above. '
+               f'The page is output of <code>BOARD.md</code> and is not edited by hand. '
+               f'Generated {html.escape(mdict.get("generated", "—"))}.</p>')
     out.append("</div>")
     return "\n".join(out)
 
@@ -379,7 +379,7 @@ def main():
     else:
         with open(a.out, "w", encoding="utf-8") as f:
             f.write(page)
-        print(f"написан: {a.out}", file=sys.stderr)
+        print(f"written: {a.out}", file=sys.stderr)
 
 
 if __name__ == "__main__":
