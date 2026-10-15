@@ -1,0 +1,10 @@
+{
+  "name": "captain",
+  "description": "A time-boxed coordinator for coding runs, shared as a team plugin — one main session that coordinates background subagents in git worktrees and does the light work (reads, git inspection, notes) itself, with Codex reviews first (Opus when Codex is not installed), a 15-minute health check, and destructive or outward actions queued for the user at the end of the box. Run /captain:captain-setup once first to choose notifications and quiet hours. Code and functionality only; not for production, devops or external writes beyond listed dev targets.",
+  "version": "0.16.0",
+  "license": "MIT",
+  "author": {
+    "name": "Ivan Dachev",
+    "email": "ivan@mentorano.com"
+  }
+}

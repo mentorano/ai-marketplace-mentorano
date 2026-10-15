@@ -1,7 +1,7 @@
 {
   "name": "utils",
   "description": "Small helpers for working with Claude Code — start a new background Claude Code session with Remote Control in the same repository and get its link, to continue from a phone or the web.",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "license": "MIT",
   "author": {
     "name": "Ivan Dachev",

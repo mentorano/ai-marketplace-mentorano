@@ -1,0 +1,168 @@
+#!/bin/sh
+# captain notification wrapper, written by the captain-setup skill from notify.sh.tmpl.
+# Usage: notify.sh "<message>"   (exactly one argument)
+# Re-run /captain:captain-setup to change it; manual edits are overwritten.
+# CAPTAIN_NOW=HH:MM overrides the clock (used by the tests).
+# CAPTAIN_SEND_NOW=1 skips the away check (the setup test ping and the wrapper's own resend).
+# CAPTAIN_AWAY_SECONDS, CAPTAIN_AWAY_POLL and CAPTAIN_IDLE override the away window, the
+# poll interval and the idle reading (used by the tests).
+#
+# The message is only ever passed as "$1"; it is never evaluated as shell code.
+
+METHOD='@@METHOD@@'        # msg-notify | command | none
+QUIET_FROM='@@QUIET_FROM@@'   # HH:MM, empty = no quiet hours
+QUIET_TO='@@QUIET_TO@@'       # HH:MM, end is exclusive; a window may cross midnight
+AWAY_MINUTES='@@AWAY_MINUTES@@'   # 0 = send at once; N = send only after N minutes with no input
+IFS= read -r MSG_NOTIFY_SCRIPT <<'CAPTAIN_SCRIPT_END'
+@@MSG_NOTIFY_SCRIPT@@
+CAPTAIN_SCRIPT_END
+IFS= read -r NOTIFY_COMMAND <<'CAPTAIN_COMMAND_END'
+@@COMMAND@@
+CAPTAIN_COMMAND_END
+
+if [ "$#" -ne 1 ]; then
+    echo 'usage: notify.sh "<message>"' >&2
+    exit 2
+fi
+
+# HH:MM -> minutes since midnight; hours 00-23 and minutes 00-59 only, fails on anything
+# else. A bad window or clock value never silences a message.
+to_minutes() {
+    case $1 in
+        [01][0-9]:[0-5][0-9] | 2[0-3]:[0-5][0-9]) ;;
+        *) return 1 ;;
+    esac
+    hours=${1%%:*}
+    minutes=${1#*:}
+    hours=${hours#0}
+    minutes=${minutes#0}
+    echo $(( ${hours:-0} * 60 + ${minutes:-0} ))
+}
+
+in_quiet_hours() {
+    [ -n "$QUIET_FROM" ] && [ -n "$QUIET_TO" ] || return 1
+    now=$(to_minutes "${CAPTAIN_NOW:-$(date +%H:%M)}") || return 1
+    from=$(to_minutes "$QUIET_FROM") || return 1
+    to=$(to_minutes "$QUIET_TO") || return 1
+    if [ "$from" -le "$to" ]; then
+        [ "$now" -ge "$from" ] && [ "$now" -lt "$to" ]
+    else
+        [ "$now" -ge "$from" ] || [ "$now" -lt "$to" ]
+    fi
+}
+
+# Seconds since the last keyboard, mouse or trackpad input (macOS HIDIdleTime); empty when
+# the system cannot tell.
+idle_seconds() {
+    if [ -n "${CAPTAIN_IDLE:-}" ]; then
+        echo "$CAPTAIN_IDLE"
+        return
+    fi
+    ioreg -c IOHIDSystem 2>/dev/null | awk '/HIDIdleTime/ {print int($NF / 1000000000); exit}'
+}
+
+# The away window in seconds; 0 when the check is off. A bad value never silences a message.
+away_window() {
+    if [ -n "${CAPTAIN_AWAY_SECONDS:-}" ]; then
+        value=$CAPTAIN_AWAY_SECONDS unit=1
+    else
+        value=$AWAY_MINUTES unit=60
+    fi
+    # Digits only, at most four, so the arithmetic below can never fail or overflow.
+    case $value in
+        '' | *[!0-9]* | ?????*) echo 0 ; return ;;
+    esac
+    value=${value#"${value%%[!0]*}"}   # strip leading zeros: 08 is not octal
+    echo $(( ${value:-0} * unit ))
+}
+
+# Succeeds when no input arrives during the whole window after the event: the owner is away.
+# Fails on input inside the window: the owner is at the computer and sees the chat. `start` is
+# the event time, taken before any other work. The clock has whole seconds, so input up to one
+# second before the event counts as inside: the owner was there. Input after the window, seen
+# only by a late last check, does not count; the last sleep is also cut to the time left.
+owner_stays_away() {
+    poll=${CAPTAIN_AWAY_POLL:-20}
+    while :; do
+        elapsed=$(( $(date +%s) - start ))
+        left=$(( window - elapsed ))
+        [ "$left" -le 0 ] && return 0
+        [ "$left" -lt "$poll" ] && poll=$left
+        sleep "$poll"
+        idle=$(idle_seconds)
+        [ -n "$idle" ] || return 0
+        elapsed=$(( $(date +%s) - start ))
+        input_at=$(( elapsed - idle ))   # seconds after the event, may be negative
+        [ "$input_at" -ge -1 ] && [ "$input_at" -lt "$window" ] && return 1
+    done
+}
+
+log() {
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+start=$(date +%s)   # the event time for the away check
+[ "$METHOD" = none ] && exit 0
+in_quiet_hours && exit 0
+
+# Away check: return at once and decide in the background, so the caller never waits. The
+# resend runs this wrapper again, so quiet hours are checked a second time at send time.
+window=$(away_window)
+if [ "${CAPTAIN_SEND_NOW:-}" != 1 ] && [ "$window" -gt 0 ] && [ -n "$(idle_seconds)" ]; then
+    if [ "$METHOD" = msg-notify ] && [ ! -x "$MSG_NOTIFY_SCRIPT" ]; then
+        echo "notify.sh: $MSG_NOTIFY_SCRIPT is not executable; re-run /captain:captain-setup" >&2
+        exit 1
+    fi
+    mkdir -p "$HOME/.claude/captain"
+    (
+        trap '' HUP
+        log "queued, waiting ${window}s for no input"
+        if owner_stays_away; then
+            log "no input for ${window}s, sending"
+            exec env CAPTAIN_SEND_NOW=1 sh "$0" "$1"
+        fi
+        log "input after the event, dropped"
+    ) </dev/null >>"$HOME/.claude/captain/notify.log" 2>&1 &
+    exit 0
+fi
+
+case $METHOD in
+    msg-notify)
+        exec "$MSG_NOTIFY_SCRIPT" claude "$1"
+        ;;
+    command)
+        if [ -z "$NOTIFY_COMMAND" ]; then
+            echo "notify.sh: no command configured; re-run /captain:captain-setup" >&2
+            exit 2
+        fi
+        # Replace every {message} with the literal text "$1"; eval then expands $1 once,
+        # as data. Without a placeholder the message is appended as the last argument.
+        # Why eval is safe here: the evaluated string is the user's own command from setup
+        # plus the two characters "$1"; the message is never part of it, and a parameter
+        # expansion's result is not parsed again, so $(...), backticks, ; and quotes in the
+        # message stay text (tests: test_command_never_executes_the_message).
+        rest=$NOTIFY_COMMAND
+        case $rest in
+            *'{message}'*) ;;
+            *) rest="$rest {message}" ;;
+        esac
+        run=
+        while :; do
+            case $rest in
+                *'{message}'*)
+                    run=$run${rest%%'{message}'*}'"$1"'
+                    rest=${rest#*'{message}'}
+                    ;;
+                *)
+                    run=$run$rest
+                    break
+                    ;;
+            esac
+        done
+        eval "$run"
+        ;;
+    *)
+        echo "notify.sh: unknown method '$METHOD'; re-run /captain:captain-setup" >&2
+        exit 2
+        ;;
+esac

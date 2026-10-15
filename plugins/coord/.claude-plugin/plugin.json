@@ -1,0 +1,10 @@
+{
+  "name": "coord",
+  "description": "Run a software project as a parallel sprint of interactive Claude Code sessions — one coordinator that owns merges, the board and the process, implementer lanes in their own git worktrees that talk only to it, and the human owner. Handoffs at task boundaries, kickoffs loaded on /clear, merges verified once per batch.",
+  "version": "0.5.0",
+  "license": "MIT",
+  "author": {
+    "name": "Joanna Seymenarova",
+    "email": "joanna@mentorano.com"
+  }
+}

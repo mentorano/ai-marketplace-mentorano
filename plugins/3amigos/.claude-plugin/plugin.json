@@ -1,0 +1,11 @@
+{
+  "name": "3amigos",
+  "description": "A one-round panel of three independent experts (Codex, a Claude Opus agent and a Claude Fable agent) that answer the same brainstorm or triage task as JSON, merged by one non-voting Opus synthesizer by majority and agreement. A voter that fails or misses its deadline is replaced by a second Fable voter with its own framing.",
+  "version": "0.5.0",
+  "license": "MIT",
+  "author": {
+    "name": "Joanna Seymenarova",
+    "email": "joanna@mentorano.com"
+  },
+  "keywords": ["panel", "brainstorm", "triage", "second-opinion", "codex", "fable"]
+}

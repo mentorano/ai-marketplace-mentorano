@@ -156,13 +156,16 @@ and `app/<feature>/services/` alike. The other rows are `upward`, `cycles`,
 `core_outward` and `framework_in_domain`; the `clean-code` skill's "Reading
 the numbers" says what each one means.
 
-A hit in a file the task touched is a boundary finding: `architecture.md`
+A hit in a file the task touched is a review candidate: `architecture.md`
 Phase 2 for a framework type inside a service, Phase 1 for a handler that
-redoes the data-access job. A hit in a file the task did not touch is
-context for the report, not a finding — the whole repository does not have
-to be clean for the task to be done. In audit mode the same hit **is** a
-row: the audit has no touched files, so every row goes into the boundaries
-list of the backlog.
+redoes the data-access job. Revalidate it against the source and the
+documented dependency policy, using clean-code's default policy when none
+exists. An introduced policy violation blocks completion; a permitted hit
+is reported with its evidence and reason. A hit in a file the task did not
+touch is context for the report — the whole repository does not have to be
+clean for the task to be done. In audit mode review every row, then keep
+confirmed violations in the boundaries backlog and explain permitted or
+rejected candidates separately.
 
 ## What not to do
 

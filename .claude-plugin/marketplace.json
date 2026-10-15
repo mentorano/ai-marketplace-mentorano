@@ -4,11 +4,51 @@
     "name": "Ivan Dachev",
     "email": "ivan@mentorano.com"
   },
-  "description": "Claude Code plugins for reading the state of a repository and keeping its code clean, and small helpers such as starting a background Remote Control session.",
+  "description": "Claude Code plugins for reading the state of a repository and keeping its code clean, for running parallel multi-session sprints, a time-boxed team coordinator, and small helpers such as starting a background Remote Control session.",
   "metadata": {
     "version": "0.1.0"
   },
   "plugins": [
+    {
+      "name": "3amigos",
+      "source": "./plugins/3amigos",
+      "description": "A one-round panel of three independent experts (Codex, a Claude Opus agent and a Claude Fable agent) that answer the same brainstorm or triage task as JSON, merged by one non-voting Opus synthesizer by majority and agreement. A voter that fails or misses its deadline is replaced by a second Fable voter with its own framing.",
+      "version": "0.5.0",
+      "license": "MIT",
+      "author": {
+        "name": "Joanna Seymenarova",
+        "email": "joanna@mentorano.com"
+      },
+      "keywords": [
+        "panel",
+        "brainstorm",
+        "triage",
+        "second-opinion",
+        "codex",
+        "fable"
+      ]
+    },
+    {
+      "name": "blast-radius",
+      "source": {
+        "source": "git-subdir",
+        "url": "anthropics/claude-code-playground",
+        "path": "claude-code/mods/blast-radius",
+        "sha": "569c5283d9a0a7ee7938df85bb32e4f48cbb8c86"
+      },
+      "description": "Anthropic's example mod, listed here as is: holds a risky Bash command (rm -rf, git reset --hard, git checkout/restore, git clean, force push, migrations), shows the files, changes or commits it would destroy, and runs it only after Proceed. A preview layer, not a permission system; pair it with cc-safety-net for a hard block.",
+      "version": "0.1.0",
+      "license": "Apache-2.0",
+      "author": {
+        "name": "Claude Code DevRel"
+      },
+      "keywords": [
+        "mods",
+        "safety",
+        "git",
+        "third-party"
+      ]
+    },
     {
       "name": "branch-board",
       "source": "./plugins/branch-board",
@@ -16,7 +56,8 @@
       "version": "0.1.0",
       "license": "MIT",
       "author": {
-        "name": "Joanna Seymenarova"
+        "name": "Joanna Seymenarova",
+        "email": "joanna@mentorano.com"
       },
       "keywords": [
         "git",
@@ -28,13 +69,33 @@
       ]
     },
     {
-      "name": "clean-code",
-      "source": "./plugins/clean-code",
-      "description": "Clean Code and Clean Architecture rules for Python and TypeScript, plus two measurement scripts — shape of functions and files, and the import boundaries between modules — that the agent runs before and after every change so the numbers come from a command, not a feeling.",
-      "version": "0.4.2",
+      "name": "captain",
+      "source": "./plugins/captain",
+      "description": "A time-boxed coordinator for coding runs, shared as a team plugin — one main session that coordinates background subagents in git worktrees and does the light work (reads, git inspection, notes) itself, with Codex reviews first (Opus when Codex is not installed), a 15-minute health check, and destructive or outward actions queued for the user at the end of the box. Run /captain:captain-setup once first to choose notifications and quiet hours. Code and functionality only; not for production, devops or external writes beyond listed dev targets.",
+      "version": "0.16.0",
       "license": "MIT",
       "author": {
-        "name": "Ivan Dachev"
+        "name": "Ivan Dachev",
+        "email": "ivan@mentorano.com"
+      },
+      "keywords": [
+        "coordination",
+        "time-box",
+        "subagents",
+        "worktrees",
+        "review",
+        "codex"
+      ]
+    },
+    {
+      "name": "clean-code",
+      "source": "./plugins/clean-code",
+      "description": "Clean Code and Clean Architecture rules, source measurement, and logging for Python and TypeScript. Includes architecture-fundamentals for system decisions and reviews: business drivers, data ownership, runtime coupling, contextual style trade-offs, risks, ADRs and fitness functions.",
+      "version": "0.6.0",
+      "license": "MIT",
+      "author": {
+        "name": "Ivan Dachev",
+        "email": "ivan@mentorano.com"
       },
       "keywords": [
         "clean-code",
@@ -42,17 +103,60 @@
         "refactoring",
         "python",
         "typescript",
-        "code-quality"
+        "code-quality",
+        "software-architecture",
+        "architecture-decisions",
+        "logging",
+        "gcp"
+      ]
+    },
+    {
+      "name": "coord",
+      "source": "./plugins/coord",
+      "description": "Run a software project as a parallel sprint of interactive Claude Code sessions — one coordinator that owns merges, the board and the process, implementer lanes in their own git worktrees that talk only to it, and the human owner. Handoffs at task boundaries, kickoffs loaded on /clear, merges verified once per batch.",
+      "version": "0.5.0",
+      "license": "MIT",
+      "author": {
+        "name": "Joanna Seymenarova",
+        "email": "joanna@mentorano.com"
+      },
+      "keywords": [
+        "coordination",
+        "parallel",
+        "sessions",
+        "worktrees",
+        "handoff",
+        "sprint"
+      ]
+    },
+    {
+      "name": "project-memory",
+      "source": "./plugins/project-memory",
+      "description": "Committed project memory for Claude Code — one topic per markdown file in .agent-memory/ at the repo root, loaded natively as rules through a committed .claude/rules/project-memory symlink (path-scoped files load when a matching file is touched), with a write trigger every session and subagent reads, a file-state health check at session start, and a defragment skill that merges, splits and trims the memory in one reviewable diff. The plugin never commits.",
+      "version": "0.1.1",
+      "license": "MIT",
+      "author": {
+        "name": "Ivan Dachev",
+        "email": "ivan@mentorano.com"
+      },
+      "keywords": [
+        "memory",
+        "rules",
+        "agent-memory",
+        "defragment",
+        "team",
+        "claude-md"
       ]
     },
     {
       "name": "utils",
       "source": "./plugins/utils",
       "description": "Small helpers for working with Claude Code — start a new background Claude Code session with Remote Control in the same repository and get its link, to continue from a phone or the web.",
-      "version": "0.2.0",
+      "version": "0.3.1",
       "license": "MIT",
       "author": {
-        "name": "Ivan Dachev"
+        "name": "Ivan Dachev",
+        "email": "ivan@mentorano.com"
       },
       "keywords": [
         "remote-control",

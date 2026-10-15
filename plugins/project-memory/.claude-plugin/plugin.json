@@ -1,0 +1,10 @@
+{
+  "name": "project-memory",
+  "description": "Committed project memory for Claude Code — one topic per markdown file in .agent-memory/ at the repo root, loaded natively as rules through a committed .claude/rules/project-memory symlink (path-scoped files load when a matching file is touched), with a write trigger every session and subagent reads, a file-state health check at session start, and a defragment skill that merges, splits and trims the memory in one reviewable diff. The plugin never commits.",
+  "version": "0.1.1",
+  "license": "MIT",
+  "author": {
+    "name": "Ivan Dachev",
+    "email": "ivan@mentorano.com"
+  }
+}

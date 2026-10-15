@@ -14,11 +14,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = sorted((ROOT / "plugins").glob("*/skills/*/SKILL.md"))
 EXPECTED = {
+    "architecture-fundamentals",
+    "3amigos",
     "bg-claude-rc",
     "branch-board",
+    "captain",
+    "captain-setup",
     "clean-code",
     "clean-code-python",
     "clean-code-typescript",
+    "clean-code-logging",
+    "coord",
+    "memory-defrag",
+    "memory-init",
+    "new-session-tab",
 }
 
 
@@ -62,16 +71,32 @@ class MarketplaceManifestTest(unittest.TestCase):
     def plugin_manifest(self, name: str) -> dict:
         return json.loads((ROOT / "plugins" / name / ".claude-plugin" / "plugin.json").read_text())
 
+    def local_entries(self) -> list[dict]:
+        return [e for e in self.marketplace["plugins"] if isinstance(e["source"], str)]
+
+    def third_party_entries(self) -> list[dict]:
+        return [e for e in self.marketplace["plugins"] if not isinstance(e["source"], str)]
+
     def test_every_advertised_plugin_exists_with_a_manifest(self):
-        for entry in self.marketplace["plugins"]:
+        for entry in self.local_entries():
             with self.subTest(plugin=entry["name"]):
                 self.assertEqual(entry["source"], f"./plugins/{entry['name']}")
                 self.assertEqual(self.plugin_manifest(entry["name"])["name"], entry["name"])
 
     def test_versions_agree_between_the_two_manifests(self):
-        for entry in self.marketplace["plugins"]:
+        for entry in self.local_entries():
             with self.subTest(plugin=entry["name"]):
                 self.assertEqual(entry["version"], self.plugin_manifest(entry["name"])["version"])
+
+    def test_third_party_plugins_are_pinned_to_a_reviewed_commit(self):
+        # Someone else's repo can change under us; an unpinned entry would ship that change unreviewed.
+        for entry in self.third_party_entries():
+            with self.subTest(plugin=entry["name"]):
+                source = entry["source"]
+                self.assertEqual(source["source"], "git-subdir")
+                self.assertRegex(source.get("sha", ""), r"^[0-9a-f]{40}$")
+                self.assertEqual(Path(source["path"]).name, entry["name"])
+                self.assertIn("version", entry)
 
 
 if __name__ == "__main__":

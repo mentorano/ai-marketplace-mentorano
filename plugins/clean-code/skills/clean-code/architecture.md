@@ -8,6 +8,13 @@ Adapters) and ch. 23 (Presenters and Humble Objects). Run them in this
 order whenever a change touches a module boundary, adds an import between
 layers, or adds a module.
 
+These phases review source boundaries using Clean Architecture. They do not
+select a system architecture style or prove runtime/data independence.
+Apply the project's documented dependency policy; do not classify an
+intentional, permitted boundary as a defect solely from a folder heuristic.
+For system topology, data ownership, deployment, and operational trade-offs,
+use [architecture-fundamentals](../architecture-fundamentals/SKILL.md).
+
 ## Vocabulary
 
 - **High-level module**: far from IO. Rules, decisions, domain types.
@@ -92,7 +99,10 @@ When the project has a dependency checker, forbidden-import rule, or
 import-cycle check, run it. Its allowed-dependency list records the design
 the team wants; the imports in the code today may be mistakes. When the
 correct fix is a new inward call, edit the list to allow it. When an edit
-to the list would allow an outward call or a cycle, the edit is the
-mistake. When the project has no such check, add a lightweight one when
+to the list would allow an outward call or a cycle forbidden by the adopted
+dependency policy, the edit is the mistake. Under this plugin's default
+Clean Architecture policy those edges remain forbidden; a documented
+project-specific boundary is evaluated against its own rules. When the
+project has no such check, add a lightweight one when
 practical; where the language can enforce visibility itself, prefer that to
 a tool that runs after the build.

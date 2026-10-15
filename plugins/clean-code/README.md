@@ -1,7 +1,7 @@
 # clean-code
 
 Rules and measurement for clean code in Python and TypeScript, packaged as
-three Claude Code skills and two scripts: one for the shape of functions and
+five Claude Code skills and two scripts: one for the shape of functions and
 files, one for the import boundaries between modules.
 
 Robert C. Martin's answer for agents is rules plus tool gates. The
@@ -27,13 +27,56 @@ which asks for cleaner, not merely no worse.
 
 | Skill | Loads when | Carries |
 |---|---|---|
-| `clean-code` | any source edit or review, and an architecture audit | the process, the audit mode, the language-agnostic rules, three review passes, `architecture.md`, `rationalizations.md`, `measure.py`, `boundaries.py` |
+| `clean-code` | any source edit or review, and a code-structure or Clean Architecture dependency audit | the process, the audit mode, the language-agnostic rules, three review passes, `architecture.md`, `rationalizations.md`, `measure.py`, `boundaries.py` |
+| `architecture-fundamentals` | system architecture decisions or reviews, service/data boundaries, style selection and operational trade-offs | prioritized characteristics, coupling and data ownership, contextual style comparison, risks, ADRs and fitness functions; references based on Richards and Ford's second edition |
 | `clean-code-python` | `.py` files, FastAPI, SQLAlchemy, Pydantic, pytest | Python shape of the rules, FastAPI layer defaults, per-layer smells |
 | `clean-code-typescript` | `.ts` / `.tsx`, React, hooks, Vite, vitest | TypeScript shape of the rules, React layer defaults, per-layer smells |
+| `clean-code-logging` | fix, audit or standardize application logs | Python JSON/GCP, readable browser console output, short fixed messages, named trailing values, stability ordering, privacy and runtime checks |
 
 The project's own `CLAUDE.md` outranks every rule in the skills. The
 language skills carry only what a linter cannot check; a rule that ruff,
 typescript-eslint or `tsc --strict` enforces names the tool and stops.
+
+## Architecture fundamentals skill
+
+Run `/clean-code:architecture-fundamentals` with the decision or system to
+review. For example:
+
+```text
+/clean-code:architecture-fundamentals Review checkout service and data boundaries; report only.
+/clean-code:architecture-fundamentals Compare a modular monolith and coarse services for this product.
+```
+
+The skill starts from business drivers and available evidence, compares
+feasible designs, and records costs, uncertainty, and verification. It
+covers deployment, data, runtime, and team constraints beyond source
+imports. A local refactor stays in clean-code. Similar domain models in
+independent contexts need a coupling analysis before shared extraction.
+
+The source review covers all 27 chapters of *Fundamentals of Software
+Architecture*, second edition (2025). The skill uses original synthesis,
+not copied book content or universal style scores. Chapter anchors,
+verified corrections, and adaptation limits are in
+[`references/sources.md`](skills/architecture-fundamentals/references/sources.md).
+The existing measurement thresholds and scripts remain unchanged.
+
+## Logging skill
+
+Run `/clean-code:clean-code-logging` to inspect and fix the current repository.
+Add a path to limit the scope. Add `audit` for a report without edits:
+
+```text
+/clean-code:clean-code-logging
+/clean-code:clean-code-logging backend frontend
+/clean-code:clean-code-logging backend audit
+```
+
+The skill keeps each main message fixed and puts named values at the end.
+Stable selectors precede outcomes, counts and timing. Free text uses single
+quotes in the readable message; JSON fields retain normal JSON encoding.
+Python backend logs use JSON suitable for GCP. TypeScript browser logs use
+plain console text. Separate references cover Python, TypeScript and GCP,
+including library access logs, exceptions, request context and verification.
 
 ## The scripts
 
@@ -186,7 +229,7 @@ where each rule comes from.
 | One job per function; sections are functions | Clean Code ch. 3 "Do One Thing", "Sections within Functions", the Stepdown Rule; ch. 17 G30 |
 | No flag arguments | Clean Code ch. 3 "Flag Arguments"; ch. 17 F3; Fowler, bliki "FlagArgument" |
 | No hidden side effects | Clean Code ch. 3 "Have No Side Effects", "Command Query Separation" (Meyer) |
-| No duplication, second copy; shared mechanism under both names | Clean Code ch. 3 DRY, ch. 12 "No Duplication", ch. 17 G5; blog "An Accidental Doppelganger in Ruby" (2009). The true-vs-accidental carve-out is Clean Architecture ch. 16 and belongs to boundaries, so it sits in `architecture.md` Phase 4 |
+| No duplication within a shared responsibility; evaluate cross-context sharing | Clean Code ch. 3 DRY, ch. 12 "No Duplication", ch. 17 G5; Clean Architecture ch. 16 and `architecture.md` Phase 4 distinguish independently changing concepts. Fundamentals of Software Architecture 2e ch. 7, 20 and 27 add the ownership, volatility and coupling trade-offs; the main skill now makes that boundary explicit |
 | Errors are types | Clean Code ch. 7 "Use Exceptions Rather Than Return Codes", "Don't Return Null" |
 | Comments explain why; what only for code you cannot rename | Clean Code ch. 4 "Good Comments", "Bad Comments"; blog "Necessary Comments" (2017) |
 | Dead code is deleted | Clean Code ch. 4 "Commented-Out Code"; ch. 17 C5, F4, G9 |

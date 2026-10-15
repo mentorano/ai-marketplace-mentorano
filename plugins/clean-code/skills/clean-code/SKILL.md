@@ -1,6 +1,6 @@
 ---
 name: clean-code
-description: Use when writing, modifying, or refactoring source code in any language, when reviewing a diff or a file for quality, when asked for "clean code", "refactor", "code smells", "is this clean", or when asked to check the architecture, audit a codebase, or say where to improve. Measures function length, complexity, parameters, nesting and file size, and the import boundaries (direction, cycles, framework leaks), before and after the change so the verdict comes from a command.
+description: Use when writing, modifying, or refactoring source code in any language, reviewing a diff or file for quality, auditing a codebase's code structure, or identifying where code quality should improve. Also use for "clean code", "refactor", "code smells", "is this clean", and Clean Architecture dependency audits. Measures function length, complexity, parameters, nesting, file size, and configured import boundaries before and after changes. System architecture selection, runtime/data boundaries and operational trade-offs belong to architecture-fundamentals.
 ---
 
 # Clean Code
@@ -20,8 +20,9 @@ made: if the project's `CLAUDE.md` names an editing tool or forbids one,
 that rule wins too.
 
 **Core principle: the numbers come from `measure.py` and `boundaries.py`,
-not from a feeling.** A function is short when the script says it is short;
-a module boundary holds when the script counts no import across it.
+not from a feeling.** The scripts measure code shape and configured source
+import rules. A clean result does not prove cohesion, data ownership,
+runtime isolation, independent deployment, or system fitness.
 
 ## When to Use
 
@@ -36,6 +37,11 @@ Load the language skill for the file being edited: `clean-code-python` for
 module boundary, adds an import between layers, or adds a module. The
 language skills cite its phases by number. Read `rationalizations.md` when
 tempted to skip a rule.
+
+For system design, architecture-style selection, service/data ownership,
+deployment boundaries, or operational trade-offs, use the sibling
+[`architecture-fundamentals`](../architecture-fundamentals/SKILL.md) skill.
+A local source edit or import review does not require its full workflow.
 
 ## Process
 
@@ -115,8 +121,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/clean-code/boundaries.py" <package root> -
 It prints the after report, a `BEFORE` line with the merge-base SUMMARY,
 and `VERDICT up=none` or the counts that went up. Run it without
 `--changed`: its counts are only comparable whole-tree, and rows narrowed
-to the changed files would hide a cycle the task closed elsewhere. No
-boundary count may go up.
+to the changed files would hide a cycle the task closed elsewhere.
+Revalidate increased boundary counts against the source and the project's
+documented dependency policy. Introduced violations of that policy block
+completion. A heuristic hit that the policy permits is reported with its
+evidence and reason; do not change thresholds or policy merely to pass.
+Where no project-specific policy exists, use the Clean Architecture rules
+in `architecture.md` as this plugin's default.
 
 The verdicts map to the rules below:
 
@@ -141,7 +152,7 @@ The verdicts map to the rules below:
 A function is matched by file and name. A renamed function shows as a new
 row, so judge a `new-over` row against the diff before calling it new.
 
-If the after-numbers are worse, the task is not done. Split the function,
+If the code-shape verdict violates the rules above, the task is not done. Split the function,
 extract the helper, flatten the nesting, then measure again. Not worse is
 the floor; the Boy Scout Rule asks for a little cleaner, so bring a touched
 function under a threshold when the change is small.
@@ -181,12 +192,14 @@ saying why and what the follow-up split would be; (4) the review findings
 with their outcomes, fixed or rejected. Tables, not a sentence about
 tables.
 
-## Audit mode
+## Audit mode: code structure and source boundaries
 
 The process above is built around a change. When there is no change —
-"check the architecture", "is this Clean Architecture", "where do we
-improve", "build a backlog" — the tools have no diff to narrow to, so run
-them over the whole tree:
+"audit this codebase", "where should code quality improve", "check the code
+structure", "is this Clean Architecture", or "build a code-quality backlog"
+— the tools have no diff to narrow to, so run them
+over the whole tree. A broader system-architecture audit also needs the
+runtime, data, and operational analysis in `architecture-fundamentals`:
 
 1. `measure.py <roots>` for the shape, `boundaries.py <package root>` for
    the boundaries. Both, always; a backlog built from one script inherits
@@ -203,8 +216,10 @@ them over the whole tree:
    domain, SQL in handlers, HTTP in services). A backlog built in audit
    mode has both sections, or it says why one is empty.
 
-In audit mode every row is a finding, touched or not. In task mode a row in
-a file the task did not touch is context for the report, not a finding.
+In audit mode every row is a review candidate, touched or not. Revalidate it
+against the source and the project's intended boundaries before reporting
+a confirmed defect. In task mode a row in a file the task did not touch is
+context for the report, not a finding.
 The audit measures; it does not enforce. When a count should become a
 gate, the fix is the project's own checker (`import-linter` for Python,
 `dependency-cruiser` or `eslint-plugin-import` for TypeScript), turned on
@@ -225,9 +240,13 @@ by the project, not a rule added to this skill.
   functions.
 - **No hidden side effects.** A function named like a query does not write.
 - **No duplication.** The second copy is the moment to extract, not the
-  third. When the two copies serve different concepts, extract the shared
-  mechanism beneath both and keep both names as thin callers; do not fold
-  one into the other.
+  third, within a shared responsibility and change boundary. Across
+  independently evolving domain contexts, similar code or data shapes do
+  not automatically justify sharing. Compare duplication with volatility,
+  ownership, and release/runtime coupling; preserve separate models when
+  sharing would couple independent policies. Extract a stable common
+  mechanism only when the shared dependency is justified. See
+  `architecture.md` Phase 4.
 - **Errors are types.** A domain error is a class in the domain, not a
   string, not a status code, not `None` with a comment.
 - **Comments explain why.** Intent, a warning, a consequence the reader
