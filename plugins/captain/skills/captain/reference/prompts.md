@@ -3,7 +3,6 @@
 ## Contents
 
 - [Agent frame (R3) - every agent prompt](#agent-frame-r3---every-agent-prompt)
-- [Sol frame variant (R20) - to `captain:light-coder-sol`](#sol-frame-variant-r20---to-captainlight-coder-sol)
 - [Bootstrap prompt (`captain:runner`) - add the R3 frame](#bootstrap-prompt-captainrunner---add-the-r3-frame)
 - [Memory commit prompt (`captain:runner`) - add the R3 frame](#memory-commit-prompt-captainrunner---add-the-r3-frame)
 - [Memory revalidation prompt (R5) - one `captain:worker`, single pass](#memory-revalidation-prompt-r5---one-captainworker-single-pass)
@@ -12,8 +11,8 @@
 - [Revalidation message (R6) - by SendMessage to the writer's agentId](#revalidation-message-r6---by-sendmessage-to-the-writers-agentid)
 - [Fix list message (R6) - after main applies the round threshold](#fix-list-message-r6---after-main-applies-the-round-threshold)
 - [Merge conflict prompt (R1) - to a `captain:worker`, add the R3 frame](#merge-conflict-prompt-r1---to-a-captainworker-add-the-r3-frame)
-- [Hand-off prompt (R6) - a fresh writer replaces one at 20% context](#hand-off-prompt-r6---a-fresh-writer-replaces-one-at-20-context)
-- [Judge prompt (R20) - to a blind `captain:deep`](#judge-prompt-r20---to-a-blind-captaindeep)
+- [Group test prompt (TS1) - to a `captain:runner`](#group-test-prompt-ts1---to-a-captainrunner)
+- [Hand-off prompt (R6) - a fresh writer replaces one at 30% context](#hand-off-prompt-r6---a-fresh-writer-replaces-one-at-30-context)
 - [Mini-consensus prompt (R9) - Codex (medium), else Fable, else `captain:worker`](#mini-consensus-prompt-r9---codex-medium-else-fable-else-captainworker)
 - [Full consensus prompt (R9) - 3amigos `task.md` for a captain decision](#full-consensus-prompt-r9---3amigos-taskmd-for-a-captain-decision)
 - [Panel runner prompt (R9) - to the `captain:runner` of a 3amigos panel](#panel-runner-prompt-r9---to-the-captainrunner-of-a-3amigos-panel)
@@ -28,7 +27,7 @@ path in a command with single quotes (`'<abs path>'`).
 <code writer while the spec loop runs (R5):> The approved spec changes listed at the end of
 this prompt are authoritative where the spec file differs; a spec writer applies them in
 parallel.
-Done means: <a verifiable finish line, e.g. "tests in <file> pass, logged; commit on <branch>">.
+Done means: <a verifiable finish line, e.g. "commit on <branch>; the group runner runs the tests">.
 Stop and report early only if: <task-specific blocker>, or the work reaches an external system
 other than a dev target listed under Scope below.
 <light coders only (captain:light-coder, R4):> If you need a file outside the owned list, or a
@@ -37,7 +36,10 @@ design decision the task did not make, stop: do not commit, and make report item
 Do not launch subagents or invoke review skills.
 
 Hard time limit: finish within <N> minutes. If you cannot, commit what works on your branch
-and report what is left. Park time (absolute): <HH:MM>.
+and report what is left.
+<with a box (R11):> Park time (absolute): <HH:MM>. Hard end (absolute): <HH:MM>.
+Main may send you a later park time and hard end; the latest message wins.
+<no box:> The run has no park time or hard end; only your own time limit above applies.
 
 Scope:
 - Checkout mode (R2): <shared | shared-multi | worktree>. Checkout: '<abs checkout>'.
@@ -46,8 +48,9 @@ Scope:
   '<feature-branch>'; the bootstrap agent created it and every agent of the run shares it.
   Commit only the files you own, by path, on that branch. Writers report the base SHA (the
   feature-branch HEAD when they started) and the head SHA of their last commit.
-  shared-multi, writers also: other writers work in this checkout now. Do not run builds or
-  tests; the designated test agent runs them after all writers finish. Do not touch shared
+  Writers, every mode (TS1): run no tests, no build, no compile check; the group's runner
+  runs them after the group's last merge.
+  shared-multi, writers also: other writers work in this checkout now. Do not touch shared
   generated files (lockfiles, migrations, snapshots).
   worktree, first step (writers only):
   git -C '<abs repo>' worktree add '<abs repo>/.claude/worktrees/<name>' -b '<agent-branch>' '<feature-branch>'
@@ -60,6 +63,11 @@ Scope:
   edit, and run every command there (cd '<abs checkout>' && ... or git -C '<abs checkout>' ...),
   including tests and the paths you give a reviewer.
 - Files you own: <list>. Do not touch: <list>, and anything outside scope.
+  <a file shared with a parallel task (PL1):> You share <file> with <task ID>; change only
+  <its Touches entry>, and leave the rest of that file as it is. A change you need outside it
+  → report it, do not make it.
+  <the spec is the contract (PL2):> Other tasks build against the names, signatures, flags
+  and formats the spec fixes; keep them exactly. Need a change to one → stop and report.
 - External systems are out of scope: no deploy, cloud, shared DB, GitHub issues/comments,
   publish, pull request, and no write to another repository. If the task reaches one, stop
   that part and report it. <only with a listed dev target, R10:> Exception: dev target
@@ -82,8 +90,8 @@ House rules:
 - Decisions (R9): a choice visible outside a file or hard to undo gets a mini-consensus
   before you execute it (Codex, else a Fable agent, else a captain:worker agent — if you cannot
   launch an agent, ask main for that opinion — skipping tools the
-  config marks off; recompute the time
-  to park before each; none left → defer it); list each decision with reason and rejected
+  config marks off; with a park time, recompute
+  the time to park before each; none left → defer it); list each decision with reason and rejected
   alternatives.
 - Mark anything you could not confirm or check, and say where you looked.
 - Your final message carries the evidence itself (output lines, log path, sha), never a
@@ -146,31 +154,6 @@ their prompt carries the round-1 approved change list, one line per change, with
 writer as a correction of the task in progress (R6).
 **Why:** 30.09.2026: the owner asked "we will review the spec, right?"; the code writers
 started after spec round 1 and the spec loop ended (r3 approve) while they worked.
-
-## Sol frame variant (R20) - to `captain:light-coder-sol`
-
-The wrapper gets the R3 frame in `worktree` mode — its `worktree add` step names the duel
-worktree and branch `duel-<run-id>-<task>-<letter>` and starts at '<base sha>', and the wrapper
-runs it — plus the Sol writer steps (`reference/tools.md`, "Sol writer").
-
-Sol's prompt, written to `<log prefix>.prompt.md`, is the same filled R3 frame with exactly
-these changes:
-
-- removed: the `worktree add` step and its retry lines (the checkout exists);
-- removed: the commit lines — "commit on <branch>" in the done line, "If you cannot, commit
-  what works on your branch", "Commit only the files you own …", "Stage only the files you
-  own …", and the commit approval;
-- the checkout line names '<abs duel worktree>';
-- added, after the stop line:
-
-```text
-The checkout exists; do not run git write commands; the wrapper commits.
-If you need a file outside the owned list or a design decision, stop and make the first
-line of your final message `ESCALATE: <reason>`.
-```
-
-Everything else stays: the time limit and park time, house rules (logging, self-review,
-stopping started processes), the scope and the report shape.
 
 ## Auto base (R2 exception, start step 5)
 
@@ -420,7 +403,7 @@ Main merged '<agent-branch>' into '<target branch>' in '<abs checkout>' and git 
 conflicts in: <files>. The merge is in progress. The checkout exists: drop the frame's
 `worktree add` step; work only in '<abs checkout>'; do not run git merge, commit, reset,
 checkout or stash. Resolve each file so both sides' intent holds (<agent-branch>: <one line
-of its task>; <target branch>: <one line>). Run the tests that cover those files, logged.
+of its task>; <target branch>: <one line>). Run no tests: the group's runner runs them (TS1).
 Stage only the resolved files, by path (git -C '<abs checkout>' add -- '<file>'). Do not
 commit: main concludes with git commit --no-edit. A conflict that needs a product choice →
 stage nothing and report it as item 1, with the two options.
@@ -429,7 +412,31 @@ stage nothing and report it as item 1, with the two options.
 Empty FIX NOW list → no message; the loop stops (`reference/triage.md`). Accepted risks of
 that round wait for the next commit of the task, else the R17 TODO/docs commit.
 
-## Hand-off prompt (R6) - a fresh writer replaces one at 20% context
+## Group test prompt (TS1) - to a `captain:runner`
+
+After the group's last merge (`reference/parallel.md`, the group flow), with the R3 frame.
+
+```text
+Run the tests of group <group> on the merged head <sha>. Do not edit, commit, merge or push
+anything, and do not run in '<abs checkout>': first
+git -C '<abs repo>' worktree add '<abs repo>/.claude/worktrees/group-<run-id>-<group>-<n>' -b 'group-<run-id>-<group>-<n>' '<sha>'
+python3 '<skill root>/scripts/record-created.py' --run-dir='<abs run dir>' --worktree='<abs repo>/.claude/worktrees/group-<run-id>-<group>-<n>'
+and run everything in that clean worktree. Leave it there: the run's cleanup removes it (its
+branch sits on a merged SHA).
+Command: <the group's test command from run.md ## Groups, with its env variables>.
+Log: ./tmp/claude-logs/group-<group>-$(date +%Y%m%d-%H%M%S).log, full output; then read the log.
+Shared resource: <test DB / port / container / none>; another group run may hold it: <yes, wait
+for it | no>.
+Report: 1. pass or fail, with the summary line and counts; 2. each failing test, with its
+error line; 3. the files each failing test touches, mapped to the group's merge range
+<base>..<sha> (`git -C '<abs checkout>' log --name-only <base>..<sha>`), as a hint of the task
+(<ZDn: files> per task); 4. the log path.
+```
+
+**Why:** the owner's answer OP2, 20.10.2026: writers run nothing; one runner per group runs the
+tests once, after the group's review and fixes.
+
+## Hand-off prompt (R6) - a fresh writer replaces one at 30% context
 
 Put this before the R3 frame of the fresh writer; the frame keeps the old writer's checkout,
 branch and files. In `worktree` mode, drop the frame's `worktree add` step: the fresh writer
@@ -455,40 +462,13 @@ different cause to try>. This is the last writer for this mechanism; the loop's 
 count does not reset (round <k>/3).
 ```
 
-After an `ESCALATE` of a light coder (R4 MR3; never inside a duel), add to the block:
+After an `ESCALATE` of a light coder (R4 MR3), add to the block:
 
 ```text
 The previous writer stopped with ESCALATE: <reason>.
 Uncommitted files: <list or "none">; last commit <sha or "base <sha>">.
 Decide the escalated point, record it (R9), then finish the task.
 ```
-
-## Judge prompt (R20) - to a blind `captain:deep`
-
-Only letters; never the agent type or model of a contestant (`reference/experiment.md`).
-
-```text
-Judge a blind writer duel for task <task ID>: <task text>. Owned files: <list>.
-Do not browse the web. Read-only: do not edit files, do not run git write commands.
-Per letter you get: the diff (<base>..<head>), its `git diff --shortstat` line, the check log
-run on the head SHA in a clean checkout, the changed and uncommitted paths vs the owned list,
-and the review register (findings per round and class).
-A: <paths or inline>   B: <...>   C: <...>
-Score each letter:
-SD1 the clean-checkout check passes and the last review left no FIX NOW (yes|no);
-SD2 files touched outside the owned list, committed or not (count);
-SD3 review rounds until clean (count); SD4 FIX NOW findings in total (count);
-SD5 code quality and fit with repo patterns (1-5); SD6 test quality (1-5).
-Winner: SD1 yes; ties → fewer SD3, then the smaller diff (added + removed lines from
---shortstat), then the higher SD5 + SD6; still tied → pick one and say why. No letter with
-SD1 yes → none.
-Output exactly, one line per letter, then one Winner line:
-<L>: <SD1 yes|no> <SD2 n> <SD3 n> <SD4 n> <SD5 1-5> <SD6 1-5>
-Winner: <L|none> — <reason, one sentence>
-```
-
-Invalid output (a letter missing, a value out of range, no `Winner:` line, a winner with
-SD1 no) → one retry, then no winner.
 
 ## Mini-consensus prompt (R9) - Codex (medium), else Fable, else `captain:worker`
 
@@ -542,10 +522,10 @@ Vote: <option letter> — <reason, one sentence>
 ```text
 Run the Codex voter and the tally of a 3amigos panel; do not vote yourself. Read only what
 the scripts print, <dir>/data.md and <dir>/tally.json, never a voter's answer file. Panel dir: <dir>. Skill dir: <skill dir>.
-Park deadline (absolute): <HH:MM>. Decisions: <N>.
+Park deadline (absolute): <HH:MM | none: no box>. Decisions: <N>.
 1. Unless the config tools mark codex false or it hit its usage limit in this run:
    python3 '<skill dir>/scripts/panel.py' --task '<dir>/task.md' --input '<dir>/data.md'
-   --out '<dir>' --voters codex --effort high --deadline <min(300, park - 5 min) in s>
+   --out '<dir>' --voters codex --effort high --deadline <min(300, park - 5 min) in s; 300 with no box>
    --require items=<N>
 2. When main sends the agent answer files, run panel.py --check on each with
    --require items=<N>.

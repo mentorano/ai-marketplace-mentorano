@@ -4,7 +4,7 @@
 
 - [Timers (R11, R13) - armed when run.md is written](#timers-r11-r13---armed-when-runmd-is-written)
 - [Agent lifecycle (R13)](#agent-lifecycle-r13)
-- [One task per writer, fresh writer at 20% context (R6)](#one-task-per-writer-fresh-writer-at-20-context-r6)
+- [One task per writer, fresh writer at 30% context (R6)](#one-task-per-writer-fresh-writer-at-30-context-r6)
 - [The 15-minute check - one status line (R13)](#the-15-minute-check---one-status-line-r13)
 - [Correction ladder](#correction-ladder)
 - [Leftover processes (R14)](#leftover-processes-r14)
@@ -12,16 +12,27 @@
 
 ## Timers (R11, R13) - armed when run.md is written
 
-All three job ids (or fallback task ids) go into `run.md` under `## Timers`.
+Every job id (or fallback task id) goes into `run.md` under `## Timers`. No box (R11): only
+the health timer; box-end, park and deadline exist only with a box. Box end, hard end,
+extensions, outages, strict mode and no box: `reference/parallel.md`.
 
 | Timer | When | Primary | Fallback |
 |---|---|---|---|
 | health | every 15 min while any agent runs | `CronCreate` recurring `4,19,34,49 * * * *` | background `sleep 900` Bash, re-armed after each check |
-| park | deadline − 10% of the box, at least 5 min before the deadline | `CronCreate` one-shot pinned to that minute | background `sleep <seconds until park>` |
-| deadline | deadline | `CronCreate` one-shot pinned to that minute | background `sleep <seconds until deadline>` |
+| box-end | with a box only: box end (start + box), once; strict mode: none, the deadline covers it | `CronCreate` one-shot pinned to that minute | background `sleep <seconds until box end>` |
+| park | with a box only: the current `Hard end` − 10% of the box, at least 5 min before it, in both time modes | `CronCreate` one-shot pinned to that minute | background `sleep <seconds until park>` |
+| deadline | with a box only: the current `Hard end` (first normal: start + 1.3 × box; strict: box end; outages and extensions move it) | `CronCreate` one-shot pinned to that minute | background `sleep <seconds until deadline>` |
 
 - Compute the minutes with `date`, never estimate. Example: start 14:02, box
-  30 min → park 14:27 (10% = 3 min, so the 5-min floor applies), deadline 14:32.
+  30 min → box end 14:32, hard end 14:41 (1.3 × 30 = 39 min), park 14:36 (10% = 3 min, so the
+  5-min floor applies), deadline 14:41. Strict: park 14:27, deadline 14:32.
+- With a box, re-arm park and deadline on each work extension and each recorded outage:
+  `CronDelete` the old jobs (fallback: `TaskStop` the old `sleep` task ids), arm the new hard
+  end's park and deadline, and record the new ids and times in `run.md`. The `box-end` job
+  never moves. Then `SendMessage` every running agent its new park and hard end
+  (`reference/parallel.md`, one time boundary).
+- Every park or deadline signal: first compare `date` with `run.md` `Park` and `Hard end`. A
+  signal of an earlier, moved time is stale: ignore it.
 - One-shot cron: pin minute, hour, day and month of the target time, taken from `date` of
   that time, not from today (a box that crosses midnight lands on the next day):
   macOS `date -v+<N>M '+%M %H %d %m'`, Linux `date -d '+<N> min' '+%M %H %d %m'`; strip
@@ -34,8 +45,9 @@ All three job ids (or fallback task ids) go into `run.md` under `## Timers`.
   {"cron": "4,19,34,49 * * * *", "prompt": "captain: health check - run it per reference/health.md", "recurring": true}
   ```
 
-  The deadline job is the same with "captain: DEADLINE signal". If `CronCreate` is not
-  available, use the fallback `sleep` for all three timers.
+  The deadline job is the same with "captain: DEADLINE signal", the box-end job with
+  "captain: BOX-END signal". If `CronCreate` is not available, use the fallback `sleep` for
+  every timer.
 - Cron jobs are session-only, fire only while the REPL is idle (never
   mid-turn), get up to 10% jitter and expire after 7 days. A signal can
   arrive late: act on it at once and note the delay for the R17 report.
@@ -45,12 +57,21 @@ All three job ids (or fallback task ids) go into `run.md` under `## Timers`.
   only the missing ones, and `CronDelete` any extra captain job, so no timer fires twice. A
   blank health id stays blank (and an extra health job is deleted) while no agent in `run.md`
   has `notified: no`; the next agent launch re-arms it.
-  Record the new ids. Also re-check `date` against park and deadline.
+  Record the new ids. With a box, also re-check `date` against box end, park and deadline.
 - End (R17): `CronDelete` every job id, or `TaskStop` every fallback task id.
 
-**On park:** `SendMessage` to every running agent: "Park signal: commit your
-work in progress on your branch now, do not push or merge unreviewed work,
-and report." No new review starts after park (R6).
+**Before any box-end, park or deadline signal** (and on resume): run the outage check of the
+15-minute check first (`Last check:` gap, error evidence, `reference/parallel.md`), record a
+confirmed outage, and with a box move the times and re-arm (no box: record it only); then act
+only if the signal still matches `run.md`.
+**On box end:** print one status line, and check that only open work (`reference/parallel.md`)
+and its review loops run; new scope waits for the next run or goes to TODO with its reason.
+**On park:** normal mode with open work (open rows of `## Tasks`, or a group not green) and
+fewer than 3 extensions used → a
+work extension instead (`reference/parallel.md`): no park signal. Else `SendMessage` to every
+running agent: "Park signal: commit your work in progress on your branch now, do not push or
+merge unreviewed work, and report." No new review starts after park (R6); "park" is the one
+time boundary of `reference/parallel.md`.
 **On deadline:** start R17. When nothing runs and only the owner's `!` commands wait
 (`reference/queue.md`), first say in one line what R17 does now (e.g. "Deadline: stopping
 all timers and writing the runs.jsonl line; your commands stay valid"), then do it; or wait
@@ -78,10 +99,12 @@ got stuck and I did not see what is happening".
   plus the message.
 - `TaskStop` with the recorded task id stops a stalled agent.
 
-## One task per writer, fresh writer at 20% context (R6)
+## One task per writer, fresh writer at 30% context (R6)
 
 A writer holds one task at a time. Its context grows with every task it gets, and a writer
-past ~20% of its window gets slower and starts to drop older instructions.
+with a large context gets slower and starts to drop older instructions. The line is 30% of the
+window. The measure comes only at the end of a task, so a writer just under the line can grow
+by one more task.
 
 - A new owner request while the writer is busy → a new `run.md` `## Tasks` row, state
   `queued`, and one line to the owner with its ID. Do not `SendMessage` it to the busy
@@ -89,30 +112,33 @@ past ~20% of its window gets slower and starts to drop older instructions.
   order them") is not a new task: send it at once.
 - The writer's completion notification → measure it:
   `python3 '<skill root>/scripts/agent-context.py' <agentId>`. The line ends in `keep` or
-  `replace` (`replace` = at least 20% of a 1M-token window; `unknown replace` and
+  `replace` (`replace` = at least 30% of a 1M-token window; `unknown replace` and
   `not found replace` = no measurement, treat it as full). Write it in the agent's `Context` column.
 - `keep` → `SendMessage` the next queued task, or the review findings (R6), to the same
   writer. A loop that ended clean (no FIX NOW) is merged first, either way: main merges at once
-  (`reference/queue.md`, the merge flow step 1), the `ZDn` row becomes `merged`, a runner runs
-  the tests on the merged head, and the R5 push gate comes after.
+  (`reference/queue.md`, the merge flow step 1), the `ZDn` row becomes `merged`, the group's
+  runner runs the tests after the group's last merge (TS1, `reference/parallel.md`), and the R5
+  push gate comes after.
 - `replace` → `TaskStop` the writer if it has not ended, mark its row `replaced`, and launch
   a fresh `captain:worker` with the hand-off prompt (`reference/prompts.md`) and the next
   task or findings. The fresh writer takes over the old writer's files and review rounds.
-  Inside a duel (R20) the replacement is instead the contestant's own agent type, and a fresh
-  `captain:light-coder-sol` resumes the same Codex session id (Codex compacts its own context).
 - Never stop a writer in the middle of a task only for its context; wait for its report.
   The park signal and the correction ladder still apply as usual.
+**Why:** 27.09: a writer grew to 316k tokens over 20 requests. The owner, 20.10.2026: the line
+moved from 20% to 30%. In one run three writers at 24-26% were replaced and lost their working
+context; of 1151 Opus subagents in 14 days, 201 peaked at 200k or more and only 22 at 300k.
 
 ## The 15-minute check - one status line (R13)
 
 **When.** Every 15 min while any agent in `run.md` has `notified: no`. When an agent's time
-limit (launch time + limit) or park falls before the next recurring check, also arm a one-shot
-check pinned to that minute (`CronCreate`, `recurring: false`, the same health prompt). No
-agent running at a check → `CronDelete` the health job and blank its id in `## Timers`; the
-next agent launch re-arms it. A check with nothing to watch prints no empty line.
+limit (launch time + limit) or park (with a box) falls before the next recurring check, also
+arm a one-shot check pinned to that minute (`CronCreate`, `recurring: false`, the same health
+prompt). No agent running at a check → `CronDelete` the health job and blank its id in `##
+Timers`; the next agent launch re-arms it. A check with nothing to watch prints no empty line.
 
 **Output.** Every check ends with exactly one line to the owner, built from `run.md` in the
-R11 status format, e.g. `42 of 120 minutes gone; ZD3 running (12/35 min); ZD4 waiting for review.`
+R11 status format, e.g. `42 of 120 minutes gone (+36 tolerance); 7 of 12 tasks done (58%); ZD3
+running (12/35 min).` (the `(+N tolerance)` part and the done share: `reference/parallel.md`).
 This line is the explicit exception to R12's "one line per real event": it is printed even
 when nothing changed. It is not a report: no `Remaining:` list, no next-step line. A correction
 or cut made in this check goes into this same line with its R19 ID (e.g. `ZD3 idle 20 min →
@@ -120,7 +146,11 @@ restarted (KR1)`), never a second line.
 **Why:** 15 sessions, 09–13.10.2026: a silent health check drew 4 harness nags "Your previous
 response had no visible output"; 43 checks in 15 sessions also filled the context.
 
-1. `date`; compare with park and deadline in `run.md`. A missed signal →
+1. `date`. First the outage: a gap of more than 20 min since the previous `Last check:` while
+   an agent runs is an outage candidate; confirm it from an error, record it under
+   `## Outages` and move hard end, park and deadline (`reference/parallel.md`, outage
+   extension; no box: record it only). Then write `Last check: <HH:MM>` to `run.md`. Only
+   then, with a box, compare with box end, park and deadline in `run.md`; a missed signal →
    act on it now.
 2. Per agent with `notified: no`, using only these three signals (never `Read` the
    `output_file`, not even with `offset`/`limit`):
@@ -142,8 +172,11 @@ response had no visible output"; 43 checks in 15 sessions also filled the contex
      fallback. **Why:** 01.10.2026: a Codex review ran 32 min to a timeout with no verdict, and
      the 15-minute check only pinged the writer.
 3. Apply the correction ladder (below) to each stalled agent.
-4. Compare time left with work left; when it no longer covers it, cut scope
-   (R18).
+4. With a box only (no box: skip; nothing is cut for time). Compare work left with the time
+   to the current `Hard end`. Before a cut, count the work
+   extensions left (normal mode): a task with an open row that fits the current hard end plus
+   the extensions left is not cut. Only what fits neither is cut (R18), with the numbers in the
+   TODO reason.
 5. Re-arm the fallback `sleep 900` if it is in use and an agent still runs; arm the one-shot
    check for the earliest agent limit or park that falls before the next check.
 6. Print the one status line (above), with any correction or cut of this check and its R19

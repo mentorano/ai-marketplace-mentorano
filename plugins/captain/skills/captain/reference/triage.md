@@ -10,6 +10,7 @@
 - [Data loss in normal use](#data-loss-in-normal-use)
 - [The fix-of-a-fix trap](#the-fix-of-a-fix-trap)
 - [`fix-all` runs - TODO is the last resort (ZD1)](#fix-all-runs---todo-is-the-last-resort-zd1)
+- [TODO only with evidence (TD1)](#todo-only-with-evidence-td1)
 - [When the loop stops](#when-the-loop-stops)
 - [The register](#the-register)
 - [New work between rounds; the verifier](#new-work-between-rounds-the-verifier)
@@ -56,7 +57,8 @@ Every finding gets exactly one class.
   input`, `path not used`, `nit/style`, `valid design`, `owner decision`, `settled` (a re-raise,
   see the register).
 - **TODO** — a real problem whose action belongs to a later session: a behaviour change, a
-  policy (timeout, threshold, retry), a product decision, hardening, tests in round 2+. Entry:
+  policy (timeout, threshold, retry), a product decision, hardening, tests in round 2+ that do
+  not fit (TP4). Only with evidence and one concrete reason (TD1, below). Entry:
   `reference/queue.md`, TODO entry for a deferred finding.
 
 In round 2+ a fix adds no new mechanism: no new state, timeout, counter, protocol field or new
@@ -71,8 +73,8 @@ under 100 ms; the r3 counter caused r4 F1.
 
 | Round | FIX NOW when the fields show | Else |
 |---|---|---|
-| 1 | reachable `normal use`, or a concrete input with a local fix; origin `change`; impact other than `none`. Also: missing tests for the change, wrong docs, and a `nit/style` whose fix takes under 2 min. | `nit/style` over 2 min → ACCEPT. `not shown` → ACCEPT. New behaviour or `pre-existing` → TODO. |
-| 2+ | reachable `normal use` with steps, origin `change` or `round-<k> fix`, impact `data loss`, `security`, `build/test broken` or `wrong result`. Also: a type or shape check on an existing server input field, with a concrete input. | `artificial` → ACCEPT (TODO when it touches data integrity). `pre-existing` → TODO. Tests → one TODO for the loop. `nit/style` → ACCEPT. A policy or a new mechanism → the trap. Any other confirmed finding (e.g. impact `degraded`) → ACCEPT, or TODO when it changes behaviour. |
+| 1 | reachable `normal use`, or a concrete input with a local fix; origin `change`; impact other than `none`. Also: missing tests for the change, wrong docs, and a `nit/style` whose fix takes under 2 min. | `nit/style` over 2 min that the task did not ask for → ACCEPT; asked-for polish → by scope and evidence (TP3). `not shown` → ACCEPT. New behaviour the owner deferred → TODO; a confirmed bug that needs a behaviour change → TP5 (its own task when the scope allows it and its path fits, else an owner question present, TODO away); a feature nobody asked for → ACCEPT valid design (TP2). `pre-existing` in scope with evidence → its own task (own round 1) when its whole path fits the last possible hard end, else TODO with the numbers; out of scope → TODO "out of the task's scope" (TP4). |
+| 2+ | reachable `normal use` with steps, origin `change` or `round-<k> fix`, impact `data loss`, `security`, `build/test broken` or `wrong result`. Also: a type or shape check on an existing server input field, with a concrete input. | `artificial` → ACCEPT (TODO when it touches data integrity). `pre-existing` in scope with evidence → its own task (own round 1) when its whole path fits the last possible hard end, else TODO with the numbers; out of scope → TODO "out of the task's scope" (TP4). Tests → added in the loop when the whole path fits the last possible hard end, else one TODO for the loop with the numbers (TP4). `nit/style` the task did not ask for → ACCEPT; asked-for polish → by scope (TP3). A policy or a new mechanism → the trap. Any other confirmed finding (e.g. impact `degraded`) → ACCEPT, or TODO when it changes behaviour. |
 
 Round 1 is exhaustive: it finds 10 of 11 real defects in the change. Round 2+ blocks only on
 reachable real defects.
@@ -92,6 +94,10 @@ Apply the first that matches: (1) data loss in normal use → FIX NOW; (2) a ver
 FIX NOW; (3) the trap; (4) the round table. A verifier failure is an observed fact on real
 data, so it is reachable in normal use by definition. Its fix still adds no new mechanism: if
 it needs one, it goes to the owner (present) or TODO (away).
+A group test failure (TS1, `reference/parallel.md`) is treated like a verifier failure: an
+observed fact, FIX NOW in every round, and its fix adds no new mechanism. One exception to its
+place in the order: after two failed reruns of the same test, the trap wins over FIX NOW for
+that test; data loss in normal use (1) still comes first.
 **Why:** the owner's answer VK2 (27.09): a verifier failure beats the trap; in that project the
 verifier found the real bugs and review rounds 2-4 did not.
 
@@ -111,13 +117,23 @@ threshold. It is in the trap when it has findings in two rounds of one loop. Dat
 use and a verifier failure come first (priority above). Then the writer
 does not iterate. It returns `MECHANISM: <name>`, what the code does now, and 2-3 options.
 
+- Every run mode, normal and `fix-all`, first: the one extra writer below (NP1), when the time
+  covers it. When the time is short, the line for the mode applies at once; in `fix-all` that
+  line is TODO (`fix-all` runs, below).
 - Present mode: the captain asks the owner one question (R19 IDs on the options).
 - Away mode: TODO (queue.md format); the current behaviour (the last reviewed fix) stays. Full
   consensus (R9) only when that behaviour loses data in normal use.
 - The owner answered and the mechanism comes back → TODO without a new question, except for
   data loss in normal use.
-- A `fix-all` run: first the one extra writer below (time does not cover it → TODO), then the
-  line for the mode.
+
+**One more writer for a trapped mechanism (NP1).** In every run mode, a mechanism in the trap
+gets one more fresh `captain:worker` (the hand-off prompt, `reference/prompts.md`) before the
+owner question or TODO, only when the time to park covers that writer's limit plus one
+re-review timeout (no box: always). Its prompt carries a new hypothesis, written by main in one
+or two lines: what the previous fixes assumed, and the different cause to try now. It does not
+reset the loop's re-review count (at most 3), and it is the only extra writer per mechanism.
+Its fix still goes through the round threshold; new findings on the same mechanism → the trap
+as usual.
 
 **Why:** a lock timeout went 30 s → 15 s → counter → "blocks forever": r2 F3 "30 s loses the
 upload", r3 F2 "15 s still loses", r4 F1 "the counter blocks forever". It should have been an
@@ -131,21 +147,62 @@ writes one line in `run.md`: `mode: fix-all — <reason>`; otherwise `mode: norm
 Present: the line is shown with the plan, and the owner may flip it; away: inferred and logged
 in `decisions.md`. It does not change during the run unless the owner says so.
 
-**One more writer for a trapped mechanism.** In `fix-all`, a mechanism in the trap gets one
-more fresh `captain:worker` (the hand-off prompt, `reference/prompts.md`) before the owner
-question or TODO, only when the time to park covers that writer's limit plus one re-review
-timeout. Its prompt carries a new hypothesis, written by main in one or two lines: what the
-previous fixes assumed, and the different cause to try now. It does not reset the loop's
-re-review count (at most 3), and it is the only extra writer per mechanism. Its fix still
-goes through the round threshold; new findings on the same mechanism → the trap as usual.
-Time does not cover it → TODO with the reason "does not fit the box", in both modes.
+**The trap's extra writer in `fix-all`.** The one extra writer for a trapped mechanism (the
+trap, above) runs in every mode; in `fix-all` a short time ends in TODO, not in an owner
+question. With a box, time does not cover it → TODO with the reason "does not fit: needs ~<N>
+min, <M> min to hard end", in both modes.
 
 **TODO only with a reason.** Every TODO entry the run adds (a cut, R18, or a finding classed
-TODO) carries a one-line reason, e.g. "does not fit the box", "needs the owner", "needs
-production". The end report lists each new entry with its reason and counts TODO entries
-closed and added (`reference/queue.md`, end report).
-**Why:** 13.10.2026: in a run whose task was "fix everything", R6 traps and R18 cuts sent work
+TODO) carries a one-line reason from the TP6 list (TODO only with evidence, below), e.g.
+"does not fit: needs ~40 min, 25 min to hard end", "owner decision", "production". The end
+report lists each new entry with its reason and counts TODO entries closed and added
+(`reference/queue.md`, end report).
+**Why:** 09.10.2026: in a run whose task was "fix everything", R6 traps and R18 cuts sent work
 to TODO; the owner: "the goal was to fix them, and you add new TODOs".
+
+## TODO only with evidence (TD1)
+
+A TODO entry is work a later session pays for. It needs evidence and one concrete reason.
+These rules key on evidence, never on a label.
+
+- **TP1 Evidence first.** A finding reaches TODO only with evidence it is real: a concrete
+  input, a failing test, an observed failure or a reachable code path. None →
+  `ACCEPT not confirmed`. An unused path → `ACCEPT path not used`, only when callers, the
+  schema or enforced validation exclude the input; record that evidence in the `decisions.md`
+  line. "Not seen in today's data" is not that evidence. Harmless artificial input or timing →
+  `ACCEPT artificial timing or input`. Judge it from the user steps and the impact, not from
+  the scenario's name: a stale or second tab is not artificial by default. Data loss in normal
+  use, security, and verifier or group test failures keep their priority (above).
+- **TP2 No feature nobody asked for.** It gets no task and no TODO. A feature the owner asked
+  for or explicitly deferred stays until the owner changes that decision.
+- **TP3 ACCEPT never goes to TODO.** ACCEPT is one `decisions.md` line. Class polish by scope
+  and evidence, never by words such as "minor", "accepted" or "polish". Polish the owner asked
+  for stays.
+- **TP4 Do it when it fits.** Confirmed in-scope work is done in this run when its whole path
+  (implementation, review, merge, group test) fits the last possible hard end (VR1; no box: it
+  always fits) and R6 permits it. Else TODO with the numbers: "does not fit: needs ~<N> min,
+  <M> min to hard end". The round table applies this to `pre-existing` findings and to tests in
+  round 2+.
+- **TP5 A refactor that confirms a real bug.** A behaviour-preserving task that confirms a real
+  bug keeps its own scope. The bug becomes a separate reviewed task in the same run when the
+  owner's scope allows a behaviour change (PL1, TS1). Else one owner question (present) or
+  TODO with the reason (away). The trap gets one fresh writer with a new hypothesis in every
+  mode when the time covers it (the trap, above); the re-review bound stays 3.
+- **TP6 One concrete reason per entry.** Exactly one of: owner decision, production or an
+  external system, out of the task's scope, the review bound, or a time cut with its numbers.
+  Entry formats: `reference/queue.md`. The end report lists every new entry with its reason.
+- **TP7 Stale availability evidence.** When only stale availability evidence blocks work (e.g.
+  a usage limit seen in an earlier phase), make one real attempt at the next operation and
+  record the result in `decisions.md`. No start-up quota probe (R15), no probe loops.
+- **TP8 One owner for TODO and docs.** TODO and docs edits have one owner and never hold a
+  reviewed merge; the R17 agent consolidates them at the end.
+
+**Why:** the owner's decision, 2026-10-20, after 42 captain sessions and 127 TODO entries
+(2026-10-13..20): of 110 non-bookkeeping entries 29% were needed, 50% were doable in the box
+and 16% were unneeded edge cases. An independent Codex check found counter-evidence for every
+rule keyed on a label: a "cooperative actor" bypass that was a real bug, a "stale tab" race
+that lost user earnings, a "pre-existing" redirect with a concrete input, "hardening" that was
+a needed fix, "polish" that was later built.
 
 ## When the loop stops
 
@@ -156,8 +213,8 @@ range, from the loop's base to its last fix commit, and the R5 push gate treats 
 passed. The bound of 3 re-reviews stays. After the first runs under these rules, the
 coordinator reports the round counts to the owner; only the owner decides to lower the bound.
 A clean loop → main merges at once (`reference/queue.md`, the merge flow step 1), without
-asking; the task's `ZDn` row becomes `merged`; then a runner runs the tests on the merged head;
-the R5 push gate comes after.
+asking; the task's `ZDn` row becomes `merged`; the group's runner runs the tests after the
+group's last merge (TS1, `reference/parallel.md`); the R5 push gate comes after.
 **Why:** in that project one loop's r2-r4 took ~26 min for fixes of fixes.
 
 ## The register

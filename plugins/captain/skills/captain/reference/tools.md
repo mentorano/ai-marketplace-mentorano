@@ -7,7 +7,6 @@
 - [Tools availability (R7, R8, R9)](#tools-availability-r7-r8-r9)
 - [Verified binaries](#verified-binaries)
 - [Codex - the reviewer (R7) and a voter (R9)](#codex---the-reviewer-r7-and-a-voter-r9)
-- [Sol writer - only inside a duel (R20)](#sol-writer---only-inside-a-duel-r20)
 - [agy - specs, consultation, votes (R8, R9); never code review](#agy---specs-consultation-votes-r8-r9-never-code-review)
 - [Web research - only when the owner allows web for a research task](#web-research---only-when-the-owner-allows-web-for-a-research-task)
 - [timeout](#timeout)
@@ -117,7 +116,7 @@ allowed. For details, `SendMessage` the agent or launch a diagnosis agent.
 - The audit (`scripts/audit-main.py`) is a non-adversarial compliance measure for this rule,
   not a security boundary.
 - The same check runs live: the plugin hook `hooks/guard.py` denies a DL2 call while captain
-  mode is on (from `/captain` until `/captain off`, across the end of the time box) with "This
+  mode is on (from `/captain` until `/captain off`, across the end of the run) with "This
   is agent work (R1, DL2): delegate it to a captain:runner or the writer that owns the file."
   The guard's state files (the mode marker, `.merge`, `.base`) are written only by the guard,
   from `/captain` commands (`.base` also from the checked auto base): a `Write`/`Edit`, a Bash redirection or a `cp`/`mv`/`tee`/`rm`
@@ -135,23 +134,21 @@ Launch agents with the `Agent` tool's `subagent_type`:
   implementation or assesses a critical action (EF1).
 
 - `captain:light-coder` — Sonnet, effort `high`: the writer of a task that passes the light
-  test (`reference/experiment.md`), and one duel contestant.
-- `captain:light-coder-sol` — Sonnet, effort `medium`: only inside a duel (R20); a wrapper
-  that runs the Sol writer below and never edits code itself.
+  test (`reference/light-test.md`).
 - Fable — `captain:worker` launched with `model: "fable"`: spec drafts and consultation,
   the Fable mini-consensus opinion and the Fable voter of a 3amigos panel (R8, R9); never a
   code reviewer. It runs under no `timeout`: its prompt names its time budget, and whoever
   launched it stops it with `TaskStop` when that budget is over; a late answer counts as
   missing.
 - `captain:runner` — Sonnet, effort `medium`: bootstrap, builds, tests, scripts, the Codex
-  review runner, the clean-checkout check before a judge, cleanup, and diagnosis summaries
+  review runner, cleanup, and diagnosis summaries
   (which test failed, the error line, the first stack frame in project code; the cause, when
   not obvious, goes to Opus).
 
 If these agent types are unavailable (e.g. the skill is symlinked, not installed as a plugin),
 launch `Agent` with `model: opus` and default effort for the Opus roles, `model: fable` for Fable, `model: sonnet` at
-default effort for the runner and light-coder roles, and tell the owner so in one line. Then
-no duel runs: the light writers' effort `high` cannot be set; `run.md` records the reason.
+default effort for the runner and light-coder roles, and tell the owner so in one line. The
+light writers' effort `high` cannot be set then; `run.md` records the reason.
 
 ## Tools availability (R7, R8, R9)
 
@@ -210,8 +207,10 @@ LOG='<literal log prefix from step 1>'
    > "$LOG" 2>&1; echo $? > "$LOG.exit")
 ```
 
-- When the R6 bound applies, replace `1200` with the time left before park, in seconds,
-  never under 300; below 300 no review starts (R6).
+- With a box, when the R6 bound applies, replace `1200` with the time left before park, in
+  seconds, never under 300; below 300 no review starts (R6). Park here is the one time boundary
+  of `reference/parallel.md`: in normal mode with open work and extensions left, the park of
+  the last possible hard end.
 - The runner ends its turn; it is re-invoked when the command exits. It then reads
   `$LOG.exit`, `$LOG.final.md` and, on failure, the last 40 lines of `$LOG`.
 - Review success = exit `0` **and** a non-empty `$LOG.final.md` whose verdict line is exactly
@@ -238,7 +237,7 @@ session sends a subagent to wait for the rest; it never polls.
 
 | Outcome | Signature | Handling |
 |---|---|---|
-| Timeout | `.exit` holds `124` | Recompute the time left before park. Retry once only if a timeout of at least 300 s that is shorter than the first one still fits; repeat the no-web line. Else, or on a second timeout → Opus fallback reviewer if it fits, otherwise park per R6. |
+| Timeout | `.exit` holds `124` | With a box, recompute the time left before park. Retry once only if a timeout of at least 300 s that is shorter than the first one still fits (no box: retry once at 600 s); repeat the no-web line. Else, or on a second timeout → Opus fallback reviewer if it fits (no box: always), otherwise park per R6. |
 | Usage limit | `You've hit your usage limit … try again at <time>` in the log | Fallback at once; no wait, no retry timer. Record the reset time in `run.md`; the first review started after it goes to Codex again. |
 | Missing binary | `.exit` holds `127`, or `command not found` | Fallback at once; one line to the owner naming the error. |
 | Login or model error | `401`, `not logged in`, `HTTP 400`, `model … not supported` | Fallback at once; one line to the owner naming the error. |
@@ -250,11 +249,11 @@ implementation) that did not write the code, with the same review prompt. It bec
 current reviewer for that loop (R6).
 
 **As a voter (R9):** in a full consensus Codex is the 3amigos panel's Codex voter: a
-`captain:runner` runs `panel.py --voters codex --effort high` with
-`--deadline` min(300 s, park − 5 min) (`reference/consensus.md`). For a mini-consensus
-opinion: the same command as a review with `medium` and `command timeout 240` (never past the
-park deadline) and the mini-consensus template. A usage limit or any failure → that vote
-counts as missing; in a panel the Fable stand-in replaces it.
+`captain:runner` runs `panel.py --voters codex --effort high` with `--deadline` min(300 s, park
+− 5 min), 300 s with no box (`reference/consensus.md`). For a mini-consensus opinion: the same
+command as a review with `medium` and `command timeout 240` (with a box, never past the park
+deadline) and the mini-consensus template. A usage limit or any failure → that vote counts as
+missing; in a panel the Fable stand-in replaces it.
 
 ### Output contracts - checked per use, for every voter (Codex, agy, Fable, Opus)
 
@@ -263,55 +262,8 @@ counts as missing; in a panel the Fable stand-in replaces it.
 | Review (R6, R7) | exactly one `Verdict: approve` or `Verdict: changes` line, then `Findings:` | failure table above |
 | Mini-consensus (R9) | one line per decision: `D<n>: AGREE — <reason>` or `D<n>: DISAGREE — <reason>` | next opinion in the chain |
 | Full consensus (R9) | 3amigos panel: JSON `{"items":[{"id","verdict","reason"}]}` that passes `panel.py --check`; fallback without 3amigos: exactly one line `Vote: <option letter> — <reason>`, letter among the options | vote counts as missing |
-| Judge (R20) | one score line per letter and one `Winner:` line (`reference/prompts.md`) | one retry, then no winner |
 
 Exit `0` with an invalid output counts as a failure for that use.
-
-## Sol writer - only inside a duel (R20)
-
-`captain:light-coder-sol` runs GPT-6.1 Sol as a duel writer (`reference/experiment.md`).
-It creates its worktree and branch, writes the Sol frame (`reference/prompts.md`) to
-`<log prefix>.prompt.md` (log prefix as in the Codex runner steps above, slug
-`codex-sol-<task>-<letter>`), and starts this as a **background** Bash command:
-
-```bash
-LOG='<literal log prefix>'
-(command timeout <secs> codex exec -m gpt-6.1-sol -c model_reasoning_effort=high \
-   -s workspace-write -C '<abs duel worktree>' -o "$LOG.final.md" - < "$LOG.prompt.md" \
-   > "$LOG" 2>&1; echo $? > "$LOG.exit")
-```
-
-- `<secs>` is the task limit, never past park. Verified 2026-09-30 with codex-cli 0.159.0:
-  `gpt-6.1-sol` answers on a ChatGPT account (a read-only probe).
-- The wrapper records the Codex session id from the log header.
-- Codex does not commit: in a git worktree the git metadata is outside the `workspace-write`
-  root. The wrapper runs the check and commits the owned files by path.
-- The `workspace-write` sandbox has no network (DU3 in
-  `reference/experiment.md`). The check runs outside the sandbox, with
-  the wrapper's rights, before review — the same exposure as any writer's own check.
-
-Resume, for each R6 message, on the same session (a new log prefix per call):
-
-```bash
-(command timeout <secs> codex exec -s workspace-write -C '<abs duel worktree>' \
-   resume <session id> -m gpt-6.1-sol -c model_reasoning_effort=high \
-   -o "$LOG.final.md" - < "$LOG.prompt.md" > "$LOG" 2>&1; echo $? > "$LOG.exit")
-```
-
-- `-s` and `-C` go **before** `resume` (verified codex-cli 0.159.0: `-s` after `resume` →
-  "unexpected argument", exit 2).
-- The revalidation message runs with `-s read-only`, the fix list with `-s workspace-write`.
-  The wrapper relays both verbatim and returns Sol's answer verbatim, with no triage of its own.
-- Sol never commits. After every successful fix resume the wrapper runs the check, commits the
-  owned paths by path (it carries out the fix list's commit line) and reports the new head SHA.
-
-**Sol writer contract** (every exec and resume):
-
-| Outcome | Signature | Handling |
-|---|---|---|
-| Escalate (checked first) | the first line of `$LOG.final.md` is `ESCALATE: <reason>` | contestant not finished, reason recorded; no hand-off inside a duel |
-| Success | `.exit` holds `0` and `$LOG.final.md` is non-empty | go on (check, commit, report) |
-| Anything else | timeout `124`, missing binary `127`, usage limit, login or model error, empty output, other exit | contestant "not finished" with the reason; no retry, no fallback writer |
 
 ## agy - specs, consultation, votes (R8, R9); never code review
 

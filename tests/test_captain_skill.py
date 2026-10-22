@@ -159,18 +159,6 @@ class ReferenceTextTest(unittest.TestCase):
         text = read_text(TOOLS_MD).replace(CODEX_CALL, "command codex exec")
         self.assertTrue(tools_md_problems(text))
 
-    def test_sol_resume_puts_sandbox_and_cd_before_resume(self):
-        # codex-cli 0.159.0: `-s` after `resume` fails with "unexpected argument", exit 2
-        joined = "\n".join(code_lines(read_text(TOOLS_MD))).replace("\\\n", " ")
-        resumes = [line for line in joined.splitlines() if re.search(r"codex exec\b.*\bresume\b", line)]
-        self.assertTrue(resumes, "tools.md has no codex exec resume example")
-        for line in resumes:
-            head, tail = line.split(" resume ", 1)
-            self.assertIn("-s ", head)
-            self.assertIn("-C ", head)
-            self.assertNotRegex(tail, r"(^|\s)(-s|-C)\s")
-            self.assertIn("gpt-6.1-sol", tail)
-
     def test_every_review_template_forbids_the_web(self):
         templates = [(head, body) for head, body in sections(read_text(PROMPTS_MD), "##")
                      if re.search(r"(?i)review prompt|consensus prompt", head)
@@ -232,7 +220,6 @@ class AgentsTest(unittest.TestCase):
         "worker": ("opus", "medium"),
         "deep": ("opus", "high"),
         "light-coder": ("sonnet", "high"),
-        "light-coder-sol": ("sonnet", "medium"),
         "runner": ("sonnet", "medium"),
     }
 
@@ -2202,7 +2189,7 @@ class AgentContextTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(CONTEXT), *ids], env=env,
                               capture_output=True, text=True, timeout=30)
 
-    def test_last_usage_counts_and_the_20_percent_line(self):
+    def test_last_usage_counts_and_the_30_percent_line(self):
         self.transcript("afresh", [{"input_tokens": 5, "cache_read_input_tokens": 90_000,
                                     "cache_creation_input_tokens": 4_000, "output_tokens": 1_000}])
         self.transcript("aold", [{"input_tokens": 1, "cache_read_input_tokens": 10},
@@ -2214,9 +2201,16 @@ class AgentContextTest(unittest.TestCase):
         self.assertEqual(lines[0], "afresh 95005 tokens 9% keep")
         self.assertEqual(lines[1], "aold 315700 tokens 31% replace")
 
-    def test_exactly_20_percent_is_replace(self):
-        self.transcript("aedge", [{"input_tokens": 200_000}])
-        self.assertEqual(self.run_context("aedge").stdout.strip(), "aedge 200000 tokens 20% replace")
+    def test_exactly_30_percent_is_replace(self):
+        self.transcript("aedge", [{"input_tokens": 300_000}])
+        self.assertEqual(self.run_context("aedge").stdout.strip(), "aedge 300000 tokens 30% replace")
+
+    def test_below_30_percent_is_keep(self):
+        # the owner, 20.10.2026: writers at 24-26% were replaced; 20% was raised to 30%
+        self.transcript("a20", [{"input_tokens": 200_000}])
+        self.transcript("abelow", [{"input_tokens": 299_999}])
+        self.assertEqual(self.run_context("a20", "abelow").stdout.splitlines(),
+                         ["a20 200000 tokens 20% keep", "abelow 299999 tokens 29% keep"])
 
     def test_no_measurement_is_unknown_not_zero(self):
         # Codex F4: a missing or empty usage must not read as an empty context
@@ -2304,10 +2298,11 @@ class CaptainModeTextTest(unittest.TestCase):
         self.assertIn("hooks/guard.py", text)
         self.assertIn("agent-context.py", text)
 
-    def test_health_md_replaces_a_writer_at_20_percent(self):
+    def test_health_md_replaces_a_writer_at_30_percent(self):
         text = read_text(SKILL_DIR / "reference" / "health.md")
         self.assertIn("agent-context.py", text)
-        self.assertIn("20%", text)
+        self.assertIn("30%", text)
+        self.assertNotIn("20% context", text)
 
 
 
@@ -2503,8 +2498,8 @@ class FewerStopsTextTest(unittest.TestCase):
                        "limit plus one re-review timeout", "a new hypothesis",
                        "It does not reset the loop's re-review count",
                        "carries a one-line reason",
-                       "Time does not cover it → TODO with the reason \"does not fit the box\", "
-                       "in both modes."):
+                       "With a box, time does not cover it → TODO with the reason \"does not fit: needs ~<N> "
+                       "min, <M> min to hard end\", in both modes."):
             with self.subTest(needle=needle):
                 self.assertIn(needle, triage)
         self.assertNotIn("Time does not cover it → the owner question", triage)
@@ -2535,13 +2530,16 @@ class FewerStopsTextTest(unittest.TestCase):
 
     def test_every_report_ends_with_what_is_left(self):
         self.assertIn("end with `Remaining:`", " ".join(read_text(SKILL_MD).split()))
+        self.assertIn("7 of 12 tasks done (58%)", read_text(SKILL_MD))
         queue = self.flat(self.REFERENCE / "queue.md")
         for needle in ("## Status, park and end reports - `Remaining:` (R12)",
-                       "`Nothing remains.` only when all five are empty",
+                       "`Nothing remains.` only when all six are empty",
+                       "groups of `## Groups` with merged tasks whose test run",
                        "`Continuing with <ID>.`", "`Waiting for you on <ID>.`",
                        "`Stopping; captain mode stays on.`",
                        "The R13 health line is not a report",
-                       "8. `Remaining:` and the last line"):
+                       "7. `Remaining:` and the last line",
+                       "Each line ends with `[waits on you]` or `[info]`"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, queue)
 

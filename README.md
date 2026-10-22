@@ -9,9 +9,9 @@ code clean.
 ```bash
 /plugin marketplace add mentorano/ai-marketplace-mentorano
 /plugin install 3amigos@ai-marketplace-mentorano
-/plugin install blast-radius@ai-marketplace-mentorano
 /plugin install branch-board@ai-marketplace-mentorano
 /plugin install captain@ai-marketplace-mentorano
+/plugin install cc-safety-net@ai-marketplace-mentorano
 /plugin install clean-code@ai-marketplace-mentorano
 /plugin install coord@ai-marketplace-mentorano
 /plugin install project-memory@ai-marketplace-mentorano
@@ -38,25 +38,6 @@ tallies per-item verdicts as agree / majority / split. Everything the panel
 produces is a proposal; it never deletes or overwrites anything. Not for code
 review. Invoke it as `/3amigos:3amigos`. See
 [`plugins/3amigos/skills/3amigos/SKILL.md`](plugins/3amigos/skills/3amigos/SKILL.md).
-
-### blast-radius
-
-Anthropic's example mod from
-[`anthropics/claude-code-playground`](https://github.com/anthropics/claude-code-playground/tree/main/claude-code/mods/blast-radius)
-(Apache-2.0), listed here as is; no code is copied into this repo. When Claude
-runs `rm -r`/`-f`, `git reset --hard`, `git checkout -- .`/`git restore .`,
-`git clean`, a force push or a migration, it holds the Bash call and shows what
-the command would destroy: the files with count and size, the uncommitted
-changes, or the remote commits a push would drop. Proceed runs the command,
-Cancel refuses it with a reason Claude sees. It reads the command text only, so
-`bash -c`, `xargs rm` and scripts that call `rm` pass unseen; it is a preview,
-not a permission system. Pair it with
-[cc-safety-net](https://github.com/kenryu42/claude-code-safety-net) for a hard
-block: the preview comes first, and a command cc-safety-net denies stays denied
-after Proceed. Needs Claude Code 2.1.287 or later and a terminal about 144
-columns wide for the side pane. The entry is pinned to a reviewed commit `sha`;
-to take a newer version, review the upstream diff of
-`claude-code/mods/blast-radius` and move the `sha`.
 
 ### branch-board
 
@@ -131,8 +112,16 @@ requests unless the user asks. The one exception is a dev or test target the
 user listed (`dev_targets` in the config, confirmed once): it runs after review,
 with the real endpoint checked first. Agents report once, in at most 8 lines;
 the 15-minute health check prints one status line; every status, park and end
-report ends with a `Remaining:` list from the run state. A run that fixes a given
-list (`mode: fix-all`) uses TODO only as the last resort. Since 0.12.0 a reviewed agent branch is merged at once,
+report ends with a `Remaining:` list from the run state. Since 0.19.0 the status
+line also shows the share of tasks done (`7 of 12 tasks done (58%)`), and
+each `Remaining:` line says whether it waits on the user (`[waits on you]`) or is only
+information (`[info]`). A run that fixes a given
+list (`mode: fix-all`) uses TODO only as the last resort. Since 0.17.0 the run plans
+the most parallel work after the spec (`reference/parallel.md`), writers run no tests and a
+runner tests each service or module group once after its last merge, the time box is
+informative (hard end at +30%, up to three more +30% while work is open, plus the length of a
+network outage; `strict` keeps an exact end for timed creative tasks), a TODO entry needs
+evidence and one concrete reason, and the `experiment` writer duel is gone. Since 0.12.0 a reviewed agent branch is merged at once,
 without asking, into the run's feature branch and into a base branch the user
 confirmed by typing `/captain base <branch>` (never `main`, `master` or the default branch, which
 stay gated by `/captain merge <branch>`). In conversation and in status lines the
@@ -169,9 +158,12 @@ about 5k tokens). The rules stay short there; their mechanics — CLI flags,
 prompt templates, consensus, timers and the health check, the queue — live in
 `reference/*.md`, so a flag change edits one place.
 
-The plugin ships two agent types: `captain:worker` (Opus, effort medium, the
-default for writers, reviewers and voters) and `captain:deep` (Opus, effort
-high, only for very complex reviews, critical actions and full consensus).
+The plugin ships four agent types: `captain:worker` (Opus, effort medium, the
+default for writers, reviewers and voters), `captain:deep` (Opus, effort
+high, only for very complex reviews, critical actions and full consensus),
+`captain:light-coder` (Sonnet, effort high, a coding task that passes the light test,
+`reference/light-test.md`) and `captain:runner` (Sonnet, effort medium: bootstrap, builds,
+group tests, scripts, the Codex review runner, cleanup).
 
 Captain mode lasts for the whole session, not only the time box: once a run
 starts, later fixes in the same session still go to agents. `/captain off`
@@ -180,8 +172,8 @@ on, it denies every main-session call that is agent work (code edits,
 commits, builds, tests, scripts, Codex) and says to delegate it — the same
 check `scripts/audit-main.py` runs after a run.
 Subagents are never blocked. A writer holds one task at a time; when it
-finishes, `scripts/agent-context.py` measures its context, and at 20% of the
-window or more a fresh writer takes the next task.
+finishes, `scripts/agent-context.py` measures its context, and at 30% of the
+window or more (20% before 0.18.0) a fresh writer takes the next task.
 
 Since 0.7.0 the captain hands the run to a fresh session at a task or merge
 boundary once its own context reaches `context_threshold` (default 250k, set in
@@ -231,6 +223,25 @@ behaves exactly as before.
 
 See
 [`plugins/captain/skills/captain/SKILL.md`](plugins/captain/skills/captain/SKILL.md).
+
+### cc-safety-net
+
+Mentorano's fork of
+[kenryu42/cc-safety-net](https://github.com/kenryu42/cc-safety-net) (MIT), at
+[mentorano/cc-safety-net](https://github.com/mentorano/cc-safety-net). It is a
+PreToolUse hook that blocks destructive commands and access to secret files. The
+fork changes three things, each as its own commit on the fork's `main`: a
+quoted heredoc written through `command cat` or `env cat` stays text, so a
+path it only mentions is not read as secret access; `git diff`, `log`, `show`,
+`status` and `blame` may name the policy file as a pathspec; and in a
+subdirectory or a linked worktree the project policy is read from the nearest
+`.cc-safety-net/` up to the repository root. Install it instead of
+`cc-safety-net@cc-marketplace`, not next to it. The entry is pinned to a
+commit `sha` on the fork's `main`. The fork does not update itself: to take a
+new upstream release, merge the author's release into the fork's `main` with a
+merge commit, run `bun run check`, push, and move the `sha`. Never rebase or
+force-push the fork's `main`; a fresh install can no longer fetch a pinned
+commit that no branch holds.
 
 ### clean-code
 
@@ -362,6 +373,13 @@ Small helpers for working with Claude Code.
   in the tab; a tab that ran nothing is closed and reported as `TAB-DEAD`.
   `--version` prints the plugin version. The captain successor tab uses it.
   See [`plugins/utils/skills/new-session-tab/SKILL.md`](plugins/utils/skills/new-session-tab/SKILL.md).
+- `one-by-one` (since 0.4.0) runs a one-by-one pass over review findings or
+  open points: one item at a time, a question for every point that changes
+  behaviour, and a new choice found while fixing becomes the next question
+  instead of an "open points" list in the final report. Only a question the
+  user cannot answer or explicitly defers stays in the report, marked as
+  deferred.
+  See [`plugins/utils/skills/one-by-one/SKILL.md`](plugins/utils/skills/one-by-one/SKILL.md).
 
 ## Tests
 

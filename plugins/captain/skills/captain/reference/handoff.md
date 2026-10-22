@@ -2,7 +2,7 @@
 
 Adapted from coord's `procedures/handoff-and-sessions.md` and its two templates. The captain
 stays one captain: the successor is the same role in a cleared session, and `/captain off` still
-ends captain mode (R1). The end of the time box (R17) is a different event; both may happen.
+ends captain mode (R1). The end of the run (R17) is a different event; both may happen.
 
 ## Contents
 
@@ -200,7 +200,7 @@ shortened. Earlier files are for lookup only. **Nothing here is status.** Re-der
     python3 <skill root>/scripts/measure-context.py <repo> 24      (a runner runs it)
     CronList, then compare with run.md `## Timers`
 
-Run dir: ./tmp/captain/<run>/ (run.md, decisions.md, queue.md). Mode, box and deadline: see run.md.
+Run dir: ./tmp/captain/<run>/ (run.md, decisions.md, queue.md). Mode, box and deadline (if any): see run.md.
 Project memory: the `Project memory` line and `## Memory candidates` stay in run.md; drafts in <run dir>/memory-drafts/.
 
 ## 1. Decisions taken (also in decisions.md)
@@ -251,8 +251,9 @@ The run is not new: no bootstrap, no new run directory, no plan.
    handoff's. `STAND-DOWN`, also one already queued when this session starts → tell the owner
    one line, "Stopped: <reason>; the run continues in the old session", and do nothing more.
 3. Re-arm timers and monitors per the Resume bullet under Timers in `reference/health.md`: `CronList`,
-   keep the matching jobs, create the missing ones, record the ids in `run.md`, re-check
-   `date` against park and deadline. A box that has run out → R17.
+   keep the matching jobs, create the missing ones, record the ids in `run.md`; with a box,
+   re-check `date` against park and deadline. Past the last possible hard end (outages and
+   extensions counted, `reference/parallel.md`) → R17.
 4. Re-derive state through a `captain:runner` (never from the handoff's prose), then do the
    handoff's first action.
 
@@ -261,7 +262,7 @@ The run is not new: no bootstrap, no new run directory, no plan.
 Both ship with the plugin (`hooks/hooks.json`) and fail open.
 
 - `hooks/handoff_at_boundary.py` (PreToolUse `Agent|Task`): in a captain session, denies once a
-  NEW writer dispatch (`captain:worker`, `captain:light-coder`, `captain:light-coder-sol`) whose
+  NEW writer dispatch (`captain:worker`, `captain:light-coder`) whose
   description is not a review, verification, vote, fix, merge or cleanup, when the context is at
   the threshold (env `HANDOFF_CONTEXT_THRESHOLD`, else `~/.claude/captain/config.json`
   `context_threshold`, tokens or a percentage of the model's window, else 250000).

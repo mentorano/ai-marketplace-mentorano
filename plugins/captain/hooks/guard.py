@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep a captain session a coordinator (R1) for the whole session, not only the time box.
+"""Keep a captain session a coordinator (R1) for the whole session, not only the run.
 
 Wired in hooks.json to three events; reads the hook JSON on stdin:
   - UserPromptSubmit: a prompt that starts with `/captain` or `/captain:captain` turns
@@ -33,7 +33,7 @@ A deny caused by the command form or the checkout state names the canonical form
 fix the form; only a protected HEAD or a missing grant tells the coordinator to ask the owner.
 
 Captain mode is a marker file per session: ~/.claude/captain/sessions/<session_id>
-(CAPTAIN_STATE_DIR overrides the directory). The end of the time box (R17) does not remove
+(CAPTAIN_STATE_DIR overrides the directory). The end of the run (R17) does not remove
 it; only `/captain off` does. After a handoff (R21) the owner's /clear starts a new session with
 no marker: the first message `/captain resume` starts with `/captain`, so the same prompt rule
 turns the mode back on for the successor, and takes over the predecessor's live grant and
@@ -60,7 +60,7 @@ CAPTAIN_SKILLS = {"captain", "captain:captain"}
 SLASH = re.compile(r"^\s*/(?:captain:)?captain(?=\s|$)(.*)$", re.S)
 SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 REASON = ("This is agent work (R1, DL2): delegate it to a captain:runner or the writer that "
-          "owns the file. Captain mode is on in this session, also after the time box ended. "
+          "owns the file. Captain mode is on in this session, also after the run ended. "
           "Main does inline only the DL1 light work of reference/tools.md: Read, Grep, Glob, "
           "read-only commands (cat, head, tail, wc, ls, find, date, stat, ps), git inspection, "
           "Write or Edit of tmp/captain/, TODO, docs/ and .claude/settings.local.json, and the "

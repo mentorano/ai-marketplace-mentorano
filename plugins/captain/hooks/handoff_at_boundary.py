@@ -2,7 +2,7 @@
 """PreToolUse hook on Agent|Task: before the NEXT task starts with a large context, hand off first (R21).
 
 In a captain session (captain mode on, see guard.py) a task starts when the main session dispatches a
-WRITER (`captain:worker`, `captain:light-coder`, `captain:light-coder-sol`) for a new task. Reviews,
+WRITER (`captain:worker`, `captain:light-coder`) for a new task. Reviews,
 verifications, votes, fixes, merges, conflict resolution and the other non-writing agents happen inside a
 task and are not boundaries; neither is a dispatch while the session's checkout has a merge in progress. If a task is about to start and the main-session context is at or above the threshold (env
 HANDOFF_CONTEXT_THRESHOLD, else `context_threshold` in ~/.claude/captain/config.json, else 250000; a
@@ -31,11 +31,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import handoff_common as common  # noqa: E402
 
-WRITERS = {"worker", "light-coder", "light-coder-sol"}
+WRITERS = {"worker", "light-coder"}
 # Inside a task, not a start: reviews, verification, votes, fixes, merges and their conflicts, cleanup,
 # diagnosis, recon. The Cyrillic alternates are deliberate: they match the same words in Bulgarian
 # task descriptions, since the captain writes descriptions in the owner's language.
-INSIDE_TASK = re.compile(r"review|ревю|ревизи|verif|верифи|vote|глас|judge|съдия|fix|поправ|integrat|интегр|"
+INSIDE_TASK = re.compile(r"review|ревю|ревизи|verif|верифи|vote|глас|fix|поправ|integrat|интегр|"
                          r"merge|слей|слив|conflict|конфликт|resolv|разреш|clean|почист|diagnos|диагно|"
                          r"recon|разузна|bootstrap", re.IGNORECASE)
 SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")

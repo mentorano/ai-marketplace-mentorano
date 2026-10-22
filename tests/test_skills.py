@@ -28,6 +28,7 @@ EXPECTED = {
     "memory-defrag",
     "memory-init",
     "new-session-tab",
+    "one-by-one",
 }
 
 
@@ -93,9 +94,12 @@ class MarketplaceManifestTest(unittest.TestCase):
         for entry in self.third_party_entries():
             with self.subTest(plugin=entry["name"]):
                 source = entry["source"]
-                self.assertEqual(source["source"], "git-subdir")
+                self.assertIn(source["source"], ("git-subdir", "url"))
                 self.assertRegex(source.get("sha", ""), r"^[0-9a-f]{40}$")
-                self.assertEqual(Path(source["path"]).name, entry["name"])
+                if source["source"] == "git-subdir":
+                    self.assertEqual(Path(source["path"]).name, entry["name"])
+                else:
+                    self.assertTrue(source["url"].endswith(f"/{entry['name']}.git"), source["url"])
                 self.assertIn("version", entry)
 
 

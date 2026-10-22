@@ -29,27 +29,6 @@
       ]
     },
     {
-      "name": "blast-radius",
-      "source": {
-        "source": "git-subdir",
-        "url": "anthropics/claude-code-playground",
-        "path": "claude-code/mods/blast-radius",
-        "sha": "569c5283d9a0a7ee7938df85bb32e4f48cbb8c86"
-      },
-      "description": "Anthropic's example mod, listed here as is: holds a risky Bash command (rm -rf, git reset --hard, git checkout/restore, git clean, force push, migrations), shows the files, changes or commits it would destroy, and runs it only after Proceed. A preview layer, not a permission system; pair it with cc-safety-net for a hard block.",
-      "version": "0.1.0",
-      "license": "Apache-2.0",
-      "author": {
-        "name": "Claude Code DevRel"
-      },
-      "keywords": [
-        "mods",
-        "safety",
-        "git",
-        "third-party"
-      ]
-    },
-    {
       "name": "branch-board",
       "source": "./plugins/branch-board",
       "description": "Build a live status page for a repository's recent branches — what exists, who moved it, how far it got, what it touches, and what its own plan documents say the goal is. Every number is derived from git and gh, never remembered.",
@@ -71,8 +50,8 @@
     {
       "name": "captain",
       "source": "./plugins/captain",
-      "description": "A time-boxed coordinator for coding runs, shared as a team plugin — one main session that coordinates background subagents in git worktrees and does the light work (reads, git inspection, notes) itself, with Codex reviews first (Opus when Codex is not installed), a 15-minute health check, and destructive or outward actions queued for the user at the end of the box. Run /captain:captain-setup once first to choose notifications and quiet hours. Code and functionality only; not for production, devops or external writes beyond listed dev targets.",
-      "version": "0.16.0",
+      "description": "A coordinator for coding runs, with a time box only when the owner names one, shared as a team plugin — one main session that coordinates background subagents in git worktrees and does the light work (reads, git inspection, notes) itself, with Codex reviews first (Opus when Codex is not installed), a 15-minute health check, and destructive or outward actions queued for the user at the end of the run. Run /captain:captain-setup once first to choose notifications and quiet hours. Code and functionality only; not for production, devops or external writes beyond listed dev targets.",
+      "version": "0.20.0",
       "license": "MIT",
       "author": {
         "name": "Ivan Dachev",
@@ -85,6 +64,28 @@
         "worktrees",
         "review",
         "codex"
+      ]
+    },
+    {
+      "name": "cc-safety-net",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/mentorano/cc-safety-net.git",
+        "sha": "3b4fe37ae914b09a3dfc341af7a58b3162d06ba7"
+      },
+      "description": "Mentorano's fork of kenryu42/cc-safety-net: a PreToolUse hook that blocks destructive commands and secret file access. The fork lets a heredoc written through `command cat` stay text, lets read-only git commands name the policy file, and reads the project policy from the repository root when the agent works in a subdirectory or worktree.",
+      "version": "2.6.13",
+      "license": "MIT",
+      "author": {
+        "name": "J Liew",
+        "email": "jliew@420024lab.com"
+      },
+      "keywords": [
+        "safety",
+        "security",
+        "guardrails",
+        "hooks",
+        "third-party"
       ]
     },
     {
@@ -151,8 +152,8 @@
     {
       "name": "utils",
       "source": "./plugins/utils",
-      "description": "Small helpers for working with Claude Code — start a new background Claude Code session with Remote Control in the same repository and get its link, to continue from a phone or the web.",
-      "version": "0.3.1",
+      "description": "Small helpers for working with Claude Code — start a new background Claude Code session with Remote Control in the same repository and get its link, to continue from a phone or the web. Also a one-by-one pass over review findings that closes every decision before the final report.",
+      "version": "0.4.0",
       "license": "MIT",
       "author": {
         "name": "Ivan Dachev",

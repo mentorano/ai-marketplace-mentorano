@@ -48,8 +48,10 @@ A new area: pick two letters from the area's name; record them in `run.md` under
 # captain run <YYYYMMDD-HHMMSS>
 - Repo: <abs path>   Start branch: <branch>   Default branch: <name>
 - Feature branch: captain/<YYYYMMDD>-<slug>, based on <origin/<default> | <owner's branch>, chosen OP2> | none: auto base (R2)
-- Mode: present | away   Box: <N> min (<given | chosen: reason>)
-- Start: <HH:MM>   Park: <HH:MM>   Deadline: <HH:MM>
+- Mode: present | away   Box: <N> min (given) | none   time: normal | strict — <reason> (a box only)
+- Start: <HH:MM>   Box end: <HH:MM>   Hard end: <HH:MM> (extensions <k>/3, outages +<N> min)   Park: <HH:MM>   Deadline: <HH:MM>
+  (no box: `- Start: <HH:MM>   outages +<N> min` only)
+- Last check: <HH:MM>
 - Uncommitted changes at start: <none | list, untouched>
 - Checkout mode (R2): shared | shared-multi | worktree — <one-line reason>
 - Run checkout: <abs run worktree .claude/worktrees/captain-run-<run-id>, every mode | the session's own checkout, auto base>   Writers: <the run worktree | per-writer worktrees>
@@ -58,7 +60,7 @@ A new area: pick two letters from the area's name; record them in `run.md` under
 - Config: read | setup done | missing, away (notify none, tools from `command -v`)
 - Tools: codex on/off, agy on/off   Notify: <method> | none
 - Codex: available | off in config | usage limit, resets at <time>
-- Experiment (R20): on | off   Agent types: plugin | fallback (no duel)
+- Agent types: plugin | fallback
 - mode: fix-all | normal — <one-line reason> (ZD1, start step 6; present: shown with the plan)
 - Dev targets: <IDs confirmed for this repo | none>   Other repos named by the owner: <list | none>
 - Project memory (PK6): on (<abs memory.py path>) | off: <reason>
@@ -67,8 +69,11 @@ A new area: pick two letters from the area's name; record them in `run.md` under
 | Timer | Kind | Id |
 |---|---|---|
 | health | cron / sleep | <id> |
+| box-end | cron / sleep | <id> |
 | park | cron / sleep | <id> |
 | deadline | cron / sleep | <id> |
+
+No box: only the health row.
 
 ## Reviews (R5 push gate)
 | Commits (base..head) | Files | Reviewer | Result |
@@ -76,25 +81,27 @@ A new area: pick two letters from the area's name; record them in `run.md` under
 | <sha>..<sha> | <files> | Codex / Opus | passed / passed (no FIX NOW, whole loop range) / changes / open |
 
 ## Tasks
-| ID | Task | Agent | State |
-|---|---|---|---|
-| ZD1 | <one line> | w-auth | todo / queued / running / review k/3 / merged / cut |
-| ZD2 | <one line> · KL 6/6 · duel: yes — <reason> | duel A/B/C | running |
+| ID | Task | Group | Touches | After | Agent | State |
+|---|---|---|---|---|---|---|
+| ZD1 | <one line> | backend-auth | `auth/service.py`: `login()`; new `auth/tokens.py` | - | w-auth | todo / queued / running / review k/3 / merged / cut |
+| ZD2 | <one line> · KL 6/6 | web-app | `web/routes.ts`: new `/login` entry | ZD1 — <the overlap or output it needs> | lc-web | running |
+
+## Groups
+| Group | Test command | Shared resource | Tasks | State |
+|---|---|---|---|---|
+| backend-auth | <the module's test command> | <test DB / port / none> | ZD1 (+ waits for ZDn, ZDm: every contract producer, direct or through another, PL2) | waiting / running / green <log path> / failed <test> → ZDn |
+
+## Outages
+- <from>–<to>, <N> min, evidence: <error line, or the transcript timestamps a runner read>
 
 The plan-split start step writes the plan here; every event updates the row. An owner request
 that arrives while its writer is busy gets a new row with state `queued` (R6). Status (R12) is
 read from
 this table, not from the chat scrollback.
 
-A coding task carries its light test and, with `Experiment: on`, its duel line
-(`reference/experiment.md`).
-
-## Duels
-| Task | Letter | Agent | Worktree / branch | Codex session | State |
-|---|---|---|---|---|---|
-| ZD2 | A | captain:light-coder | duel-<run-id>-ZD2-A | - | review 1/3 / not finished: <reason> / winner / lost |
-
-The letter mapping lives only here; no prompt names it.
+A coding task carries its light test (`reference/light-test.md`). `Group`, `Touches`, `After`,
+`## Groups` and `## Outages`: the parallel plan, the test groups and the outage extension
+(`reference/parallel.md`).
 
 ## Agents
 | Name | agentId | Task id (TaskStop) | Task | Checkout (abs) | Model | Limit | Period start | Minutes | output_file | notified | Context |
@@ -102,8 +109,7 @@ The letter mapping lives only here; no prompt names it.
 | w-auth | <id> | <id> | <one line> | <abs> | opus | 15m | 14:05 | 12 | <path> | no | 9% keep |
 
 On every resume by `SendMessage`: new period start and limit, `notified: no`. On every
-completion notification: add the minutes from period start to `date` to `Minutes` (the
-duel record's `minutes`, R20).
+completion notification: add the minutes from period start to `date` to `Minutes`.
 
 ## IDs
 | Letters | Area |
@@ -130,7 +136,7 @@ history rewrites over others' commits (rebase, `reset --hard`); applying a migra
 changing data on a shared or cloud DB; any external write (GitHub issues and comments, cloud,
 deploy, publish, `gh repo create`, CI settings, secrets or runners). Local edits of
 `.github/workflows/*` are code and stay in scope. One line per action; the command is ready
-to run.
+to run. Deletes inside the task scope are allowed and are not queued.
 
 ```markdown
 # Queue for the owner
@@ -210,8 +216,9 @@ mode, worktree mode too.
    (`reference/prompts.md`): it resolves the listed files, stages them by path and does not
    commit. Then main runs `git -C '<abs checkout of that merge>' commit --no-edit`. A resolution that needs a
    product choice → `git merge --abort` and the question goes to the owner.
-3. The full test suite on the merged head, and the push of the feature branch, go to an agent
-   (R5 push gate), as before. A runner runs the tests on the merged head first. The push of a
+3. The tests, and the push of the feature branch, go to an agent (R5 push gate). The group's
+   runner runs the group's tests after the group's last merge (TS1, `reference/parallel.md`);
+   the full-build script runs once before the first push. The push of a
    base branch: the agent checks the upstream with `git -C '<abs base checkout>' branch -vv`,
    then pushes an explicit refspec, `git push <remote> <sha>:refs/heads/<branch>`. Agents never
    push a base branch that is `main`, `master` or the default branch.
@@ -309,9 +316,9 @@ row; main does not read the draft yet. Letters `MK` under `## IDs`.
 
 When: after the last merge into the feature branch (shared mode: the last writer's commit) and
 before the R17 agent that updates TODO and docs and pushes. Present and away mode alike: no
-queue entry and no owner question. The step never pushes park or the deadline: fewer than 10
-minutes to the deadline → skip it, a runner `restore`s any written but uncommitted file, and
-the kept rows get `not written: no time`.
+queue entry and no owner question. The step never pushes park or the deadline: with a box,
+fewer than 10 minutes to the deadline → skip it, a runner `restore`s any written but
+uncommitted file, and the kept rows get `not written: no time`.
 
 0. ZP0 Clean check. Main runs `git -C '<abs run checkout>' status --porcelain --ignored
    --untracked-files=all -- .agent-memory` (`--ignored`: an ignored local file counts too). Any output → the memory step is skipped for the
@@ -353,16 +360,16 @@ review loop.
 - KN1 | tier: full | away: product | <question> | options: A <...> / B <...> / C <...>
   | votes: Codex A, agy B, Fable A, Opus A | result: A (majority | no consensus) | reason: <...>
 - AR1 | tier: mini | <decision> | reason: <...> | rejected: <...> | second opinion: Codex agree
-- VR2 | scope cut | <subtask> → TODO.md | reason: <...>
+- VR2 | scope cut | <subtask> → TODO.md | reason: does not fit: needs ~40 min, 25 min to hard end
+- VR3 | extension 1/3 | open: ZD3, ZD5
+- VR4 | time: strict — <reason from the kickoff wording> (away mode; present: shown with the plan)
 - ZD1 r2 F6 | ACCEPT artificial timing | <file:line> — <problem, one line>
 - ZD1 r3 F2 | TODO owner decision → <TODO ID> | <file:line> — <problem, one line>
 ```
 
 Review register (R6): one line per ACCEPT or TODO finding, `<task ID> r<k> F<n> | <class>
 <reason> | <file:line> — <problem>`. From round 2 the review prompt carries these lines
-verbatim. Refuted findings and nits live only here (`reference/triage.md`). In a duel (R20)
-the key carries the contestant letter, `<task ID>/<letter> r<k> F<n>` (e.g. `ZD2/A r1 F1`),
-and each contestant's review prompt carries only its own letter's lines.
+verbatim. Refuted findings and nits live only here (`reference/triage.md`).
 
 ## TODO entry (R18)
 
@@ -370,41 +377,50 @@ The repo's existing TODO file (root `TODO.md` first, else `docs/plans/TODO.md`;
 one file only); none → create `TODO.md` in the root.
 
 ```markdown
-- **<ID>** <what> — deferred: <reason, one line: does not fit the <N>-min box | needs the owner | needs production | ...> (<date>).
+- **<ID>** <what> — deferred: <reason: owner decision | production or external system: <name> | out of the task's scope | review bound (3 re-reviews) | does not fit: needs ~<N> min, <M> min to hard end> (<date>).
   Resume: <files>, branch `<branch>`, spec <section>. Open findings: <F-list or none>.
 ```
 
+Exactly one reason from this closed list (TP6, `reference/triage.md`, TODO only with evidence);
+a time cut always carries its numbers. No reason from the list → no TODO entry.
+
 ## TODO entry for a deferred finding (R6, R18)
 
-Same file and IDs as above. Tests deferred in round 2+ make one entry for the loop, not one
-per finding. ACCEPT never goes to TODO; it is a register line in `decisions.md`.
+Same file, IDs and reason list as above. Tests deferred in round 2+ (only when they do not
+fit, TP4) make one entry for the loop, not one per finding. ACCEPT never goes to TODO; it is a
+register line in `decisions.md`. `kind` is not the reason: both fields are required.
 
 ```markdown
-- **<ID>** <what, one line> — deferred from review <task ID> r<k> F<n> (<date>), kind: <behaviour | owner decision | hardening | tests>.
+- **<ID>** <what, one line> — deferred from review <task ID> r<k> F<n> (<date>), kind: <behaviour | owner decision | hardening | tests>, reason: <one from the R18 list>.
   Now: <current behaviour, one sentence>. Risk: <when it hits: normal use (steps) | artificial timing only>.
-  Options: <A / B> or Fix idea: <one line>. Evidence: <review log path>. Resume: <files>, branch `<branch>`.
+  Options: <A / B> or Fix idea: <one line>. Evidence: <input | failing test | observed failure | code path file:line>; review log: <path>. Resume: <files>, branch `<branch>`.
 ```
 
-**After park (R5/R18 exception):** only a change to the TODO file itself may be committed
-and pushed without review, and the report marks it "pushed unreviewed"; it never pushes
-through an unreviewed commit (R5 push gate). Code and other docs
-changes made after park are committed on their branch but not pushed or merged.
+**After park (a box only; R5/R18 exception):** only a change to the TODO file itself may be
+committed and pushed without review, and the report marks it "pushed unreviewed"; it never
+pushes through an unreviewed commit (R5 push gate). Code and other docs changes made after park
+are committed on their branch but not pushed or merged.
 
 ## Status, park and end reports - `Remaining:` (R12)
 
 A status report (the owner asked), the park report and the end report end with two parts.
 
 1. `Remaining:` — built from run state, never from memory: open rows of `run.md` `## Tasks`,
-   `queue.md` items, TODO entries added in this run, commits held back (R17), and cleanup
-   items that were skipped. One line each, with its ID. `Nothing remains.` only when all five
-   are empty.
+   `queue.md` items, TODO entries added in this run, commits held back (R17), cleanup
+   items that were skipped, and groups of `## Groups` with merged tasks whose test run, its
+   fixes or the full build is not green yet. One line each, with its ID. `Nothing remains.` only when all six
+   are empty. Each line ends with `[waits on you]` or `[info]`: `[waits on you]` when its next step
+   needs the owner (an answer, a decision, a `!` command, a manual check, a merge or push the
+   owner approves); `[info]` when the run or a later run handles it, or nothing is to be done. E.g.
+   `- ZD4 review 2/3 running [info]`, `- PSH1 merge of the feature branch into main [waits on you]`.
 2. The last line says what happens next: `Continuing with <ID>.` (only when that action starts
-   in the same turn), `Waiting for you on <ID>.`, or at the end of the box
+   in the same turn), `Waiting for you on <ID>.`, or at the end of the run
    `Stopping; captain mode stays on.`
 
 The R13 health line is not a report: one line, no `Remaining:`.
 **Why:** 15 sessions, 09–13.10.2026: the owner asked "status?" 8 times and "what is left / are
-we done" 7 times.
+we done" 7 times. 17–20.10.2026: four times "which of these wait on me?" ("anything waiting
+on me?").
 
 **Notify (R12).** `~/.claude/captain/notify.sh "<message>"`: present mode for a waiting
 question and the end report; away mode for the end report only. If it fails, the message stays
@@ -414,24 +430,22 @@ in the chat.
 
 Items blocked on the owner come first. The TODO count line, `TODO: added <n>, closed <m>`,
 names added first; when added > 0 it is the report's first line, with each new entry and its
-one-line reason under it (`reference/triage.md`, `fix-all`); else it goes into item 6.
+one-line reason from the TP6 list under it (`reference/triage.md`, TODO only with evidence);
+else it goes into item 6.
 
 1. The queue: ready commands, one per line; the owner says yes per item and runs each
    approved one as a `!` command, in order (owner `!` commands, above).
 2. The permissions added to `.claude/settings.local.json` in R15, with the
    proposal to remove them (main writes that after the owner's yes).
-3. Subtasks cut to fit the box, and the TODO file they went to.
+3. Subtasks cut to fit the box (a box only), and the TODO file they went to.
 4. External-system parts that were stopped.
 5. Decisions: away mode all; present mode the consensus ones.
-6. Short report: done (with evidence: log path + result line, sha) / not done / review
-   findings rejected, each with its reason; branches and worktrees the run created; how late
-   any timer fired; a TODO-only change pushed unreviewed after park, if any; a missing
-   config in away mode (nothing created, notify none, tools from `command -v`); the
-   `audit-main.py` exit code if it was run.
-7. Duels (R20), when any ran: one line per duel with its ID, the winner (letter and agent)
-   or `none`, and the judge's reason; branches, worktrees, logs and Codex session ids that
-   stayed (`reference/experiment.md`, cleanup by outcome).
-8. `Remaining:` and the last line (above).
+6. Short report: done (with evidence: log path + result line, sha) / not done / review findings
+   rejected, each with its reason; branches and worktrees the run created; how late any timer
+   fired; with a box, work extensions used (`<k>/3`); outage minutes; a TODO-only change pushed
+   unreviewed after park, if any; a missing config in away mode (nothing created, notify none,
+   tools from `command -v`); the `audit-main.py` exit code if it was run.
+7. `Remaining:` and the last line (above).
 
 After the report, one `~/.claude/captain/notify.sh "<one-line summary>"` call (R12), in both
 modes; the wrapper decides whether the owner is away.
@@ -453,13 +467,13 @@ with open(os.path.expanduser("~/.claude/captain/runs.jsonl"), "a") as out:
 ```
 
 ```json
-{"date": "2026-09-26", "repo": "<name>", "task": "<one line>", "box_min": 30, "box_reason": "given", "actual_min": 32, "outcome": "partly", "cut": ["VR3"], "review_rounds": 2, "codex_available": true}
+{"date": "2026-09-26", "repo": "<name>", "task": "<one line>", "box_min": 30, "box_reason": "given", "actual_min": 32, "outcome": "partly", "cut": ["VR3"], "review_rounds": 2, "codex_available": true, "time": "normal", "extensions": 1, "outage_min": 0}
 ```
-
-Duels add one line each to `~/.claude/captain/experiments.jsonl` with the same append
-snippet; record format: `reference/experiment.md`.
 
 A run with `Project memory: on` adds `"memory": {"candidates": <n>, "written": ["<topic>.md"]}`; an `off` run writes the record above unchanged.
 
-`outcome` is `done`, `partly` (with the cut items that went to TODO) or `overrun`. `cut`
-lists the R19 IDs of the cut items; `[]` when nothing was cut.
+`box_min` is the owner's box in minutes, `null` with no box; `box_reason` is `given` or `none`.
+`outcome` is `done`, `partly` (with the cut items that went to TODO) or `overrun` (a box only).
+`cut` lists the R19 IDs of the cut items; `[]` when nothing was cut. `extensions` is the count
+of work extensions (0-3; 0 with no box); `outage_min` is the sum of the `## Outages` lines (0
+when none); `time` is `normal` or `strict`, `null` with no box (`reference/parallel.md`).

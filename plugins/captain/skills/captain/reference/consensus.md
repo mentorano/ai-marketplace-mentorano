@@ -44,9 +44,9 @@ or when the owner asks.
 One voter at a time, never a panel.
 
 1. The agent writes each decision, its reason and the rejected alternatives.
-2. The agent gets the absolute park time from its prompt. Before each opinion in the chain it
-   recomputes the time left with `date`; each opinion's timeout is the smaller of 240 s and
-   the time left before park.
+2. With a box, the agent gets the absolute park time from its prompt. Before each opinion in
+   the chain it recomputes the time left with `date`; each opinion's timeout is the smaller of
+   240 s and the time left before park. No box: 240 s each.
 3. The chain, one opinion at a time (mini-consensus prompt): Codex (effort `medium`,
    `command timeout 240`); if it fails, hits its usage limit or returns no valid
    `D<n>: AGREE|DISAGREE — reason` lines, a Fable agent (`captain:worker` with
@@ -54,8 +54,8 @@ One voter at a time, never a panel.
    An agent that cannot launch a nested agent says so at once in its report; the main session
    launches that opinion, stops it with `TaskStop` when the budget is over, and passes the
    answer back by `SendMessage`. A tool the config `tools` marks `false` is skipped, not tried.
-4. No time left before park → defer the decision and the work that depends on it: commit what
-   is independent, and report the decision as open (it goes to TODO per R18).
+4. With a box, no time left before park → defer the decision and the work that depends on it:
+   commit what is independent, and report the decision as open (it goes to TODO per R18).
 5. Several decisions may go in one batch.
 6. AGREE → execute. DISAGREE → that decision escalates (below); the agent continues with the
    other parts.
@@ -100,6 +100,9 @@ decision ID in it), passed as `--out`; `task.md` and `data.md` live there.
 
 **Time.**
 
+- No box (R11): no park, so every panel may start; the Codex deadline is 300 s, and the Opus
+  and Fable voters are told the same 300 s and stopped with `TaskStop` when it is over. The two
+  rules below apply with a box.
 - No panel starts when the time to park is shorter than its deadline, or when park − 5 min
   is under 60 s; the decision then takes the safer, more reversible option, marked
   `no consensus (no time)`.

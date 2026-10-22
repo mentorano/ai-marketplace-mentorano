@@ -12,11 +12,11 @@ One line per agent:
   <agentId> <tokens> tokens <percent>% keep|replace
   <agentId> unknown replace      (no usable usage record: treat as full)
   <agentId> not found replace    (no transcript: treat as full)
-`replace` means the agent used at least 20% of a 1M-token context window: when its current
+`replace` means the agent used at least 30% of a 1M-token context window: when its current
 task ends, the coordinator stops it and gives the next task to a fresh agent (R6).
 
 --total prints instead the tokens the agent spent in all: the sum of the usage of every model
-call in its transcript, resumed periods included (a writer duel's `tokens`). Claude Code writes
+call in its transcript, resumed periods included. Claude Code writes
 one line per content block and repeats the call's usage on each, so a call is counted once per
 message id; a call without an id counts once per line.
   <agentId> <tokens> tokens total
@@ -25,8 +25,7 @@ message id; a call without an id counts once per line.
 
 Exit codes: 0 every agent measured; 1 at least one not found or unknown; 2 bad arguments.
 The main session may run the default form (R1): it reads only the usage numbers, never the
-transcript text, and prints no agent output. `--total` is run only by the integration agent
-(a subagent) for a duel record, never by main: the main allow-list and audit-main.py accept
+transcript text, and prints no agent output. `--total` is run only by a subagent, never by main: the main allow-list and audit-main.py accept
 only the default form.
 """
 from __future__ import annotations
@@ -38,7 +37,7 @@ import sys
 from pathlib import Path
 
 WINDOW = 1_000_000
-REPLACE_AT = 0.20
+REPLACE_AT = 0.30
 AGENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 USAGE_KEYS = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens",
               "output_tokens")

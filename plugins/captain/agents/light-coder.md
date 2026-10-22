@@ -22,4 +22,5 @@ contract.
   `ESCALATE: <reason>`, with the uncommitted files and your last commit (or
   the base SHA).
 - Never launch subagents and never invoke review skills.
-- Done means the task's check command passes and its log path is in the report.
+- Done means the commit is on your branch; the group runner runs the task's
+  check command (TS1).

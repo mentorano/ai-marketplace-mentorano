@@ -1053,12 +1053,14 @@ def first_word(args: str) -> str:
     return words[0].lower() if words else ""
 
 
-# `експеримент` is deliberate: the Bulgarian spelling of `experiment`, accepted as a start word (R20).
-START_WORD = re.compile(r"^((\d+h)?(\d+m)?|\d+|away|experiment|експеримент|base=\S+)$", re.I)
+# `experiment` (also „експеримент“) is no longer an argument, but a start typed with it out of
+# habit still ends the previous run's merge grant.
+START_WORD = re.compile(r"^((\d+h)?(\d+m)?|\d+|away|strict|точно|experiment|експеримент|base=\S+)$",
+                        re.I)
 
 
 def starts_run(args: str) -> bool:
-    """A new `/captain` start: `[<timebox>] [away] [experiment] [base=<branch>]` or no
+    """A new `/captain` start: `[<timebox>] [away] [strict] [base=<branch>]` or no
     arguments (SKILL.md Arguments). Free text (a question, a resume note) keeps the run."""
     return all(START_WORD.match(word) for word in args.split())
 
