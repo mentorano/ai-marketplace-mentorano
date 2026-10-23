@@ -207,6 +207,23 @@ class CleanupRunTest(CleanupCase):
         self.assertTrue(found["cwd"].startswith("REMOVED "), found["cwd"])
         self.assertNotIn(FEATURE, self.git(self.repo, "branch", "--list"))
 
+    def test_branch_merged_into_the_default_branch_only_is_deleted_from_the_main_worktree(self):
+        # merged into main and origin/main, not into the feature branch the run checkout holds
+        self.git(self.repo, "merge", "-q", "--ff-only", "captain/w-unmerged")
+        self.git(self.repo, "push", "-q", "origin", "main")
+        found = self.lines()
+        self.assertTrue(found["unmerged"].startswith("REMOVED "), found["unmerged"])
+        self.assertFalse((self.trees / "unmerged").exists())
+        self.assertNotIn("captain/w-unmerged", self.git(self.repo, "branch", "--list"))
+
+    def test_merged_branch_stays_when_no_checkout_has_it_in_head(self):
+        self.git(self.repo, "push", "-q", "origin", "captain/w-unmerged:main")
+        self.git(self.repo, "fetch", "-q", "origin")
+        found = self.lines()
+        self.assertTrue(found["unmerged"].startswith("SKIPPED "), found["unmerged"])
+        self.assertIn("merged into origin/main but no checkout", found["unmerged"])
+        self.assertIn("captain/w-unmerged", self.git(self.repo, "branch", "--list"))
+
     def test_second_run_reports_already_removed(self):
         self.lines()
         found = self.lines()

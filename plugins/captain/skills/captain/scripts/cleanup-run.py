@@ -26,7 +26,8 @@ An item is also skipped when run.md has no readable `## Agents` table, or when t
 
 Removal: `git worktree unlock` only when the lock reason is JSON with top-level owner
 "supacode" (the lock is put back if the remove then fails), `git worktree remove` without
---force, `git branch -d` (never -D; from the run checkout only when it is the same repository).
+--force, `git branch -d` (never -D) from a checkout of the same repository whose HEAD has the
+branch: the run checkout first, then the other worktrees; when none has it, the branch stays.
 Git runs without optional locks, so --dry-run does not even refresh the index. The Supacode CLI is not called: see reference/health.md.
 Exit codes: 0 every item handled (removed, would remove or skipped); 2 bad arguments, a missing
 manifest or a missing run.md.
@@ -272,14 +273,22 @@ def delete_branch(entry: dict, ctx: Context) -> str | None:
     common, branch = entry["common_dir"], entry["branch"]
     if not branch_exists(common, branch):
         return None
-    # `branch -d` checks the merge against HEAD of the directory it runs in: the run checkout
-    # holds the feature branch, into which writer branches merge.
-    where = common
-    if (ctx.run.checkout and ctx.run.checkout != entry["worktree"]
-            and os.path.isdir(ctx.run.checkout) and same_repo(ctx.run.checkout, common)):
-        where = ctx.run.checkout
-    result = run_git(where, "branch", "-d", branch)
-    return None if result.returncode == 0 else f"git branch -d refused: {first_line(result)}"
+    # `branch -d` checks the merge against HEAD of the directory it runs in, so it runs in a
+    # checkout whose HEAD has the branch: the run checkout first (writer branches merge into
+    # the feature branch), then the other worktrees of the repository.
+    candidates = [ctx.run.checkout] if ctx.run.checkout else []
+    candidates += [path for path in worktrees(common) if path != ctx.run.checkout]
+    for where in candidates:
+        if (where != entry["worktree"] and os.path.isdir(where) and same_repo(where, common)
+                and run_git(where, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0):
+            result = run_git(where, "branch", "-d", branch)
+            if result.returncode == 0:
+                return None
+            return f"git branch -d refused: {first_line(result)}"
+    targets = [target for target in merge_targets(common, ctx.run, branch)
+               if run_git(common, "merge-base", "--is-ancestor", branch, target).returncode == 0]
+    return (f"merged into {', '.join(targets) or 'a merge target'} but no checkout of the "
+            f"repository has it in HEAD; branch not deleted")
 
 
 def handle(entry: dict, ctx: Context) -> str:
