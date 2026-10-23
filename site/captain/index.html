@@ -232,7 +232,7 @@ td:last-child { color: var(--muted); }
 .cmd code { color: var(--sea); }
 
 /* lessons */
-.install { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; counter-reset: i; list-style: none; margin: 0; padding: 0; }
+.install { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; max-width: 80ch; counter-reset: i; list-style: none; margin: 0; padding: 0; }
 .install li { counter-increment: i; display: grid; gap: 8px; align-content: start; min-width: 0; }
 .install li h3::before { content: counter(i) ". "; color: var(--sea); font-family: var(--f-display); }
 .install pre {
@@ -269,7 +269,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
   <!-- HERO -->
   <header class="hero">
     <div class="hero-top">
-      <span class="eyebrow">plugin captain · Claude Code · v0.20.0</span>
+      <span class="eyebrow">plugin captain · Claude Code · v0.20.1</span>
     </div>
     <h1><span data-l="bg">Как работи Капитана</span><span data-l="en">How the Captain works</span></h1>
     <p class="lead"><span data-l="bg">Една сесия на Claude Code командва екип от фонови агенти. Капитана не пише код. Той разделя работата, пуска агентите паралелно, праща всичко на ревю и пита собственика само за важното.</span><span data-l="en">One Claude Code session commands a crew of background agents. The Captain („Капитана“) writes no code. It splits the work, runs the agents in parallel, sends everything to review and asks the owner only about what matters.</span></p>
@@ -672,7 +672,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
     </div>
   </section>
 
-  <footer><span data-l="bg">Източник: plugin <code>captain</code> v0.20.0, skill <code>captain:captain</code> и неговите референции, агентите и hook скриптовете.</span><span data-l="en">Source: the <code>captain</code> plugin v0.20.0, the <code>captain:captain</code> skill with its references, the agents and the hooks.</span></footer>
+  <footer><span data-l="bg">Източник: plugin <code>captain</code> v0.20.1, skill <code>captain:captain</code> и неговите референции, агентите и hook скриптовете.</span><span data-l="en">Source: the <code>captain</code> plugin v0.20.1, the <code>captain:captain</code> skill with its references, the agents and the hooks.</span></footer>
 </div>
 <script>
 (function () {
