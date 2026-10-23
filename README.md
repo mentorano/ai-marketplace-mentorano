@@ -100,6 +100,13 @@ Full contract, and the rules that keep the output honest, in
 
 ### captain
 
+<a href="https://mentorano.github.io/ai-marketplace-mentorano/captain/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="site/captain/banner-en-dark.png">
+    <img src="site/captain/banner-en-light.png" width="100%" alt="How the captain works: one session coordinates background agents, every push is reviewed, risky actions wait for the owner. Click to open the infographic.">
+  </picture>
+</a>
+
 A time-boxed coordinator for coding runs, shared as a team plugin. One main
 Claude Code session coordinates and does only the light work (reads, git
 inspection, notes and docs): it splits the work, launches background

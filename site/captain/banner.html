@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<title>Капитана · банер</title>
+<!--
+  Source of the README banners: banner-light.png and banner-dark.png (Bulgarian),
+  banner-en-light.png and banner-en-dark.png (English). Render all four from the repo root:
+    C="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    for v in light dark en-light en-dark; do
+      "$C" --headless=new --hide-scrollbars --force-device-scale-factor=2 --window-size=1280,400 \
+        --virtual-time-budget=4000 --screenshot="site/captain/banner-$v.png" "file://$PWD/site/captain/banner.html#$v"
+    done
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --paper: #edf1f3; --sheet: #f8fafb; --ink: #13263b; --muted: #566879; --rule: #c7d2da;
+  --grid: rgba(19, 38, 59, 0.06); --signal: #c2361c; --signal-soft: rgba(194, 54, 28, 0.09);
+  --sea: #1f5c8f; --sea-soft: rgba(31, 92, 143, 0.09); --brass: #94680f; --brass-soft: rgba(148, 104, 15, 0.1);
+  --f-display: "Unbounded", "Arial Black", sans-serif;
+  --f-body: "Onest", "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", Menlo, monospace;
+}
+:root.dark {
+  --paper: #0d1722; --sheet: #132131; --ink: #e3eaf0; --muted: #94a5b4; --rule: #2a3b4c;
+  --grid: rgba(227, 234, 240, 0.05); --signal: #f0705a; --signal-soft: rgba(240, 112, 90, 0.13);
+  --sea: #74aee0; --sea-soft: rgba(116, 174, 224, 0.12); --brass: #e0b65a; --brass-soft: rgba(224, 182, 90, 0.12);
+}
+* { box-sizing: border-box; }
+:root:not(.en) [data-l="en"], :root.en [data-l="bg"] { display: none; }
+html, body { margin: 0; width: 1280px; height: 400px; overflow: hidden; }
+body {
+  background: var(--paper);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: var(--ink); font-family: var(--f-body);
+  display: grid; grid-template-columns: 520px 1fr; gap: 24px; align-items: center;
+  padding: 0 48px 0 56px;
+  border-bottom: 6px solid var(--signal);
+}
+.copy { display: grid; gap: 18px; }
+.eyebrow { font-family: var(--f-mono); font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 54px; line-height: 1.04; letter-spacing: -0.01em; }
+p { margin: 0; font-size: 21px; line-height: 1.4; color: var(--muted); max-width: 30ch; }
+.cta {
+  justify-self: start; font-family: var(--f-mono); font-weight: 600; font-size: 18px;
+  color: var(--paper); background: var(--signal); padding: 10px 18px; border-radius: 4px;
+}
+svg { width: 100%; height: auto; color: var(--ink); }
+svg text { font-family: var(--f-body); }
+.tt { font-size: 19px; font-weight: 600; fill: currentColor; }
+.ts { font-family: var(--f-mono); font-size: 13px; fill: var(--muted); }
+.te { font-family: var(--f-mono); font-size: 13px; fill: var(--sea); }
+.box { fill: var(--sheet); stroke: currentColor; stroke-width: 1.4; }
+.main { fill: var(--sheet); stroke: currentColor; stroke-width: 3; }
+.sea { fill: var(--sea-soft); stroke: var(--sea); stroke-width: 1.4; }
+.brass { fill: var(--brass-soft); stroke: var(--brass); stroke-width: 1.4; }
+.gate { fill: var(--signal-soft); stroke: var(--signal); stroke-width: 1.6; }
+.edge { stroke: var(--sea); stroke-width: 2; fill: none; }
+.ink { stroke: currentColor; stroke-width: 2; fill: none; }
+</style>
+<script>
+  var v = location.hash.slice(1).split("-");
+  if (v.indexOf("dark") >= 0) document.documentElement.classList.add("dark");
+  if (v.indexOf("en") >= 0) document.documentElement.classList.add("en");
+</script>
+</head>
+<body>
+  <div class="copy">
+    <span class="eyebrow">plugin captain · Claude Code</span>
+    <h1><span data-l="bg">Как работи Капитана</span><span data-l="en">How the Captain works</span></h1>
+    <p><span data-l="bg">Една сесия командва фонови агенти. Ревю преди всеки push. Рисковото чака теб.</span><span data-l="en">One session commands background agents. Review before every push. Risky actions wait for you.</span></p>
+    <span class="cta"><span data-l="bg">Отвори инфографиката →</span><span data-l="en">Open the infographic →</span></span>
+  </div>
+  <svg viewBox="0 0 660 330" role="img" aria-label="Собственик, Капитана и четирите вида помощници: runner, писатели, Codex и панелът 3amigos">
+    <defs>
+      <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--sea)"/></marker>
+      <marker id="k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+    </defs>
+    <rect class="box" x="0" y="118" width="130" height="64" rx="4"/>
+    <text class="tt" x="65" y="156" text-anchor="middle"><tspan data-l="bg">Собственик</tspan><tspan data-l="en">Owner</tspan></text>
+    <path class="ink" d="M130 150 H190" marker-end="url(#k)"/>
+
+    <rect class="main" x="192" y="96" width="176" height="108" rx="4"/>
+    <text class="tt" x="280" y="140" text-anchor="middle"><tspan data-l="bg">Капитана</tspan><tspan data-l="en">Captain</tspan></text>
+    <text class="ts" x="280" y="164" text-anchor="middle"><tspan data-l="bg">координира,</tspan><tspan data-l="en">coordinates,</tspan></text>
+    <text class="ts" x="280" y="182" text-anchor="middle"><tspan data-l="bg">не пише код</tspan><tspan data-l="en">writes no code</tspan></text>
+
+    <rect class="brass" x="450" y="6" width="210" height="56" rx="4"/>
+    <text class="tt" x="466" y="40">Runner</text>
+    <rect class="sea" x="450" y="80" width="210" height="56" rx="4"/>
+    <text class="tt" x="466" y="114"><tspan data-l="bg">Писатели</tspan><tspan data-l="en">Writers</tspan></text>
+    <rect class="box" x="450" y="154" width="210" height="56" rx="4"/>
+    <text class="tt" x="466" y="188"><tspan data-l="bg">Codex ревю</tspan><tspan data-l="en">Codex review</tspan></text>
+    <rect class="box" x="450" y="228" width="210" height="56" rx="4"/>
+    <text class="tt" x="466" y="262">3amigos</text>
+
+    <path class="edge" d="M368 126 C410 126 410 34 448 34" marker-end="url(#s)"/>
+    <path class="edge" d="M368 142 C410 142 410 108 448 108" marker-end="url(#s)"/>
+    <path class="edge" d="M368 158 C410 158 410 182 448 182" marker-end="url(#s)"/>
+    <path class="edge" d="M368 174 C410 174 410 256 448 256" marker-end="url(#s)"/>
+    <text class="te" x="555" y="312" text-anchor="middle"><tspan data-l="bg">обратно: отчет ≤ 8 реда</tspan><tspan data-l="en">back: a report ≤ 8 lines</tspan></text>
+
+    <rect class="gate" x="0" y="236" width="368" height="48" rx="4"/>
+    <text class="ts" x="16" y="266" style="fill: var(--signal); font-size: 14px"><tspan data-l="bg">queue.md · рисковото чака „да“</tspan><tspan data-l="en">queue.md · risky actions wait for yes</tspan></text>
+  </svg>
+</body>
+</html>
