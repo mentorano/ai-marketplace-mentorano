@@ -232,6 +232,17 @@ td:last-child { color: var(--muted); }
 .cmd code { color: var(--sea); }
 
 /* lessons */
+.install { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; counter-reset: i; list-style: none; margin: 0; padding: 0; }
+.install li { counter-increment: i; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.install li h3::before { content: counter(i) ". "; color: var(--sea); font-family: var(--f-display); }
+.install pre {
+  margin: 0; font-family: var(--f-mono); font-size: 0.82rem; line-height: 1.6; background: var(--sheet);
+  border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px; overflow-x: auto;
+}
+.install p { font-size: 0.93rem; color: var(--muted); }
+.links { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+a { color: var(--sea); text-underline-offset: 3px; }
+a:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 .lessons { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
 .lesson { display: grid; gap: 6px; align-content: start; padding-top: 12px; border-top: 2px solid var(--ink); }
 .lesson .num { font-family: var(--f-display); font-weight: 700; font-size: 2rem; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -620,6 +631,44 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
       <div class="lesson"><span class="num">466</span><p><span data-l="bg">съобщения от агенти за 15 run.</span><span data-l="en">agent messages in 15 runs.</span></p><span class="fix"><span data-l="bg">→ един отчет, до 8 реда, детайлите във файл.</span><span data-l="en">→ one report, at most 8 lines, details in a file.</span></span></div>
       <div class="lesson"><span class="num"><span data-l="bg">27 мин</span><span data-l="en">27 min</span></span><p><span data-l="bg">агент стоеше блокиран и никой не забеляза.</span><span data-l="en">an agent sat stalled and nobody noticed.</span></p><span class="fix"><span data-l="bg">→ проверка на всеки 15 минути.</span><span data-l="en">→ a check every 15 minutes.</span></span></div>
       <div class="lesson"><span class="num"><span data-l="bg">86 мин</span><span data-l="en">86 min</span></span><p><span data-l="bg">отворени въпроси задържаха таймера.</span><span data-l="en">open questions held the clock.</span></p><span class="fix"><span data-l="bg">→ питай само за продукт и обхват, първо пусни работата.</span><span data-l="en">→ ask only about product and scope, start the work first.</span></span></div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="install">
+    <div class="sec-head">
+      <span class="eyebrow"><span data-l="bg">Инсталиране</span><span data-l="en">Install</span></span>
+      <h2><span data-l="bg">Пусни Капитана при себе си</span><span data-l="en">Run the Captain yourself</span></h2>
+      <p><span data-l="bg">Четири стъпки в Claude Code. Пълните инструкции са в публичното репо.</span><span data-l="en">Four steps in Claude Code. The full instructions are in the public repository.</span></p>
+    </div>
+    <ol class="install">
+      <li>
+        <h3><span data-l="bg">Добави marketplace-а</span><span data-l="en">Add the marketplace</span></h3>
+        <pre>/plugin marketplace add mentorano/ai-marketplace-mentorano</pre>
+      </li>
+      <li>
+        <h3><span data-l="bg">Инсталирай plugin-ите</span><span data-l="en">Install the plugins</span></h3>
+        <pre>/plugin install captain@ai-marketplace-mentorano
+/plugin install 3amigos@ai-marketplace-mentorano
+/plugin install utils@ai-marketplace-mentorano</pre>
+        <p><span data-l="bg">3amigos е за решенията с консенсус, utils е за handoff в нов tab. И двата са по избор.</span><span data-l="en">3amigos runs the consensus decisions, utils opens the handoff tab. Both are optional.</span></p>
+      </li>
+      <li>
+        <h3><span data-l="bg">Настрой веднъж</span><span data-l="en">Set up once</span></h3>
+        <pre>/captain:captain-setup</pre>
+        <p><span data-l="bg">Пита как да те известява и кога да мълчи. Открива Codex CLI, ако е инсталиран. Без Codex ревюира Opus.</span><span data-l="en">Asks how to notify you and when to stay quiet. Detects the Codex CLI if it is installed. Without Codex, Opus reviews.</span></p>
+      </li>
+      <li>
+        <h3><span data-l="bg">Стартирай run</span><span data-l="en">Start a run</span></h3>
+        <pre>/captain
+/captain 1h away</pre>
+        <p><span data-l="bg">Първото е с теб, без време. Второто е за 1 час, докато те няма.</span><span data-l="en">The first runs with you, no time box. The second runs for 1 hour while you are away.</span></p>
+      </li>
+    </ol>
+    <div class="links">
+      <a href="https://github.com/mentorano/ai-marketplace-mentorano#install"><span data-l="bg">Инструкции за инсталиране</span><span data-l="en">Install instructions</span></a>
+      <a href="https://github.com/mentorano/ai-marketplace-mentorano#captain"><span data-l="bg">Описание на captain в README</span><span data-l="en">The captain section of the README</span></a>
+      <a href="https://github.com/mentorano/ai-marketplace-mentorano"><span data-l="bg">Публичното репо</span><span data-l="en">The public repository</span></a>
     </div>
   </section>
 
