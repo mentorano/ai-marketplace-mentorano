@@ -136,7 +136,8 @@ def _link_typescript(taken: Snapshot, relatives: list[str]) -> None:
         if package is None:
             continue
         modules = package.parent
-        link = taken.mirror(modules) if modules.is_relative_to(repo) else taken.root / "node_modules"
+        # Not taken.mirror: it resolves, and a node_modules linked outside the repository would leave it.
+        link = taken.root / modules.relative_to(repo) if modules.is_relative_to(repo) else taken.root / "node_modules"
         if not link.exists():
             link.parent.mkdir(parents=True, exist_ok=True)
             os.symlink(modules, link)

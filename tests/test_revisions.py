@@ -281,6 +281,20 @@ class CompareTypeScriptTest(unittest.TestCase):
         self.assertEqual([(r["name"], r["verdict"]) for r in data["compare"]["functions"]], [("f", "crossed")])
         self.assertTrue((TS_PACKAGE / "package.json").is_file())
 
+    def test_a_node_modules_linked_outside_the_repository_still_compares(self):
+        # A worktree often links node_modules to the main checkout's; the link leaves the repository.
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "main-checkout" / "web" / "node_modules"
+            outside.mkdir(parents=True)
+            os.symlink(TS_PACKAGE, outside / "typescript")
+            repo = new_repo(Path(tmp), {".gitignore": "node_modules\n", "web/src/a.ts": "export const f = () => 1;\n"})
+            os.symlink(outside, repo / "web" / "node_modules")
+            long_body = "".join(f"  const v{i} = {i};\n" for i in range(25))
+            commit(repo, {"web/src/a.ts": f"export const f = () => {{\n{long_body}  return 1;\n}};\n"}, "longer")
+            proc = run(MEASURE, "web/src/a.ts", "--compare", "HEAD~1", cwd=repo)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("VERDICT ", proc.stdout)
+
 
 PACKAGE = {
     "app/__init__.py": "",
