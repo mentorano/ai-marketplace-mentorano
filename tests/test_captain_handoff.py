@@ -661,6 +661,8 @@ class SuccessorTabWrapperTest(unittest.TestCase):
         self.assertEqual(new[0][new[0].index("-i") + 1],
                          f'cd {self.dir} && : > {marker} && {self.bin / "claude"} -n proj-c5-r2 "$(cat {prompt})"')
         self.assertTrue(marker.exists())
+        self.assertFalse((self.handoff.parent / "proj-c5-r2.prompt.md").exists(),
+                         "the resume slash command runs unwrapped: it sends its own STARTED")
 
     def test_the_highest_version_is_picked_numerically(self):
         self.install_utils("0.3.0")

@@ -98,6 +98,18 @@ elif args[0] == "close-surface":
 """
 
 
+# `claude agents --json` prints $CLAUDE_AGENTS and exits $CLAUDE_AGENTS_RC; it leaves a mark in
+# $CLAUDE_AGENTS_LOG. Any other call (the tab's `claude -n ...`) does nothing.
+CLAUDE_STUB = """#!/bin/sh
+if [ "$1" = agents ]; then
+  [ -n "$CLAUDE_AGENTS_LOG" ] && echo agents >> "$CLAUDE_AGENTS_LOG"
+  printf '%s\\n' "$CLAUDE_AGENTS"
+  exit "${CLAUDE_AGENTS_RC:-0}"
+fi
+exit 0
+"""
+
+
 def worktree_row(path: Path) -> str:
     return urllib.parse.quote(str(path).rstrip("/") + "/", safe="")
 
@@ -105,6 +117,8 @@ def worktree_row(path: Path) -> str:
 class NewSessionTabTest(unittest.TestCase):
     """new-session-tab.py against stub `supacode` and `claude` binaries on PATH."""
     TAB = "0D1E2F30-AAAA-BBBB-CCCC-000000000001"
+    SESSION = "9081b697-f16a-4b97-88d6-f3e6d5198fdb"  # this (the opening) session
+    OPENER = "opener-f9"
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -113,7 +127,7 @@ class NewSessionTabTest(unittest.TestCase):
         (self.home / ".claude").mkdir(parents=True)
         self.bin = root / "bin"
         self.bin.mkdir()
-        for name, body in (("supacode", SUPACODE_STUB), ("claude", "#!/bin/sh\nexit 0\n")):
+        for name, body in (("supacode", SUPACODE_STUB), ("claude", CLAUDE_STUB)):
             (self.bin / name).write_text(body, encoding="utf-8")
             (self.bin / name).chmod(0o755)
         self.repo = root / "repo"
@@ -125,6 +139,7 @@ class NewSessionTabTest(unittest.TestCase):
         self.prompt.parent.mkdir(parents=True)
         self.prompt.write_text("Continue with the next task (café).\n", encoding="utf-8")
         self.log = root / "supacode.log"
+        self.agents_log = root / "agents.log"
         self.rows = [worktree_row(root), worktree_row(self.repo), worktree_row(self.other)]
 
     def tearDown(self):
@@ -136,7 +151,11 @@ class NewSessionTabTest(unittest.TestCase):
         base = {k: v for k, v in os.environ.items() if k not in HOST_ENV}
         full = {**base, "HOME": str(self.home), "PATH": f"{self.bin}:/usr/bin:/bin",
                 "SUPA_LOG": str(self.log), "SUPA_ROWS": " ".join(self.rows), "SUPA_TAB": self.TAB,
-                "SUPA_TAB_IN": worktree_row(self.repo), "SUPA_RUN": "1", "CMUX_RUN": "1", **(env or {})}
+                "SUPA_TAB_IN": worktree_row(self.repo), "SUPA_RUN": "1", "CMUX_RUN": "1",
+                "CLAUDE_CODE_SESSION_ID": self.SESSION, "CLAUDE_AGENTS_LOG": str(self.agents_log),
+                "CLAUDE_AGENTS": json.dumps([{"sessionId": "11111111-2222-3333-4444-555555555555", "name": "other"},
+                                             {"sessionId": self.SESSION, "name": self.OPENER}]),
+                **(env or {})}
         return subprocess.run([sys.executable, str(NEW_TAB), f"--dir={directory or self.dir}",
                                f"--prompt-file={self.prompt}", f"--name={name}",
                                f"--wait={wait}", *flags, *extra],
@@ -147,6 +166,13 @@ class NewSessionTabTest(unittest.TestCase):
             return []
         return [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
 
+    @staticmethod
+    def last(result: subprocess.CompletedProcess) -> str:
+        return (result.stdout.strip().splitlines() or [""])[-1]
+
+    def wrapped(self) -> Path:
+        return self.prompt.parent / "proj-c5-r2.handshake.md"
+
     def tab_command(self) -> str:
         new = [c for c in self.calls() if c[:2] == ["tab", "new"]]
         self.assertEqual(len(new), 1, self.calls())
@@ -155,15 +181,16 @@ class NewSessionTabTest(unittest.TestCase):
     def test_auto_outside_supacode_and_cmux_is_tab_none(self):
         result = self.run_tab(terminal="auto")
         self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
-        self.assertTrue(result.stdout.startswith("TAB-NONE "), result.stdout)
+        self.assertTrue(self.last(result).startswith("TAB-NONE "), result.stdout)
         self.assertEqual(self.calls(), [])
 
     def test_opens_the_tab_with_w_of_the_innermost_worktree_and_the_prompt_in_a_file(self):
         result = self.run_tab(terminal="supacode")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        prompt = self.prompt
-        self.assertEqual(result.stdout.strip(), f"TAB-OK {self.TAB} {worktree_row(self.repo)} proj-c5-r2 "
-                                                f"mode=default prompt={prompt}")
+        prompt = self.wrapped()
+        self.assertEqual(result.stdout.strip().splitlines(), [
+            f"HANDSHAKE proj-c5-r2 reply-to={self.OPENER}",
+            f"TAB-OK {self.TAB} {worktree_row(self.repo)} proj-c5-r2 mode=default prompt={prompt}"])
         new = [c for c in self.calls() if c[:2] == ["tab", "new"]][0]
         self.assertEqual(new[new.index("-w") + 1], worktree_row(self.repo), "the innermost, not the parent")
         command = self.tab_command()
@@ -172,13 +199,14 @@ class NewSessionTabTest(unittest.TestCase):
         self.assertEqual(command, f'cd {self.dir} && : > {marker} && {self.bin / "claude"} -n proj-c5-r2 '
                                   f'"$(cat {prompt})"', "the marker is written before claude starts")
         self.assertNotIn("close", [c[1] for c in self.calls() if len(c) > 1], "a live tab is never closed")
-        self.assertEqual(prompt.read_text(encoding="utf-8"), "Continue with the next task (café).\n", "the prompt is left as is")
+        self.assertEqual(self.prompt.read_text(encoding="utf-8"), "Continue with the next task (café).\n",
+                         "the prompt is left as is")
 
     def test_without_the_key_a_supacode_session_is_detected(self):
         result = self.run_tab(terminal="auto", env={"TERM_PROGRAM": "supacode",
                                               "SUPACODE_WORKTREE_ID": worktree_row(self.repo)})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(result.stdout.startswith("TAB-OK "), result.stdout)
+        self.assertTrue(self.last(result).startswith("TAB-OK "), result.stdout)
 
     CMUX_ENV = {"CMUX_SOCKET_PATH": "/tmp/cmux.sock", "CMUX_WORKSPACE_ID": "WS-1"}
 
@@ -200,8 +228,8 @@ class NewSessionTabTest(unittest.TestCase):
     def test_cmux_asked_opens_a_surface_types_the_command_and_presses_enter(self):
         result = self.run_cmux()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        prompt = self.prompt
-        self.assertEqual(result.stdout.strip(), f"TAB-OK surface:103 WS-1 proj-c5-r2 mode=default prompt={prompt}")
+        prompt = self.wrapped()
+        self.assertEqual(self.last(result), f"TAB-OK surface:103 WS-1 proj-c5-r2 mode=default prompt={prompt}")
         marker = self.prompt.parent / "proj-c5-r2.alive"
         command = f'cd {self.dir} && : > {marker} && {self.bin / "claude"} -n proj-c5-r2 "$(cat {prompt})"'
         self.assertEqual(self.cmux_calls(), [
@@ -212,13 +240,13 @@ class NewSessionTabTest(unittest.TestCase):
 
     def test_without_workspace_id_the_workspace_flag_is_left_out_and_shown_as_a_dash(self):
         result = self.run_cmux(env={"CMUX_WORKSPACE_ID": ""})
-        self.assertTrue(result.stdout.startswith("TAB-OK surface:103 - proj-c5-r2 "), result.stdout)
+        self.assertTrue(self.last(result).startswith("TAB-OK surface:103 - proj-c5-r2 "), result.stdout)
         self.assertEqual(self.cmux_calls()[0], ["new-surface", "--type", "terminal", "--focus", "false"])
 
     def test_without_the_key_a_cmux_session_is_detected(self):
         result = self.run_cmux(terminal="auto")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(result.stdout.startswith("TAB-OK surface:103 "), result.stdout)
+        self.assertTrue(self.last(result).startswith("TAB-OK surface:103 "), result.stdout)
 
     def test_without_the_key_cmux_needs_the_socket(self):
         env = self.add_cmux()
@@ -229,7 +257,7 @@ class NewSessionTabTest(unittest.TestCase):
     def test_supacode_wins_when_both_are_detected(self):
         result = self.run_cmux(terminal="auto", env={"TERM_PROGRAM": "supacode",
                                                "SUPACODE_WORKTREE_ID": worktree_row(self.repo)})
-        self.assertTrue(result.stdout.startswith(f"TAB-OK {self.TAB} "), result.stdout)
+        self.assertTrue(self.last(result).startswith(f"TAB-OK {self.TAB} "), result.stdout)
         self.assertEqual(self.cmux_calls(), [])
 
     def test_terminal_none_beats_a_cmux_session(self):
@@ -243,7 +271,7 @@ class NewSessionTabTest(unittest.TestCase):
         (self.bin / "cmux").rename(bundled)
         result = self.run_tab(terminal="cmux",
                               env={**env, **self.CMUX_ENV, "CMUX_BUNDLED_CLI_PATH": str(bundled)})
-        self.assertTrue(result.stdout.startswith("TAB-OK surface:103 "), result.stdout)
+        self.assertTrue(self.last(result).startswith("TAB-OK surface:103 "), result.stdout)
 
     def test_a_missing_cmux_cli_is_no_cmux(self):
         result = self.run_tab(terminal="cmux", env=self.CMUX_ENV)
@@ -259,7 +287,7 @@ class NewSessionTabTest(unittest.TestCase):
     def test_read_screen_is_never_called_on_the_new_surface(self):
         # 2026-10-06, cmux 0.64.25: an unfocused new surface has no PTY yet, so read-screen fails
         result = self.run_cmux(env={"CMUX_READ_RC": "1"})
-        self.assertTrue(result.stdout.startswith("TAB-OK surface:103 "), result.stdout)
+        self.assertTrue(self.last(result).startswith("TAB-OK surface:103 "), result.stdout)
         self.assertNotIn("read-screen", [c[0] for c in self.cmux_calls()])
 
     def test_a_failing_send_reports_the_surface_ref_and_presses_no_key(self):
@@ -291,7 +319,7 @@ class NewSessionTabTest(unittest.TestCase):
                 self.assertEqual(self.cmux_calls(), [])
 
     def test_the_permission_mode_is_mirrored_only_when_safe(self):
-        session = "9081b697-f16a-4b97-88d6-f3e6d5198fdb"
+        session = self.SESSION
         transcript = self.home / ".claude" / "projects" / "-repo" / f"{session}.jsonl"
         transcript.parent.mkdir(parents=True)
         for last, flag, shown in (("auto", "--permission-mode auto", "mode=auto"),
@@ -301,8 +329,7 @@ class NewSessionTabTest(unittest.TestCase):
                            {"type": "permission-mode", "permissionMode": last}]
                 transcript.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
                 self.log.unlink(missing_ok=True)
-                result = self.run_tab(terminal="supacode",
-                                      env={"CLAUDE_CODE_SESSION_ID": session})
+                result = self.run_tab(terminal="supacode")
                 self.assertIn(shown, result.stdout)
                 command = self.tab_command()
                 if flag:
@@ -374,7 +401,7 @@ class NewSessionTabTest(unittest.TestCase):
     def test_a_marker_that_appears_within_the_wait_is_tab_ok(self):
         result = self.run_tab(terminal="supacode", env={"SUPA_RUN": "late"}, wait=10)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(result.stdout.startswith(f"TAB-OK {self.TAB} "), result.stdout)
+        self.assertTrue(self.last(result).startswith(f"TAB-OK {self.TAB} "), result.stdout)
         self.assertTrue(self.marker().exists())
         new = self.calls().index(next(c for c in self.calls() if c[:2] == ["tab", "new"]))
         self.assertFalse([c for c in self.calls()[new:] if c[:2] == ["tab", "close"]])
@@ -403,7 +430,7 @@ class NewSessionTabTest(unittest.TestCase):
         result = self.run_tab(terminal="supacode")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(shlex.split(self.tab_command())[5], str(self.prompt.parent / "proj-c5-r2.alive"))
-        self.assertTrue(self.tab_command().endswith(f'"$(cat {shlex.quote(str(self.prompt))})"'))
+        self.assertTrue(self.tab_command().endswith(f'"$(cat {shlex.quote(str(self.wrapped()))})"'))
 
     def test_a_missing_or_relative_prompt_file_is_refused(self):
         for prompt in (self.repo / "tmp" / "missing.md", Path("tmp/handover.md")):
@@ -448,10 +475,133 @@ class NewSessionTabTest(unittest.TestCase):
 
     def test_auto_is_the_default_terminal(self):
         result = self.run_tab(env={"TERM_PROGRAM": "supacode", "SUPACODE_WORKTREE_ID": worktree_row(self.repo)})
-        self.assertTrue(result.stdout.startswith(f"TAB-OK {self.TAB} "), result.stdout)
+        self.assertTrue(self.last(result).startswith(f"TAB-OK {self.TAB} "), result.stdout)
         result = self.run_tab()
         self.assertEqual(result.returncode, 3, result.stdout)
-        self.assertTrue(result.stdout.startswith("TAB-NONE "), result.stdout)
+        self.assertTrue(self.last(result).startswith("TAB-NONE "), result.stdout)
+
+
+class HandshakeTest(NewSessionTabTest):
+    """The new session's first step is `STARTED <name> pwd=...` to the session that opened the tab."""
+
+    def test_the_tab_reads_a_wrapped_copy_and_the_prompt_file_is_left_as_is(self):
+        self.prompt.write_bytes("Continue (café).\n".encode("utf-8") + b"\xff raw\n")
+        result = self.run_tab(terminal="supacode")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.prompt.read_bytes(), "Continue (café).\n".encode("utf-8") + b"\xff raw\n")
+        wrapped = self.wrapped().read_bytes()
+        head, sep, body = wrapped.partition(b"\n\n---\n\n")
+        self.assertEqual(body, self.prompt.read_bytes(), "the prompt's bytes follow the handshake unchanged")
+        head = head.decode("utf-8")
+        self.assertTrue(head.startswith("First step, before anything else: send one message with the "
+                                        f"SendMessage tool to the session `{self.OPENER}`"), head)
+        for needle in ("`STARTED proj-c5-r2 pwd=<your working directory>: ", "Do not wait for an answer",
+                       "`ACK proj-c5-r2`"):
+            self.assertIn(needle, head)
+        self.assertIn(f'"$(cat {self.wrapped()})"', self.tab_command())
+
+    def test_a_retry_rewrites_the_wrapped_copy_with_one_handshake(self):
+        self.run_tab(terminal="supacode")
+        self.log.unlink()
+        result = self.run_tab(terminal="supacode")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.wrapped().read_text(encoding="utf-8").count("First step"), 1)
+
+    def test_an_explicit_reply_to_beats_the_lookup_and_may_hold_spaces(self):
+        result = self.run_tab(terminal="supacode", env={"CLAUDE_AGENTS_RC": "1"},
+                              extra=("--reply-to=Session with spaces",))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines()[0], "HANDSHAKE proj-c5-r2 reply-to=Session with spaces")
+        self.assertIn("`Session with spaces`", self.wrapped().read_text(encoding="utf-8"))
+        self.assertFalse(self.agents_log.exists(), "no `claude agents` call when --reply-to is given")
+
+    def test_the_lookup_takes_the_row_of_this_session(self):
+        rows = [{"sessionId": self.SESSION, "name": "my opener 7"}]
+        result = self.run_tab(terminal="supacode", env={"CLAUDE_AGENTS": json.dumps(rows)})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines()[0], "HANDSHAKE proj-c5-r2 reply-to=my opener 7")
+
+    def test_no_name_to_answer_to_is_failed_before_any_tab(self):
+        cases = {"no session id": {"CLAUDE_CODE_SESSION_ID": ""},
+                 "no row": {"CLAUDE_AGENTS": json.dumps([{"sessionId": "x", "name": "other"}])},
+                 "two rows": {"CLAUDE_AGENTS": json.dumps([{"sessionId": self.SESSION, "name": "a"},
+                                                           {"sessionId": self.SESSION, "name": "b"}])},
+                 "rc": {"CLAUDE_AGENTS_RC": "1"},
+                 "not json": {"CLAUDE_AGENTS": "agents: no TTY"},
+                 "not a list": {"CLAUDE_AGENTS": "{}"},
+                 "backtick name": {"CLAUDE_AGENTS": json.dumps([{"sessionId": self.SESSION, "name": "a`b"}])}}
+        for case, env in cases.items():
+            with self.subTest(case=case):
+                self.log.unlink(missing_ok=True)
+                result = self.run_tab(terminal="supacode", env=env)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertTrue(result.stdout.startswith("FAILED NO-REPLY-TO "), result.stdout)
+                self.assertIn("--reply-to", result.stdout)
+                self.assertEqual(len(result.stdout.strip().splitlines()), 1)
+                self.assertFalse([c for c in self.calls() if c[:2] == ["tab", "new"]])
+                self.assertFalse(self.wrapped().exists())
+
+    def test_a_bad_reply_to_is_refused_before_anything(self):
+        for value in ("", " ", "a`b", "a\nb", "x" * 301):
+            with self.subTest(value=value):
+                result = self.run_tab(terminal="supacode", extra=(f"--reply-to={value}",))
+                self.assertTrue(result.stdout.startswith("FAILED BAD-REPLY-TO"), result.stdout)
+        self.assertEqual(self.calls(), [])
+
+    def test_a_slash_command_prompt_runs_as_it_is(self):
+        self.prompt.write_text("\n/some-skill resume a=1\n", encoding="utf-8")
+        result = self.run_tab(terminal="supacode", env={"CLAUDE_CODE_SESSION_ID": ""})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines()[0], "HANDSHAKE-NONE slash-command")
+        self.assertEqual(self.last(result), f"TAB-OK {self.TAB} {worktree_row(self.repo)} proj-c5-r2 "
+                                            f"mode=default prompt={self.prompt}")
+        self.assertIn(f'"$(cat {self.prompt})"', self.tab_command())
+        self.assertFalse(self.wrapped().exists())
+
+    def test_the_wrapped_copy_is_not_accepted_as_the_prompt(self):
+        self.prompt = self.repo / "tmp" / "proj-c5-r2.handshake.md"
+        self.prompt.write_text("go\n", encoding="utf-8")
+        result = self.run_tab(terminal="supacode")
+        self.assertTrue(result.stdout.startswith("FAILED BAD-PROMPT-FILE"), result.stdout)
+        self.assertIn("handshake prompt", result.stdout)
+        self.assertEqual(self.prompt.read_text(encoding="utf-8"), "go\n")
+        self.assertEqual(self.calls(), [])
+
+    def test_an_absolute_path_first_is_no_slash_command(self):
+        for text in ("/repo/src/main.py needs a review.\n", "/tmp inspect the files there.\n", "/usr\n"):
+            with self.subTest(text=text):
+                self.prompt.write_text(text, encoding="utf-8")
+                self.wrapped().unlink(missing_ok=True)
+                self.log.unlink(missing_ok=True)
+                result = self.run_tab(terminal="supacode")
+                self.assertEqual(result.stdout.splitlines()[0], f"HANDSHAKE proj-c5-r2 reply-to={self.OPENER}")
+                self.assertTrue(self.wrapped().read_text(encoding="utf-8").endswith(text))
+
+    def test_a_file_of_the_copy_name_that_is_not_a_copy_is_kept(self):
+        self.wrapped().write_text("my own notes\n", encoding="utf-8")
+        result = self.run_tab(terminal="supacode")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertTrue(result.stdout.startswith("FAILED HANDSHAKE-FILE "), result.stdout)
+        self.assertEqual(self.wrapped().read_text(encoding="utf-8"), "my own notes\n")
+        self.assertFalse([c for c in self.calls() if c[:2] == ["tab", "new"]])
+
+    def test_without_a_terminal_the_copy_is_written_for_the_pasted_command(self):
+        result = self.run_tab(terminal="none")
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines(), [
+            f"HANDSHAKE proj-c5-r2 reply-to={self.OPENER}",
+            f"TAB-NONE --terminal=none prompt={self.wrapped()}"])
+        self.assertIn("STARTED proj-c5-r2 pwd=", self.wrapped().read_text(encoding="utf-8"))
+        self.assertEqual(self.calls(), [])
+
+    def test_a_dead_tab_is_still_one_failed_line(self):
+        result = self.run_tab(terminal="supacode", env={"SUPA_RUN": ""})
+        self.assertEqual(result.stdout.strip().splitlines(),
+                         [f"FAILED TAB-DEAD {self.TAB} in={worktree_row(self.repo)} after=1s closed=yes"])
+
+
+for _name in [n for n in vars(NewSessionTabTest) if n.startswith("test_")]:
+    setattr(HandshakeTest, _name, None)
 
 
 class FreshWorktreeTest(NewSessionTabTest):
@@ -475,7 +625,8 @@ class FreshWorktreeTest(NewSessionTabTest):
         result = self.fresh()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         lines = result.stdout.strip().splitlines()
-        self.assertEqual(lines[0], f"BOOTSTRAP-CLOSED {self.BOOT}")
+        self.assertEqual(lines[0], f"HANDSHAKE proj-c5-r2 reply-to={self.OPENER}")
+        self.assertEqual(lines[1], f"BOOTSTRAP-CLOSED {self.BOOT}")
         self.assertTrue(lines[-1].startswith(f"TAB-OK {self.TAB} "), lines)
         wt = worktree_row(self.repo)
         self.assertEqual(self.closes(), [["tab", "close", "-w", wt, "-t", self.BOOT, "--background"]])
@@ -487,7 +638,7 @@ class FreshWorktreeTest(NewSessionTabTest):
         (self.repo / "supacode.json").write_text(json.dumps({"setupScript": "make setup"}), encoding="utf-8")
         result = self.fresh()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(result.stdout.splitlines()[0], "BOOTSTRAP-KEPT setup-script")
+        self.assertEqual(result.stdout.splitlines()[-2], "BOOTSTRAP-KEPT setup-script")
         self.assertEqual(self.closes(), [])
 
     def test_a_setup_script_in_repos_json_or_the_script_list_keeps_it_too(self):
@@ -496,22 +647,22 @@ class FreshWorktreeTest(NewSessionTabTest):
         (config / "repos.json").write_text(json.dumps({str(self.repo) + "/": {"setupScript": "x"}}),
                                            encoding="utf-8")
         result = self.fresh()
-        self.assertEqual(result.stdout.splitlines()[0], "BOOTSTRAP-KEPT setup-script")
+        self.assertEqual(result.stdout.splitlines()[-2], "BOOTSTRAP-KEPT setup-script")
         (config / "repos.json").unlink()
         self.log.unlink()  # a second, separate run
         result = self.fresh(env={"SUPA_SCRIPTS": "B90F7467-8638-4FB6-9CFC-450207596267\tsetup\tSetup\n"})
-        self.assertEqual(result.stdout.splitlines()[0], "BOOTSTRAP-KEPT setup-script")
+        self.assertEqual(result.stdout.splitlines()[-2], "BOOTSTRAP-KEPT setup-script")
         self.assertEqual(self.closes(), [])
 
     def test_unreadable_settings_keep_the_tab(self):
         (self.repo / "supacode.json").write_text("{not json", encoding="utf-8")
         result = self.fresh()
-        self.assertEqual(result.stdout.splitlines()[0], "BOOTSTRAP-KEPT setup-script-unknown")
+        self.assertEqual(result.stdout.splitlines()[-2], "BOOTSTRAP-KEPT setup-script-unknown")
         self.assertEqual(self.closes(), [])
 
     def test_a_repo_root_git_cannot_name_keeps_the_tab(self):
         result = self.fresh(env={"GIT_FAIL": "1"})
-        self.assertEqual(result.stdout.splitlines()[0], "BOOTSTRAP-KEPT setup-script-unknown")
+        self.assertEqual(result.stdout.splitlines()[-2], "BOOTSTRAP-KEPT setup-script-unknown")
         self.assertEqual(self.closes(), [])
 
     def test_a_repos_json_that_is_not_an_object_keeps_the_tab(self):
@@ -519,23 +670,23 @@ class FreshWorktreeTest(NewSessionTabTest):
         config.mkdir(parents=True)
         (config / "repos.json").write_text("[]", encoding="utf-8")
         result = self.fresh()
-        self.assertEqual(result.stdout.splitlines()[0], "BOOTSTRAP-KEPT setup-script-unknown")
+        self.assertEqual(result.stdout.splitlines()[-2], "BOOTSTRAP-KEPT setup-script-unknown")
         self.assertEqual(self.closes(), [])
 
     def test_an_empty_setup_script_and_other_scripts_do_not_keep_it(self):
         (self.repo / "supacode.json").write_text(json.dumps({"setupScript": "  "}), encoding="utf-8")
         result = self.fresh(env={"SUPA_SCRIPTS": "B90F7467-8638-4FB6-9CFC-450207596267\trun\tRun\n"})
-        self.assertEqual(result.stdout.splitlines()[0], f"BOOTSTRAP-CLOSED {self.BOOT}")
+        self.assertEqual(result.stdout.splitlines()[-2], f"BOOTSTRAP-CLOSED {self.BOOT}")
 
     def test_nothing_to_close_when_the_worktree_had_no_tab(self):
         result = self.fresh(env={"SUPA_BOOT": " "})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(result.stdout.splitlines()[0], "BOOTSTRAP-NONE no-tab")
+        self.assertEqual(result.stdout.splitlines()[-2], "BOOTSTRAP-NONE no-tab")
         self.assertEqual(self.closes(), [])
 
     def test_a_worktree_with_two_tabs_is_not_fresh_and_nothing_is_closed(self):
         result = self.fresh(env={"SUPA_BOOT": f"{self.BOOT} BBBB0000-1111-2222-3333-444444444444"})
-        self.assertEqual(result.stdout.splitlines()[0], "BOOTSTRAP-NONE tabs=2")
+        self.assertEqual(result.stdout.splitlines()[-2], "BOOTSTRAP-NONE tabs=2")
         self.assertEqual(self.closes(), [])
 
     def test_a_dead_new_tab_closes_no_bootstrap(self):
@@ -545,11 +696,11 @@ class FreshWorktreeTest(NewSessionTabTest):
 
     def test_a_close_that_leaves_the_tab_is_close_failed(self):
         result = self.fresh(env={"SUPA_CLOSE_KEEPS": "1"})
-        self.assertEqual(result.stdout.splitlines()[0], f"BOOTSTRAP-KEPT close-failed {self.BOOT}")
+        self.assertEqual(result.stdout.splitlines()[-2], f"BOOTSTRAP-KEPT close-failed {self.BOOT}")
 
     def test_without_the_flag_a_single_tab_worktree_keeps_its_tab(self):
         result = self.run_tab(terminal="supacode", env={"SUPA_BOOT": self.BOOT})
-        self.assertEqual(result.stdout.strip().splitlines(), [result.stdout.strip()], "one line")
+        self.assertEqual(len(result.stdout.strip().splitlines()), 2, "HANDSHAKE and TAB-OK, no BOOTSTRAP")
         self.assertEqual(self.closes(), [])
 
     def test_the_flag_needs_supacode(self):
@@ -580,7 +731,8 @@ class VersionAndSkillTest(unittest.TestCase):
         text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
         for needle in ("scripts/new-session-tab.py", "--prompt-file=", "--terminal=", "--permission-mode=",
                        "TAB-OK", "TAB-DEAD", "TAB-NONE", "./tmp/handover-<topic>-<date>.md", "CLAUDE_PLUGIN_ROOT",
-                       "a shell ran"):
+                       "a shell ran", "--reply-to=", "HANDSHAKE", "STARTED <name> pwd=", "ACK <name>",
+                       "ListAgents", "sleep 180"):
             self.assertIn(needle, text)
 
 

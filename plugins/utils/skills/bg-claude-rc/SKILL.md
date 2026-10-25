@@ -99,6 +99,20 @@ it has done some work. The same URL can also be partly redrawn, so the script ta
 longest match. The id after `session_` has no fixed length (24 and 26 characters have
 been seen).
 
+## Proof that it started
+
+This session gets no prompt, so it has nothing to answer and no `STARTED` is asked for. Here the
+proof is the script itself: `backgrounded · <id>` from `claude --bg`, then `id=` and `url=`. A
+row with that name in `claude agents --json` or `ListAgents` shows it is still alive. A `url=`
+that stays empty is the case under [Checking and managing](#checking-and-managing).
+
+When the user gave a task for it and you send that task with `SendMessage` to `<name>`, ask for
+the same handshake as `utils:new-session-tab`: start the message with one line asking that its
+first step is a `SendMessage` back to this session (the name `ListAgents` shows as "This session
+is <name>"): `STARTED <name> pwd=<its working directory>: <what it starts with>`, with no wait for
+an answer. Then wait for it as in that skill's "After TAB-OK" section: a background `sleep 180`,
+`ACK <name>` on `STARTED`, and a `ListAgents` report to the user when nothing comes.
+
 ## What you do not do
 
 - Do not send a prompt to the new session unless the user gave a task for it. They write

@@ -85,9 +85,17 @@ got stuck and I did not see what is happening".
 - At start, `ToolSearch` loads `SendMessage` and `TaskStop` (and the Cron
   tools, `AskUserQuestion`).
 - `Agent` returns an `agentId`, an `output_file` path and a task id for `TaskStop`; record
-  all of them in the `run.md` agent table at once, with task, absolute worktree, model,
+  all of them in the `run.md` `## Agents` table at once, with task, absolute worktree, model,
   prompt time limit, launch time, and `notified: no`. Use the ids exactly as the launch result
   gives them; do not assume the task id equals the `agentId`.
+- `## Agents` is the only agent table in `run.md`; keep no second one. Every agent whose
+  prompt creates a worktree gets its row at launch: writers, group test runners, the
+  bootstrap agent (`bootstrap`), fresh writers after a handoff. Its prompt passes the same
+  `Name` to `record-created.py --agent` (`reference/prompts.md`); the cleanup finds the row
+  by `Checkout (abs)` or by that name, and removes nothing whose row has `notified` other
+  than `yes`.
+  **Why:** a run kept two agent tables; the rows of two agents went only into the other one,
+  and the cleanup skipped their worktrees until main added the rows by hand.
 - Completion arrives as a task-notification → set `notified: yes`. `TaskList`
   is the todo list, not agent status; do not use it.
 - `SendMessage(to: <agentId>)` reaches a running agent at its next tool round
@@ -215,40 +223,102 @@ Working directory of a PID: `command lsof -a -p <PID> -d cwd -Fn`.
 ## Worktree cleanup - after the merge into the default branch
 
 **Manifest.** The run deletes only what `tmp/captain/<run>/created.jsonl` lists. The bootstrap
-agent and every writer append to it with `python3 '<skill root>/scripts/record-created.py'
---run-dir='<abs run dir>' --worktree='<abs worktree>'` right after their `git worktree add`
-(`reference/prompts.md`); it reads repo common dir, branch and SHA from git. Nobody writes the
-file by hand; a worktree missing from it is not the run's and goes to the queue (R10).
+agent, every writer and every group test runner append to it with
+`python3 '<skill root>/scripts/record-created.py' --run-dir='<abs run dir>'
+--worktree='<abs worktree>' --agent='<agent name>'` right after their `git worktree add`
+(`reference/prompts.md`). It reads repo common dir, branch and SHA from git, and records the
+agent name and the identity of the worktree's `.git` file. Nobody writes the file by hand; a
+worktree missing from it is not the run's and goes to the queue (R10).
 
 **The script.** A `captain:runner` runs `cleanup-run.py` at R14/R17 cleanup, and again when
 the owner has merged the feature branch into the default branch or asks for it, exactly as
-start step 3 allowed it (no other quoting, no extra argument):
+start step 3 allowed it (no other quoting, no argument beyond the two allowed forms):
 
     python3 '<skill root>/scripts/cleanup-run.py' --run-dir='<abs run dir>'
 
-Start step 3 adds this exact command as one allow rule in `.claude/settings.local.json`, the
-script path and run dir filled in, no wildcard in the arguments:
-`Bash(python3 '<skill root>/scripts/cleanup-run.py' --run-dir='<abs run dir>')`. Main fixes the
-run ID (`<YYYYMMDD-HHMMSS>`) when it writes the rule; step 5 creates `tmp/captain/<run-id>/`
-with that same ID.
+Start step 3 adds this exact command as one allow rule in `.claude/settings.local.json`, and
+the same command with the run checkout flag as a second rule, the script path and run dir
+filled in, no wildcard in the arguments:
+`Bash(python3 '<skill root>/scripts/cleanup-run.py' --run-dir='<abs run dir>')` and
+`Bash(python3 '<skill root>/scripts/cleanup-run.py' --run-dir='<abs run dir>' --include-run-checkout)`.
+Main fixes the run ID (`<YYYYMMDD-HHMMSS>`) when it writes the rules; step 5 creates
+`tmp/captain/<run-id>/` with that same ID.
 
-`--dry-run` lists `WOULD-REMOVE` and changes nothing; the allow rule does not cover it, so use it
-only when asked. One line per item, `REMOVED`, `SKIPPED ... reason=<reason>` or `WOULD-REMOVE`;
-the runner reports every line. It skips: the working directory of a captain main session or of
-the runner; the run checkout while captain mode is on; a worktree with tracked or
-untracked changes; a branch not merged into the feature branch, its base or `origin/<default>`;
-a worktree whose `run.md` agent row has `notified` other than `yes`; a lock by anything but
-Supacode; any step git refuses. It runs `git worktree unlock` only for a lock reason with
-`"owner":"supacode"`, `git worktree remove` never `-f` (`--force`), `git branch -d` never `-D`.
-Every `SKIPPED` line goes into the end report (R17) with its reason; the owner decides.
+`--dry-run` lists `WOULD-REMOVE` and changes nothing; the allow rules do not cover it, so use it
+only when asked.
+
+**Output.** The first line is `READ feature=<branch|-> base=<branch|none|-> default=<branch|->
+checkout=<path|-> base_sha=<sha|-> agents=<n>`: what the script read from `run.md` (`-`: the
+label is missing; `none`: an explicit `Base branch (R10): none`). A missing `Feature branch:`,
+`Base branch (R10):`, `Run checkout:` or `Base SHA` adds a line
+`WARN run.md has no <label> line; <what that disables>`; fix the label as in the run.md
+template (`reference/queue.md`) and run the script again. Then one line per item that still
+exists: `REMOVED`, `SKIPPED ... reason=<reason>` or `WOULD-REMOVE`. Items whose worktree and
+branch are both gone print no line; when there are any, the last line `ALREADY-REMOVED <n>`
+counts them. The runner reports every line.
+
+**Logs.** Before a removal the script copies the worktree's `tmp/claude-logs/` to `<run
+dir>/worktree-logs/<name>/`, or `<name>-<n>/` when that directory exists (an earlier copy).
+Every line of an item whose worktree was removed names the copy, `logs=<copy>`. An agent
+report path `<worktree>/tmp/claude-logs/<file>` is then `<copy>/<file>`, with the `logs=` value
+of that line; a line without `logs=` has no copy. The end report (R17) says so once.
+
+**Skips.** It skips:
+
+- the working directory of a captain main session (a marker that is not stale, below) or of
+  the runner;
+- the run checkout (below);
+- a worktree with tracked or untracked changes, or with ignored files that are not disposable
+  (disposable: `node_modules/`, `__pycache__/`, `*.pyc`, `.pytest_cache/`, `tmp/claude-logs/`);
+- a worktree in which a process of the current user works (busy), or whose process check is
+  incomplete (`ps` or a cwd lookup failed: unknown);
+- a worktree at the recorded path that is not the one the run created;
+- a branch not merged into the feature branch, its base or `origin/<default>`;
+- a worktree whose `## Agents` row has `notified` other than `yes`;
+- a worktree with no `## Agents` row for its agent (`no agent row for <agent> (<worktree>)`):
+  add that one row and run the script again;
+- every item when `run.md` has no readable `## Agents` table;
+- a lock by anything but Supacode; any step git refuses.
+
+It runs `git worktree unlock` only for a lock reason with `"owner":"supacode"`, `git worktree
+remove` never `-f` (`--force`), `git branch -d` never `-D`. `SKIPPED` lines are only items that
+still exist. Every `SKIPPED` line goes into the end report (R17) with its reason; the end report
+ignores `ALREADY-REMOVED`. The owner decides.
+
+**Session markers.** A marker in `~/.claude/captain/sessions/` counts for the cleanup only
+while it is not stale: the newest mtime of the marker, its `.merge` and `.base` files and the
+session's transcript is under 5 days old. Captain mode is on for the cleanup when such a
+marker has its `cwd` in the same repository as the run. Nothing moves or removes a stale
+marker automatically, and the guard is unchanged: for a session that is still open, a stale
+marker keeps captain mode on.
+
+Only when the owner asks, a runner archives old markers with
+`python3 '<skill root>/scripts/archive-sessions.py' --older-than-days=<n> [--dry-run]`: it moves
+each stale marker with its `.merge` and `.base` files to
+`~/.claude/captain/sessions-archive/<YYYYMMDD>/`, prints one `ARCHIVE <id> <files>` or `KEEP <id>
+<reason>` line per session. When it moved files (or would move them, `--dry-run`), it then
+prints the command that moves everything back, and last a `NOTE` line: a session that is
+still open and whose marker was archived needs `/captain resume` (or `/captain`) to turn
+captain mode on again.
+
+**Run checkout.** Not at R17: follow-up work uses the same feature branch
+and worktree (R1). Without the flag the script always keeps it, `reason=run checkout kept;
+pass --include-run-checkout on the owner's request`, with or without a live marker. Only when
+the owner asks, the runner runs `git -C '<abs repo>' fetch origin` and then the second allowed
+command, with `--include-run-checkout`. The script then removes the run checkout when all hold:
+the feature branch has commits beyond the run's `Base SHA`, and its head is an ancestor of
+`origin/<default>`; no marker that is not stale has its `cwd` inside it, and no process works
+in it; the tree is clean; no other tool locks it. It deletes the feature branch only from a
+checkout whose HEAD has it; otherwise the worktree goes, and the branch stays with the reason
+`merged into ... but no checkout of the repository has it in HEAD`.
+
+Nothing else is cleaned automatically: the merge flow has no cleanup step of its own, and
+markers move only with the archive script above.
 
 It does not call `supacode worktree delete`: that command takes a Supacode worktree ID, not a
 path, falls back to the calling session's own `$SUPACODE_WORKTREE_ID` without one, and its help
 does not say whether it deletes the directory too (not verified). A Supacode entry left behind
 is the owner's to delete.
-
-Not at R17 for the run checkout: follow-up work uses the same feature branch and worktree
-(R1), and captain mode stays on, so the script keeps it; a cleanup after `/captain off` removes it.
 
 A final classifier denial of the runner (R16) → one `!` block for the owner with the same
 script command plus `--dry-run`; after its output, the script command itself. Git commands as

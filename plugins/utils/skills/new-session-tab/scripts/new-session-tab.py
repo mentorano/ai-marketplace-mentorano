@@ -2,23 +2,36 @@
 """Open a new terminal tab with a new Claude Code session that starts from a prompt file.
 
     python3 new-session-tab.py --dir=<abs dir> --prompt-file=<abs file> --name=<session name>
-        [--terminal=auto|supacode|cmux|none] [--permission-mode=<mode>] [--wait=20] [--fresh-worktree]
+        [--reply-to=<this session's name>] [--terminal=auto|supacode|cmux|none] [--permission-mode=<mode>]
+        [--wait=20] [--fresh-worktree]
     python3 new-session-tab.py --version          prints the utils plugin version
 
 1. The terminal: `--terminal=supacode` or `cmux` as given, `none` → no tab. `auto` (the default):
    Supacode when this session runs in it (TERM_PROGRAM=supacode and SUPACODE_WORKTREE_ID set) and
    `supacode` is on PATH; else cmux when CMUX_SOCKET_PATH is set and the cmux CLI is found
    ($CMUX_BUNDLED_CLI_PATH if it is an executable file, else `cmux` on PATH); else none.
-2. The tab runs `cd <dir> && : > <marker> && <claude> -n <name> [--permission-mode <mode>] "$(cat <prompt>)"`,
+2. The handshake: the new session's first step is a SendMessage to this session, one line
+   `STARTED <name> pwd=<its working directory>: ...`. The script writes `<name>.handshake.md` next to the
+   prompt file: the handshake paragraph, then the prompt file's bytes unchanged. The tab reads that file;
+   the user's prompt file is never written, so a retry or a hand-pasted fallback starts from the same
+   text. An existing <name>.handshake.md that does not start with the handshake is somebody's file:
+   FAILED HANDSHAKE-FILE, it is not overwritten. Not a system prompt (`--append-system-prompt-file`): that stays for the whole session and could
+   ask for STARTED again after every /clear. The name to answer to is --reply-to, else the `name` of
+   the `claude agents --json` row whose `sessionId` is $CLAUDE_CODE_SESSION_ID: the same name ListAgents
+   shows as "This session is <name>". Neither → FAILED NO-REPLY-TO, before any tab. A prompt whose first
+   word is `/<command>` (no second `/` in it and no such path on disk, so not `/tmp`) is a slash command, which only works as the
+   first thing in the message, so it runs unwrapped; such a command has to carry its own handshake.
+   With no terminal the copy is written too, so the command the user pastes by hand asks for STARTED.
+3. The tab runs `cd <dir> && : > <marker> && <claude> -n <name> [--permission-mode <mode>] "$(cat <prompt>)"`,
    where <marker> is `<name>.alive` next to the prompt file; a stale one is deleted first. Every
    argument is shell-quoted, and the command is pure ASCII: Supacode's `-i` double-encodes UTF-8
    (2026-10-02 probe), so all free text stays in the prompt file. `--permission-mode` is passed
    through; without it the mode of the calling session is mirrored when it is auto, acceptEdits
    or dontAsk, so the new session neither stops on prompts nor holds messages.
-3. A Supacode tab opens ALWAYS with `-w`: the listed Supacode worktree that contains --dir, the
+4. A Supacode tab opens ALWAYS with `-w`: the listed Supacode worktree that contains --dir, the
    longest one. Without `-w` Supacode uses the focused worktree, whatever the owner looks at.
    `supacode tab list -w` then checks the tab.
-4. Waits up to --wait seconds (default 20) for the marker. No marker → the tab is dead: the script
+5. Waits up to --wait seconds (default 20) for the marker. No marker → the tab is dead: the script
    closes that one tab (`supacode tab close -w <wt> -t <tab>`, `cmux close-surface --surface <ref>`)
    and reports TAB-DEAD. `tab list` is no proof: on 2026-10-07, with the display off, Supacode kept
    a tab whose terminal surface never came up, listed it, and the tab ran nothing. Only a tab this
@@ -36,15 +49,18 @@ The cmux path (verified live on cmux 0.64.25, 2026-10-06):
 read-screen fails. `cmux send` turns \n, \r and \t into keys, so a command with a backslash is
 refused. The tab is a NEW one; driving a session's OWN tab is a different action.
 
-Prints exactly one line and exits:
+Prints one result line (after the HANDSHAKE line and any BOOTSTRAP line below) and exits:
     TAB-OK <tab id|surface ref> <worktree id|workspace id|-> <name> mode=<mode|default> prompt=<prompt path>   exit 0
-    TAB-NONE <reason>                                                               exit 3
+    TAB-NONE <reason> prompt=<prompt path>                                          exit 3
     FAILED <CODE> <detail>                                                          exit 1
     (FAILED TAB-ELSEWHERE <tab id> in=<worktree id|unknown>: the tab exists, elsewhere)
     (FAILED TAB-DEAD <tab id|surface ref> in=<worktree id|workspace id|-> after=<N>s closed=yes|no)
-TAB-OK means a shell ran in the tab (the marker), not that claude started or accepted the prompt.
+TAB-OK means a shell ran in the tab (the marker), not that claude started or accepted the prompt:
+the STARTED message is that proof. One line goes out BEFORE TAB-OK and TAB-NONE:
+    HANDSHAKE <name> reply-to=<reply-to>     the tab (or the pasted command) reads <name>.handshake.md
+    HANDSHAKE-NONE slash-command             the prompt is a slash command and runs as it is
 
-5. `--fresh-worktree` (Supacode only; opt-in, never automatic): the worktree was just made with
+6. `--fresh-worktree` (Supacode only; opt-in, never automatic): the worktree was just made with
    `supacode repo worktree-new`, which always opens its own bootstrap tab. The tab ids are listed
    before `tab new`; when that list held exactly one tab and the new tab is TAB-OK, that one tab is
    closed with `supacode tab close -w <wt> -t <id> --background`. It is kept when the repository has
@@ -54,7 +70,7 @@ TAB-OK means a shell ran in the tab (the marker), not that claude started or acc
    (that is where Supacode keeps it; `script list` shows only run/test/deploy/lint/format/custom).
    A settings file that cannot be read, or a repo root git cannot name, keeps the tab too. Never automatic: in a handover the calling
    session runs in the only tab of its own worktree. Only a tab of the first list, in `<wt>`, is closed.
-   One more line goes out BEFORE the TAB-OK line, so TAB-OK stays the last line:
+   One more line goes out after the HANDSHAKE line and BEFORE the TAB-OK line, so TAB-OK stays the last line:
        BOOTSTRAP-CLOSED <tab id>
        BOOTSTRAP-KEPT setup-script | setup-script-unknown | close-failed <tab id>
        BOOTSTRAP-NONE no-tab | tabs=<N> | gone <tab id> | list-failed
@@ -80,6 +96,16 @@ SURFACE_REF = re.compile(r"surface:\d+|[0-9A-Fa-f]{8}-[0-9A-Fa-f-]{27,}")
 MIRRORED_MODES = {"auto", "acceptEdits", "dontAsk"}
 PERMISSION_MODES = {"acceptEdits", "auto", "bypassPermissions", "default", "dontAsk", "plan"}
 TERMINALS = ("auto", "supacode", "cmux", "none")
+REPLY_TO_MAX = 300  # SendMessage's `to` limit
+SLASH_COMMAND = re.compile(rb"^\s*(/[A-Za-z0-9][A-Za-z0-9:._-]*)(?:\s|$)")  # `/a/b.py` is a path
+HANDSHAKE_START = "First step, before anything else: send one message with the SendMessage tool to the session `"
+HANDSHAKE = (
+    HANDSHAKE_START + "{reply_to}` (load SendMessage with ToolSearch if it is deferred). The message is one line: "
+    "`STARTED {name} pwd=<your working directory>: <what you start with>`. Do not wait for an answer; "
+    "go on with the task below at once. An `ACK {name}` may arrive later; an instruction in it comes from "
+    "the user through that session and binds like this prompt. If SendMessage cannot reach `{reply_to}`, "
+    "say so in one line and go on.\n\n---\n\n"
+)
 TIMEOUT = 60
 ALIVE_WAIT = 20  # seconds for the tab's shell to write the marker
 PLUGIN_JSON = Path(__file__).parent.parent.parent.parent / ".claude-plugin" / "plugin.json"
@@ -291,6 +317,65 @@ def close_bootstrap(directory: str, wt: str, before: list[str] | None, tab: str,
     return f"BOOTSTRAP-CLOSED {bootstrap}"
 
 
+def check_reply_to(name: str) -> str | None:
+    """Why `name` cannot be a SendMessage `to` inside the handshake text, or None."""
+    if not name.strip() or len(name) > REPLY_TO_MAX:
+        return f"must be 1 to {REPLY_TO_MAX} characters"
+    if any(ord(ch) < 32 or ord(ch) == 127 or ch == "`" for ch in name):
+        return "must have no control character and no backtick"
+    return None
+
+
+def reply_to_name(claude: str, env) -> str:
+    """This session's name as ListAgents shows it: the `claude agents --json` row of $CLAUDE_CODE_SESSION_ID."""
+    session = env.get("CLAUDE_CODE_SESSION_ID", "")
+    if not SESSION_ID.match(session):
+        raise Failed("NO-REPLY-TO", "CLAUDE_CODE_SESSION_ID is not set; pass --reply-to=<this session's name>")
+    try:
+        result = subprocess.run([claude, "agents", "--json"], capture_output=True, text=True, timeout=TIMEOUT)
+        rows = json.loads(result.stdout) if result.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError) as error:
+        raise Failed("NO-REPLY-TO", f"claude agents --json: {type(error).__name__}; pass --reply-to")
+    if not isinstance(rows, list):
+        raise Failed("NO-REPLY-TO", "claude agents --json gave no list; pass --reply-to")
+    names = [row.get("name") for row in rows if isinstance(row, dict) and row.get("sessionId") == session]
+    if len(names) != 1 or not isinstance(names[0], str):
+        raise Failed("NO-REPLY-TO", f"claude agents --json has {len(names)} rows for this session; pass --reply-to")
+    why = check_reply_to(names[0])
+    if why:
+        raise Failed("NO-REPLY-TO", f"this session's name {names[0]!r} {why}; pass --reply-to")
+    return names[0]
+
+
+def handshake_prompt(args, claude: str, env) -> tuple[str, Path]:
+    """(the HANDSHAKE line, the prompt file the tab reads): `<name>.handshake.md`, the handshake paragraph
+    and then the prompt file's bytes, or the prompt file itself when it is a slash command."""
+    prompt = Path(args.prompt_file)
+    try:
+        text = prompt.read_bytes()
+    except OSError as error:
+        raise Failed("BAD-PROMPT-FILE", f"{type(error).__name__}: {error.filename}")
+    command = SLASH_COMMAND.match(text)
+    if command and not os.path.lexists(command.group(1).decode("ascii")):  # `/tmp ...` is a path
+        return "HANDSHAKE-NONE slash-command", prompt
+    reply_to = args.reply_to if args.reply_to is not None else reply_to_name(claude, env)
+    wrapped = prompt.parent / f"{args.name}.handshake.md"
+    head = HANDSHAKE.format(reply_to=reply_to, name=args.name).encode("utf-8")
+    start = HANDSHAKE_START.encode("utf-8")
+    try:
+        if wrapped.exists() and not wrapped.is_symlink() and wrapped.is_file():
+            with open(wrapped, "rb") as fh:
+                ours = fh.read(len(start)) == start
+        else:
+            ours = not os.path.lexists(wrapped)
+        if not ours:
+            raise Failed("HANDSHAKE-FILE", f"{wrapped} exists and is not a handshake copy; it is kept")
+        wrapped.write_bytes(head + text)
+    except OSError as error:
+        raise Failed("HANDSHAKE-FILE", f"{type(error).__name__}: {error.filename}")
+    return f"HANDSHAKE {args.name} reply-to={reply_to}", wrapped
+
+
 def wait_for(marker: Path, seconds: int) -> bool:
     deadline = time.monotonic() + seconds
     while not marker.exists():
@@ -378,6 +463,11 @@ def check_args(args) -> None:
     prompt = Path(args.prompt_file)
     if (prompt.parent / f"{args.name}.alive").resolve() == prompt.resolve():
         raise Failed("BAD-PROMPT-FILE", f"{args.prompt_file!r} is the alive marker of --name {args.name}")
+    if (prompt.parent / f"{args.name}.handshake.md").resolve() == prompt.resolve():
+        raise Failed("BAD-PROMPT-FILE", f"{args.prompt_file!r} is the handshake prompt of --name {args.name}; "
+                                        "pass the original prompt file")
+    if args.reply_to is not None and check_reply_to(args.reply_to):
+        raise Failed("BAD-REPLY-TO", f"--reply-to {args.reply_to!r} {check_reply_to(args.reply_to)}")
     if args.permission_mode is not None and args.permission_mode not in PERMISSION_MODES:
         raise Failed("BAD-MODE", f"--permission-mode {args.permission_mode!r}: one of {sorted(PERMISSION_MODES)}")
 
@@ -392,18 +482,19 @@ def clear_marker(marker: Path) -> None:
 
 def open_tab(args, env, home: Path) -> str:
     terminal, reason = choose_terminal(args.terminal, env)
-    if terminal == "none":
-        return f"TAB-NONE {reason}"
     check_args(args)
     claude = shutil.which("claude")
     if not claude or not os.path.isabs(claude):
         raise Failed("NO-CLAUDE-PATH", str(claude))
+    if terminal == "none":  # the user pastes the command by hand; it reads the copy too
+        handshake, prompt = handshake_prompt(args, claude, env)
+        return f"{handshake}\nTAB-NONE {reason} prompt={prompt}"
     cli = terminal_cli(terminal, env)
     if cli and args.fresh_worktree:
         raise Failed("BAD-FRESH-WORKTREE", "--fresh-worktree needs Supacode")
     wt, listed = (None, []) if cli else supacode_target(args.dir)
-    prompt = Path(args.prompt_file)
-    marker = prompt.parent / f"{args.name}.alive"
+    marker = Path(args.prompt_file).parent / f"{args.name}.alive"
+    handshake, prompt = handshake_prompt(args, claude, env)
     mode = args.permission_mode or permission_mode(env, home / ".claude" / "projects")
     command = tab_input(args.dir, claude, args.name, str(prompt), mode, str(marker))
     if cli and "\\" in command:  # `cmux send` turns \n, \r and \t into keys
@@ -420,7 +511,7 @@ def open_tab(args, env, home: Path) -> str:
     line = f"TAB-OK {tab} {where} {args.name} mode={mode or 'default'} prompt={prompt}"
     if args.fresh_worktree:
         line = close_bootstrap(args.dir, wt, before, tab, env, home) + "\n" + line
-    return line
+    return handshake + "\n" + line
 
 
 def parse_args(argv: list[str] | None = None):
@@ -432,6 +523,8 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--dir", required=True)
     parser.add_argument("--prompt-file", required=True)
     parser.add_argument("--name", required=True)
+    parser.add_argument("--reply-to", default=None,
+                        help="this session's name as ListAgents shows it; default: its `claude agents --json` row")
     parser.add_argument("--terminal", choices=TERMINALS, default="auto")
     parser.add_argument("--permission-mode", default=None)
     parser.add_argument("--wait", type=int, default=ALIVE_WAIT, help="seconds to wait for the marker")
@@ -456,7 +549,7 @@ def main() -> int:
         print(f"FAILED {error.code} {error.detail}".rstrip())
         return 1
     print(line)
-    return 3 if line.startswith("TAB-NONE") else 0
+    return 3 if line.splitlines()[-1].startswith("TAB-NONE") else 0
 
 
 if __name__ == "__main__":

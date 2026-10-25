@@ -20,6 +20,10 @@
 Fill every `<...>`. Keep the wording of the fixed lines; the rules rely on it. Quote every
 path in a command with single quotes (`'<abs path>'`).
 
+Every `record-created.py` call passes `--agent='<agent name>'`: the agent's `Name` in
+`run.md` `## Agents` (the bootstrap agent: `bootstrap`; a group test runner: its row name).
+Main adds that row when it launches the agent (`reference/health.md`, Agent lifecycle).
+
 ## Agent frame (R3) - every agent prompt
 
 ```text
@@ -58,7 +62,7 @@ Scope:
   retry; if '<agent-branch>' already exists by then, retry without -b:
   git -C '<abs repo>' worktree add '<abs repo>/.claude/worktrees/<name>' '<agent-branch>'
   Then record it for the run's cleanup (never write created.jsonl by hand):
-  python3 '<skill root>/scripts/record-created.py' --run-dir='<abs run dir>' --worktree='<abs repo>/.claude/worktrees/<name>'
+  python3 '<skill root>/scripts/record-created.py' --run-dir='<abs run dir>' --worktree='<abs repo>/.claude/worktrees/<name>' --agent='<agent name>'
   Tools do not move into the checkout: use absolute paths under '<abs checkout>' for every
   edit, and run every command there (cd '<abs checkout>' && ... or git -C '<abs checkout>' ...),
   including tests and the paths you give a reviewer.
@@ -205,7 +209,7 @@ checkout, and do not touch uncommitted changes.
    git -C '<abs repo>' worktree add '<abs repo>/.claude/worktrees/captain-run-<run-id>' 'captain/<YYYYMMDD>-<slug>'
    (<run-id> is the run's unique ID, `<YYYYMMDD-HHMMSS>`, the name of its run-state directory.)
    Then record it for the run's cleanup (never write created.jsonl by hand):
-   python3 '<skill root>/scripts/record-created.py' --run-dir='<abs repo>/tmp/captain/<run-id>' --worktree='<abs repo>/.claude/worktrees/captain-run-<run-id>'
+   python3 '<skill root>/scripts/record-created.py' --run-dir='<abs repo>/tmp/captain/<run-id>' --worktree='<abs repo>/.claude/worktrees/captain-run-<run-id>' --agent='bootstrap'
 6. Report `git -C '<abs repo>' remote -v`, `git -C '<abs repo>' branch -vv` for the current
    branch, and the captain versions in the plugin cache: `command ls ~/.claude/plugins/cache/*/captain/`.
 7. Report the base-branch candidates (R10): the start branch when it is not main, master or
@@ -420,7 +424,7 @@ After the group's last merge (`reference/parallel.md`, the group flow), with the
 Run the tests of group <group> on the merged head <sha>. Do not edit, commit, merge or push
 anything, and do not run in '<abs checkout>': first
 git -C '<abs repo>' worktree add '<abs repo>/.claude/worktrees/group-<run-id>-<group>-<n>' -b 'group-<run-id>-<group>-<n>' '<sha>'
-python3 '<skill root>/scripts/record-created.py' --run-dir='<abs run dir>' --worktree='<abs repo>/.claude/worktrees/group-<run-id>-<group>-<n>'
+python3 '<skill root>/scripts/record-created.py' --run-dir='<abs run dir>' --worktree='<abs repo>/.claude/worktrees/group-<run-id>-<group>-<n>' --agent='<agent name>'
 and run everything in that clean worktree. Leave it there: the run's cleanup removes it (its
 branch sits on a merged SHA).
 Command: <the group's test command from run.md ## Groups, with its env variables>.

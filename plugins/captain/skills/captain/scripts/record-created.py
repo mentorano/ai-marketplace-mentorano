@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Record a worktree and branch the captain run created, for cleanup-run.py.
 
-Usage: python3 record-created.py --run-dir=<abs run-state dir> --worktree=<abs worktree>
+Usage: python3 record-created.py --run-dir=<abs run-state dir> --worktree=<abs worktree> --agent=<name>
 
 Appends one JSON line to <run-dir>/created.jsonl:
-  {"run_id", "common_dir", "worktree", "branch", "sha", "created"}
+  {"run_id", "common_dir", "worktree", "branch", "sha", "created", "agent", "git_ino", "git_dev"}
 run_id is the name of the run-state directory (tmp/captain/<run-id>); common_dir is the
 repository's git common dir; worktree is the canonical (realpath) worktree path; branch is the
-branch checked out there; sha is its HEAD at creation. Every value is read from git, so the
+branch checked out there; sha is its HEAD at creation; agent is the --agent name (the Name of the agent's row in run.md); git_ino and git_dev
+are the inode and device of the worktree's `.git` link file, so cleanup can tell the worktree the
+run created from a later one at the same path. Every value is read from git, so the
 model never writes the manifest by hand. The bootstrap agent runs it after it adds the run
 worktree, and every writer after its `git worktree add`.
 
 Refuses (exit 2, nothing written): a path that is not a git worktree, the repository's main
-worktree, a detached HEAD, or a run directory that does not exist.
+worktree, a detached HEAD, a worktree without a `.git` file, an empty --agent, or a run directory that
+does not exist.
 Exit codes: 0 recorded; 2 bad arguments or refused.
 """
 from __future__ import annotations
@@ -33,7 +36,7 @@ def git(directory: str, *args: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
-def entry_for(run_dir: Path, worktree: str) -> tuple[dict | None, str]:
+def entry_for(run_dir: Path, worktree: str, agent: str) -> tuple[dict | None, str]:
     path = os.path.realpath(worktree)
     top = git(path, "rev-parse", "--show-toplevel")
     if top is None or os.path.realpath(top) != path:
@@ -50,9 +53,14 @@ def entry_for(run_dir: Path, worktree: str) -> tuple[dict | None, str]:
     sha = git(path, "rev-parse", "HEAD")
     if sha is None:
         return None, f"no commit at HEAD: {path}"
+    try:
+        link = os.stat(os.path.join(path, ".git"))
+    except OSError as error:
+        return None, f"cannot stat the .git file of {path}: {error}"
     return {"run_id": run_dir.name, "common_dir": os.path.realpath(common), "worktree": path,
             "branch": branch, "sha": sha,
-            "created": time.strftime("%Y-%m-%dT%H:%M:%S%z")}, ""
+            "created": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "agent": agent, "git_ino": link.st_ino, "git_dev": link.st_dev}, ""
 
 
 def append(run_dir: Path, entry: dict) -> None:
@@ -69,13 +77,18 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--worktree", required=True)
+    parser.add_argument("--agent", required=True)
     args = parser.parse_args(argv)
+    agent = args.agent.strip()
+    if not agent:
+        print("record-created: --agent must be a non-empty name", file=sys.stderr)
+        return 2
     run_dir = Path(os.path.realpath(args.run_dir))
     if not os.path.isabs(args.run_dir) or not run_dir.is_dir():
         print(f"record-created: --run-dir must be an existing absolute directory: {args.run_dir}",
               file=sys.stderr)
         return 2
-    entry, problem = entry_for(run_dir, args.worktree)
+    entry, problem = entry_for(run_dir, args.worktree, agent)
     if entry is None:
         print(f"record-created: refused, {problem}", file=sys.stderr)
         return 2

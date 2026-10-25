@@ -111,6 +111,10 @@ A coding task carries its light test (`reference/light-test.md`). `Group`, `Touc
 On every resume by `SendMessage`: new period start and limit, `notified: no`. On every
 completion notification: add the minutes from period start to `date` to `Minutes`.
 
+`## Agents` is the run's only agent table: no second table (an agent log, a list of ids).
+Every agent gets its row at launch, and every agent whose prompt creates a worktree passes
+its `Name` to `record-created.py --agent` (`reference/health.md`, Agent lifecycle).
+
 ## IDs
 | Letters | Area |
 |---|---|
@@ -441,8 +445,12 @@ else it goes into item 6.
 4. External-system parts that were stopped.
 5. Decisions: away mode all; present mode the consensus ones.
 6. Short report: done (with evidence: log path + result line, sha) / not done / review findings
-   rejected, each with its reason; branches and worktrees the run created; how late any timer
-   fired; with a box, work extensions used (`<k>/3`); outage minutes; a TODO-only change pushed
+   rejected, each with its reason; branches and worktrees the run created; every cleanup
+   `SKIPPED` line with its reason (`ALREADY-REMOVED` is left out), and once, when a worktree
+   was removed: a log path `<worktree>/tmp/claude-logs/<file>` is now `<copy>/<file>`, with
+   the `logs=<copy>` value of its line (it may end in `-<n>`; no `logs=`, no copy)
+   (`reference/health.md`, worktree cleanup);
+   how late any timer fired; with a box, work extensions used (`<k>/3`); outage minutes; a TODO-only change pushed
    unreviewed after park, if any; a missing config in away mode (nothing created, notify none,
    tools from `command -v`); the `audit-main.py` exit code if it was run.
 7. `Remaining:` and the last line (above).

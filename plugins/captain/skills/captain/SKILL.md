@@ -48,8 +48,8 @@ No pull request, opened or proposed, unless the owner asks for one.
 2. Parse the arguments; `ToolSearch` load `SendMessage`, `TaskStop`, `AskUserQuestion` and the
    Cron tools. A read-only recon agent may launch now (R2).
 3. Check `.claude/settings.local.json` for the plan's permissions, `~/.claude/captain/` and
-   the exact `cleanup-run.py` rule (R14); after the owner's yes, `Write` them (never Bash)
-   before code agents launch. Both modes.
+   the two exact `cleanup-run.py` rules, with and without `--include-run-checkout` (R14); after
+   the owner's yes, `Write` them (never Bash) before code agents launch. Both modes.
 4. Read `TODO*` and `docs/plans/` (a plan over ~300 lines → a subagent summarizes); estimate;
    with a box, pick the time mode (R11). Never pick a box the owner did not name. A plan
    exists → split it and fill `Touches` now (R2, PL2), before the checkout mode.

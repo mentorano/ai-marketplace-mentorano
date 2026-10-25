@@ -379,6 +379,11 @@ Small helpers for working with Claude Code.
   opens with `-w` for the worktree, and `TAB-OK` comes only after a shell ran
   in the tab; a tab that ran nothing is closed and reported as `TAB-DEAD`.
   `--version` prints the plugin version. The captain successor tab uses it.
+  Since 0.5.0 the tab reads a copy of the prompt whose first step asks the new
+  session to send `STARTED <name> pwd=<dir>` to the session that opened it
+  (`--reply-to`, else that session's own name from `claude agents --json`),
+  and the skill waits up to three minutes for that message, also after a
+  hand-pasted fallback. A slash-command prompt runs unwrapped.
   See [`plugins/utils/skills/new-session-tab/SKILL.md`](plugins/utils/skills/new-session-tab/SKILL.md).
 - `one-by-one` (since 0.4.0) runs a one-by-one pass over review findings or
   open points: one item at a time, a question for every point that changes
