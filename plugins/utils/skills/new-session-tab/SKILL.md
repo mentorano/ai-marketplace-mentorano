@@ -13,7 +13,10 @@ prompt file. For a background session to reach from a phone, use `bg-claude-rc` 
 1. Write the prompt to `./tmp/handover-<topic>-<date>.md` in the repository (`<date>` as
    `YYYYMMDD`, `<topic>` a short slug). Make it self-contained: the goal, what is done (commits,
    files), what is left, open decisions, and the first step. The new session knows nothing else.
-2. Pick the session name: `<repo-slug>-<topic>`, letters, digits, `.`, `_`, `-` only.
+2. Pick the session name: `<repo-slug>-<topic>`, letters, digits, `.`, `_`, `-` only. The
+   skill's argument `prefix=<p>` (a caller's own session name prefix) → pass
+   `--name-prefix=<p>`; the script puts it in front of a name that does not start with it, and
+   the name on the result line is the one to use.
 3. Open the tab with the script below, `--dir` the repository (or worktree) root, `--prompt-file`
    the absolute path of that file. Do not write a "message me when you start" line into the
    prompt: the script adds the handshake (see [The handshake](#the-handshake)).
@@ -121,7 +124,7 @@ session runs in the only tab of its worktree.
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/new-session-tab/scripts/new-session-tab.py" \
   --dir=<abs dir> --prompt-file=<abs file> --name=<session name> [--reply-to=<this session's name>] \
-  [--terminal=auto|supacode|cmux|none] [--permission-mode=<mode>] [--wait=20] [--fresh-worktree]
+  [--terminal=auto|supacode|cmux|none] [--permission-mode=<mode>] [--wait=20] [--name-prefix=<p>] [--fresh-worktree]
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/new-session-tab/scripts/new-session-tab.py" --version
 ```
 

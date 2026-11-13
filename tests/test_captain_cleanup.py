@@ -129,7 +129,7 @@ class CleanupCase(unittest.TestCase):
         self.out = result.stdout.splitlines()
         found = {}
         for line in self.out:
-            if line.split()[0] in ("REMOVED", "WOULD-REMOVE", "SKIPPED"):
+            if line.split()[0] in ("KEPT", "REMOVED", "WOULD-REMOVE", "SKIPPED"):
                 found[Path(line.split()[1]).name] = line
         return found
 
@@ -147,6 +147,13 @@ class CleanupCase(unittest.TestCase):
         text = run_md.read_text(encoding="utf-8")
         self.assertIn(old, text)
         run_md.write_text(text.replace(old, new), encoding="utf-8")
+
+    def add_process_row(self, cwd: Path, agent: str) -> None:
+        """A `## Processes` table at the end of run.md with one server row working in `cwd`."""
+        run_md = self.run_dir / "run.md"
+        run_md.write_text(run_md.read_text(encoding="utf-8") + (
+            "\n## Processes\n| PID | Start time | Working dir | Agent |\n|---|---|---|---|\n"
+            f"| 99999 | Thu Oct 30 14:00:00 2026 | {cwd} | {agent} |\n"), encoding="utf-8")
 
     def stub(self, name: str, body: str) -> None:
         """A fake command first on PATH for the cleanup script."""
@@ -262,6 +269,60 @@ class CleanupRunTest(CleanupCase):
         self.assertIn("captain/w-unmerged", branches)
         self.assertIn(FEATURE, branches)
         self.assertIn("locked in use by an editor", self.git(self.repo, "worktree", "list", "--porcelain"))
+
+    def test_a_kept_owner_server_keeps_its_worktree_and_branch(self):
+        self.add_process_row(self.wt["clean"] / "app", "server-runner, kept: owner")
+        found = self.lines()
+        self.assertEqual(found["clean"], f"KEPT {self.wt['clean']}")
+        self.assertTrue(self.wt["clean"].is_dir())
+        self.assertIn("captain/w-clean", self.git(self.repo, "branch", "--list"))
+        self.assertTrue(found["supacode"].startswith("REMOVED "), found["supacode"])
+
+    def test_a_kept_owner_server_is_kept_on_a_dry_run_too(self):
+        self.add_process_row(self.wt["clean"], "server-runner, kept: owner")
+        found = self.lines("--dry-run")
+        self.assertEqual(found["clean"], f"KEPT {self.wt['clean']}")
+
+    def test_a_kept_owner_mark_in_a_trailing_cell_beyond_the_header_keeps_it(self):
+        run_md = self.run_dir / "run.md"
+        run_md.write_text(run_md.read_text(encoding="utf-8") + (
+            "\n## Processes\n| PID | Start time | Working dir | Agent |\n|---|---|---|---|\n"
+            f"| 99999 | Thu Oct 30 14:00:00 2026 | {self.wt['clean']} | server-runner | kept: owner |\n"),
+            encoding="utf-8")
+        found = self.lines()
+        self.assertEqual(found["clean"], f"KEPT {self.wt['clean']}")
+        self.assertTrue(self.wt["clean"].is_dir())
+        self.assertIn("captain/w-clean", self.git(self.repo, "branch", "--list"))
+
+    def test_a_processes_table_after_a_level_3_subheading_is_still_read(self):
+        run_md = self.run_dir / "run.md"
+        run_md.write_text(run_md.read_text(encoding="utf-8") + (
+            "\n## Processes\n\n### Servers\n\n| PID | Start time | Working dir | Agent |\n"
+            f"|---|---|---|---|\n| 99999 | Thu Oct 30 14:00:00 2026 | {self.wt['clean']} "
+            "| server-runner, kept: owner |\n"), encoding="utf-8")
+        found = self.lines()
+        self.assertEqual(found["clean"], f"KEPT {self.wt['clean']}")
+        self.assertTrue(self.wt["clean"].is_dir())
+
+    def test_a_kept_owner_row_does_not_hide_a_run_id_mismatch(self):
+        manifest = self.run_dir / "created.jsonl"
+        entries = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()]
+        for entry in entries:
+            if entry["worktree"] == str(self.wt["clean"]):
+                entry["run_id"] = "20000101-000000"
+        manifest.write_text("".join(json.dumps(entry) + "\n" for entry in entries), encoding="utf-8")
+        self.add_process_row(self.wt["clean"], "server-runner, kept: owner")
+        found = self.lines()
+        self.assertTrue(found["clean"].startswith("SKIPPED "), found["clean"])
+        self.assertIn("recorded for run 20000101-000000", found["clean"])
+        self.assertTrue(self.wt["clean"].is_dir())
+
+    def test_the_same_server_row_without_the_mark_is_removed_as_today(self):
+        self.add_process_row(self.wt["clean"] / "app", "server-runner")
+        found = self.lines()
+        self.assertTrue(found["clean"].startswith("REMOVED "), found["clean"])
+        self.assertFalse(self.wt["clean"].exists())
+        self.assertNotIn("captain/w-clean", self.git(self.repo, "branch", "--list"))
 
     def test_run_checkout_goes_last_with_the_flag(self):
         for marker in Path(self.env["CAPTAIN_STATE_DIR"]).iterdir():
@@ -555,6 +616,15 @@ class IdentityAndMarkerTest(CleanupCase):
         self.assertTrue((self.trees / "clean").is_dir())
         self.assertIn("captain/w-clean", self.git(self.repo, "branch", "--list"))
         self.assertTrue(found["supacode"].startswith("REMOVED "), found["supacode"])
+
+    def test_a_kept_owner_row_does_not_hide_a_recreated_worktree(self):
+        self.record_identity()
+        self.recreate("clean")
+        self.add_process_row(self.trees / "clean", "server-runner, kept: owner")
+        found = self.lines()
+        self.assertTrue(found["clean"].startswith("SKIPPED "), found["clean"])
+        self.assertIn("worktree at this path is not the one the run created", found["clean"])
+        self.assertTrue((self.trees / "clean").is_dir())
 
     def test_missing_git_file_is_not_the_one_the_run_created(self):
         self.record_identity()

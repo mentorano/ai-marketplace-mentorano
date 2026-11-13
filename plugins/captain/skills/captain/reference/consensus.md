@@ -20,6 +20,7 @@ commands: see R7 and R8.
 |---|---|---|---|
 | Complex technical | complex questions; choices that drastically change the architecture | full consensus (3amigos panel) | one line: what and why |
 | Judged complex | any other problem main judges complex enough: several plausible options, an architecture effect, or a hard-to-undo choice; any mode | full consensus (3amigos panel); the reason for the call goes into `decisions.md` | one line: what and why |
+| Review bound (R6) | after the 3rd re-review, FIX NOW findings with impact `data loss`, `security`, `build/test broken` or `wrong result` left outside the trap; any mode | full consensus (3amigos panel) main runs: "2 more rounds or TODO" | present: one line, no question; away: `decisions.md` |
 | Other technical | a choice visible outside the file (interface, data or output format, behaviour) or hard to undo | the responsible agent + mini-consensus before executing | nothing, unless escalated; it is in `decisions.md` |
 | Not a decision | purely local naming, comment wording | the agent | nothing; no review |
 | Product / scope | what to build, what to drop | present: the owner; away: full consensus (3amigos panel), every question | present: the question; away: `decisions.md` |
@@ -36,8 +37,17 @@ by `SendMessage`; otherwise launch an agent. Related follow-ups go to one agent.
 and scope question goes to a 3amigos panel; the run takes the result and continues. Every
 decision goes into `decisions.md`.
 
+**Review-bound panel** (R6, `reference/triage.md`, When the loop stops). Main runs it, in
+both modes, as one item with options A (re-reviews 4–5) and B (TODO). `data.md` carries the
+open FIX NOW findings, the new real defects per round and the fix-of-fix count. A trapped
+mechanism goes to the trap, never to this panel. Majority A → rounds 4–5; B, `split`,
+`no consensus` or no time → TODO, reason `review bound (3 re-reviews)`. After the 5th re-review
+→ TODO, reason `review bound (5 re-reviews)`, no second panel. The owner is not asked; in
+present mode main shows one line with the result.
+
 **Settled:** a decision recorded in `decisions.md` is settled. Reopen it only on new evidence
-or when the owner asks.
+or when the owner asks. Only `source: owner` or `scope: permanent` lines outlive the run
+(`reference/queue.md`, decisions.md).
 
 ## Mini-consensus
 
@@ -130,4 +140,5 @@ than 2 votes → the safer, more reversible option, `no consensus`.
 ## Cost
 
 A panel takes up to the Codex deadline plus the tally, about 6 min. In a 30-min box it is for
-the complex tiers and away-mode product questions only; everything else is mini-consensus.
+the complex tiers, the review-bound panel and away-mode product questions only; everything
+else is mini-consensus.

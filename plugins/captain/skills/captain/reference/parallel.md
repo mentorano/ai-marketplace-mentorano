@@ -22,7 +22,8 @@
 ## The parallel plan (PL1)
 
 **When.** Start step 4 splits a plan that exists at start; step 6 writes it to `run.md`. A
-new spec: after its review round 1 (R5).
+new spec: after its review round 1 (R5). Every phase of the plan or handover is a row from the
+start; a phase whose split waits is one placeholder row until it starts (`reference/queue.md`).
 
 **What.** Main splits the plan (PL2, below) into `run.md` `## Tasks`, with three columns:
 
@@ -111,8 +112,9 @@ The owner named no time (R11) → the run has no box. `run.md` says `Box: none` 
 this time section, the work extensions, the outage extension, strict mode and the cuts below
 apply only with a box.
 
-- **No time boundary.** R6 bounds re-reviews only by their count (3). A Codex review keeps its
-  `timeout 1200`; a panel's Codex deadline is 300 s; a mini-consensus opinion gets 240 s; the
+- **No time boundary.** R6 bounds re-reviews only by their count (3, or 5 after the
+  review-bound panel). A Codex review keeps its `timeout 1200`; a panel's Codex deadline is
+  300 s; a mini-consensus opinion gets 240 s; the
   NP1 extra writer always runs (`reference/triage.md`). Agent prompts carry no park time
   (`reference/prompts.md`).
 - **No cut for time.** Nothing goes to TODO because of time; the other TODO reasons stay.
@@ -263,6 +265,9 @@ one row in `run.md` `## Groups` with its test command.
 
 **Writers run nothing**, in every mode: no tests, no build, no compile check. The group's
 runner runs them (R3 frame, `reference/prompts.md`).
+Cowboy mode (R22): the writers still write the tests, but no group run and no full build runs in
+the loop; the test pass runs every skipped group and the full build once, before any merge into
+the base branch (`reference/cowboy.md`).
 **Why:** the owner's answer OP2, 20.10.2026: every writer ran tests and waited; grouping by
 service or module and testing the group once after review and fixes speeds the run up a lot.
 
@@ -281,12 +286,20 @@ service or module and testing the group once after review and fixes speeds the r
    for the run's cleanup, never in the run checkout, so later merges do not change what it
    tests.
 4. A failure is an observed fact, like a verifier failure: FIX NOW in every round
-   (`reference/triage.md`). Main maps the failing test to a task by the files in the group's
-   merge range and sends it to that task's writer (or a fresh `captain:worker` when the writer
+   (`reference/triage.md`). A skipped test that is new or in a file of the group's merge range
+   is not green either: main handles it as a failure, or records in `decisions.md` why the skip
+   is expected (only CI has what the test needs, say). Main maps the failing or skipped test to
+   a task by the files in the group's merge range and sends it to that task's writer (or a fresh `captain:worker` when the writer
    is gone). The fix gets one delta review of the fix commit only; then the runner reruns the
    group's tests. Two failed reruns of the same test → the R6 trap rules, which then win over
    FIX NOW (`reference/triage.md`, priority); data loss in normal use still comes first.
-5. The R5 push of the group's range waits for a green group run.
+5. The R5 push of the group's range waits for a green group run and, for a group with visible
+   UI changes, for a passed UI check at the range's last SHA; the exceptions (a check that could
+   not run for a cause outside the run's code, a `not checked: external write` use case) and the
+   UI fix rounds are in `reference/ui-check.md`.
+
+**Why (skips):** 14.10.2026, a green suite on a laptop had skipped the integration tests of the
+change; the skip count was the only sign.
 
 **Trade-off.** A review can now see code that does not compile. Codex usually catches that in
 round 1, and the group run catches the rest before any push.

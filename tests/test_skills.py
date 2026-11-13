@@ -29,6 +29,7 @@ EXPECTED = {
     "memory-init",
     "new-session-tab",
     "one-by-one",
+    "share-artifact",
 }
 
 

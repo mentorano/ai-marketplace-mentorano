@@ -319,7 +319,8 @@ class NoBoxByDefaultTest(unittest.TestCase):
         for needle in ("## No box - the default (VR1)",
                        "`run.md` says `Box: none` and holds no `Box end`, `Hard end`, `Park` or "
                        "`Deadline`; `## Timers` holds only the health job.",
-                       "R6 bounds re-reviews only by their count (3).",
+                       "R6 bounds re-reviews only by their count (3, or 5 after the "
+                       "review-bound panel).",
                        "Nothing goes to TODO because of time;",
                        "The run ends when no open work is left (finished, below): R17.",
                        "it moves nothing.",

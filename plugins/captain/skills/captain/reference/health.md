@@ -117,7 +117,8 @@ by one more task.
 - A new owner request while the writer is busy → a new `run.md` `## Tasks` row, state
   `queued`, and one line to the owner with its ID. Do not `SendMessage` it to the busy
   writer. A correction or clarification of the task in progress ("do not merge them, just
-  order them") is not a new task: send it at once.
+  order them") is not a new task: send it at once. Owner feedback on the work goes into the
+  owner feedback file first (`reference/queue.md`), and the message names its path.
 - The writer's completion notification → measure it:
   `python3 '<skill root>/scripts/agent-context.py' <agentId>`. The line ends in `keep` or
   `replace` (`replace` = at least 30% of a 1M-token window; `unknown replace` and
@@ -167,7 +168,8 @@ response had no visible output"; 43 checks in 15 sessions also filled the contex
      compare with `date +%s`. Unchanged for 5+ min is only a trigger to look closer, not a
      verdict: an agent that waits on a background Codex run (up to its `timeout`, reviews
      take up to 14 min) or a long build is quiet by design. Weigh it against its task and
-     its tool timeout.
+     its tool timeout. Frozen past that timeout, it may wait on a permission prompt:
+     correction ladder step 2.
      One `stat` per Bash call with the literal path: no `for` loop, no variable, no glob.
      **Why:** 30.09.2026: `for a in …; do stat -L -f %m …/$a.output; done` was denied by
      `guard.py` as UNVERIFIABLE (parameter expansion).
@@ -194,9 +196,18 @@ response had no visible output"; 43 checks in 15 sessions also filled the contex
 
 1. First stall sign → `SendMessage`: "Progress report now, one line. Your
    limit is <N> min, <M> left."
-2. No progress by the next check → `TaskStop`, relaunch with narrower scope
+2. Output mtime frozen and no answer to step 1 by the next check → a `captain:runner` reads
+   the tail of the agent's output (main never does). Last record an `assistant` Bash
+   `tool_use` with no `tool_result`, older than its `timeout` (else 2 min) = a presumed
+   permission prompt nobody answers (the harness ends a Bash command at its timeout with a
+   result). `TaskStop` it at once (that ends the prompt) and relaunch without the flagged
+   command; update `run.md` as in step 3. Any other tool, or no clear timeout → step 3 or 4.
+   **Why:** 17.10.2026: two away-mode reviewers waited 54 and 29.5 min on a
+   `dangerous_tool_use` prompt; main's transcript showed nothing, step 1's `SendMessage`
+   stayed "queued for delivery at its next tool round", only `TaskStop` ended it.
+3. No progress by the next check → `TaskStop`, relaunch with narrower scope
    and a note of what stalled; update `run.md` (old agent `stopped`, new row).
-3. A stalled external tool (Codex hang, agy timeout) → relaunch with the
+4. A stalled external tool (Codex hang, agy timeout) → relaunch with the
    specific fix: no-web line repeated, shorter timeout, or the fallback tool
    (see R7, R8).
 
@@ -208,17 +219,27 @@ Before any "nothing is running" claim: every `run.md` agent has
 
 ```bash
 command ps -axo pid,lstart,command | command grep -E \
-  'tail -f|emulator|qemu-system|GradleDaemon|gradle|codex app-server|codex exec|agy|node .*(vite|next|server)|java .*spring' \
+  'tail -f|emulator|qemu-system|GradleDaemon|gradle|codex app-server|codex exec|agy|node .*(vite|next|server)|java .*spring|uvicorn|gunicorn|manage.py runserver|flask|[Pp]ython[0-9.]*( -[^ ]+)* /?(([^ /t][^ /]*|t([^ /e][^ /]*)?|te([^ /s][^ /]*)?|tes([^ /t][^ /]*)?|test[^ /s][^ /]*|tests[^ /]+)/)*(server|serve|app)\.py( |$)|[Pp]ython[0-9.]*( -[^ ]+)* -m http\.server|agent-browser' \
   | command grep -v grep
 ```
 
 Working directory of a PID: `command lsof -a -p <PID> -d cwd -Fn`.
 
+An agent with `notified: yes` whose final report has arrived but which the harness still shows
+as running keeps a background child of its own (a monitor, a wait loop): `TaskStop` with its
+recorded task id before the claim. An interim hand-back (`reference/tools.md`, Codex) is not a
+final report.
+**Why:** 20.10.2026: four review runners stayed "running" 10–60 min after their reports.
+
 - The run records every long-running process it starts (PID, start time,
-  working directory, agent) in `run.md` under `## Processes`.
+  working directory, agent) in `run.md` under `## Processes`, the UI check's app servers and
+  browser processes too (`reference/ui-check.md`).
 - Cleanup (R17) stops only processes whose PID, start time and working
   directory all match `run.md`. Every other match is listed to the owner as
   "not verified as ours, not stopped".
+- Exception (R14, R17): a `## Processes` row marked `kept: owner` (the owner will test too,
+  `reference/ui-check.md`) is not stopped, and its check worktree is left. Both go to the end
+  report with the URL and the stop commands, one `!` block per command.
 
 ## Worktree cleanup - after the merge into the default branch
 

@@ -6,12 +6,14 @@
 - [Triage fields - the writer fills them per finding](#triage-fields---the-writer-fills-them-per-finding)
 - [Classes](#classes)
 - [Round threshold - the captain applies it](#round-threshold---the-captain-applies-it)
+- [Cowboy mode - one round (R22)](#cowboy-mode---one-round-r22)
 - [Priority when rules overlap](#priority-when-rules-overlap)
 - [Data loss in normal use](#data-loss-in-normal-use)
 - [The fix-of-a-fix trap](#the-fix-of-a-fix-trap)
 - [`fix-all` runs - TODO is the last resort (ZD1)](#fix-all-runs---todo-is-the-last-resort-zd1)
 - [TODO only with evidence (TD1)](#todo-only-with-evidence-td1)
 - [When the loop stops](#when-the-loop-stops)
+- [The UI fix counter (UP6)](#the-ui-fix-counter-up6)
 - [The register](#the-register)
 - [New work between rounds; the verifier](#new-work-between-rounds-the-verifier)
 
@@ -42,6 +44,9 @@ F<n> | reachable: normal use (steps: <user steps>) | artificial (<held promise, 
      | proposed: FIX NOW | ACCEPT <reason> | TODO <behaviour | owner decision | hardening | tests>
      | evidence: <failing test, input, or code path file:line>
 ```
+
+A UI check FAIL gets the same `impact` field; the UI fix counter maps it to critical, major
+or minor (below).
 
 "not shown" means the writer cannot show the defect with an input, a failing test or a
 concrete code path. Such a finding is `ACCEPT not confirmed`. No hardening commit "just in
@@ -88,6 +93,22 @@ changed behaviour the owner looks at.
 **Why:** 01.10.2026: 2–3 Codex rounds per micro-task on an HTML mock (about 25 min), and the
 captain itself classed the findings as artificial.
 
+## Cowboy mode - one round (R22)
+
+In a cowboy run (`reference/cowboy.md`) every change, code and tests together, gets exactly one
+review, and triage runs once under the round-1 row: every confirmed defect is FIX NOW. The
+writer fixes and commits; there is no re-review of the fix, so no round 2, no trap and no
+review-bound panel. The fix commit counts as reviewed for the push to the feature branch
+(R5), never for the merge into the base branch: that waits for the test pass.
+- **Data loss** in normal use stays FIX NOW, and its fix gets one re-review: the only
+  exception. That re-review is the change's last: what it finds is fixed without another
+  review; data loss found again stops the change: one owner question, and the change is not
+  shown until the owner answers.
+- Findings not fixed go to the register (`decisions.md`) or TODO, as in a normal run.
+- The test pass (`merge`) and the night session use the normal loop above for their failures.
+**Why:** the owner, 2026-10-30: in the visual loop every change paid up to 3 re-reviews;
+cowboy mode trades that for one round and pays the safety back once, before the merge.
+
 ## Priority when rules overlap
 
 Apply the first that matches: (1) data loss in normal use → FIX NOW; (2) a verifier failure →
@@ -98,6 +119,8 @@ A group test failure (TS1, `reference/parallel.md`) is treated like a verifier f
 observed fact, FIX NOW in every round, and its fix adds no new mechanism. One exception to its
 place in the order: after two failed reruns of the same test, the trap wins over FIX NOW for
 that test; data loss in normal use (1) still comes first.
+At the review bound the trap also comes before the review-bound panel: a mechanism with
+findings in two rounds goes to the trap, never to the panel (When the loop stops, below).
 **Why:** the owner's answer VK2 (27.09): a verifier failure beats the trap; in that project the
 verifier found the real bugs and review rounds 2-4 did not.
 
@@ -131,7 +154,8 @@ gets one more fresh `captain:worker` (the hand-off prompt, `reference/prompts.md
 owner question or TODO, only when the time to park covers that writer's limit plus one
 re-review timeout (no box: always). Its prompt carries a new hypothesis, written by main in one
 or two lines: what the previous fixes assumed, and the different cause to try now. It does not
-reset the loop's re-review count (at most 3), and it is the only extra writer per mechanism.
+reset the loop's re-review count (at most 3, or 5 after the review-bound panel), and it is
+the only extra writer per mechanism.
 Its fix still goes through the round threshold; new findings on the same mechanism → the trap
 as usual.
 
@@ -187,7 +211,8 @@ These rules key on evidence, never on a label.
   bug keeps its own scope. The bug becomes a separate reviewed task in the same run when the
   owner's scope allows a behaviour change (PL1, TS1). Else one owner question (present) or
   TODO with the reason (away). The trap gets one fresh writer with a new hypothesis in every
-  mode when the time covers it (the trap, above); the re-review bound stays 3.
+  mode when the time covers it (the trap, above); the re-review bound stays 3, or 5 only after
+  the review-bound panel (When the loop stops, below).
 - **TP6 One concrete reason per entry.** Exactly one of: owner decision, production or an
   external system, out of the task's scope, the review bound, or a time cut with its numbers.
   Entry formats: `reference/queue.md`. The end report lists every new entry with its reason.
@@ -215,7 +240,51 @@ coordinator reports the round counts to the owner; only the owner decides to low
 A clean loop → main merges at once (`reference/queue.md`, the merge flow step 1), without
 asking; the task's `ZDn` row becomes `merged`; the group's runner runs the tests after the
 group's last merge (TS1, `reference/parallel.md`); the R5 push gate comes after.
-**Why:** in that project one loop's r2-r4 took ~26 min for fixes of fixes.
+
+**The review-bound panel.** After the 3rd re-review, when triage still leaves FIX NOW findings
+with impact `data loss`, `security`, `build/test broken` or `wrong result`, main runs one
+3amigos panel (full consensus, `reference/consensus.md`): "2 more rounds or TODO".
+- The trap keeps its priority: findings of a mechanism with findings in two rounds go to the
+  trap (NP1, then the owner question or TODO), never to the panel. The panel weighs only the
+  other qualifying FIX NOW findings; none left → no panel.
+- The panel's data (`data.md`): the open FIX NOW findings with their triage lines, the new
+  real defects per round (origin `change` or `pre-existing`), and the fix-of-fix count
+  (findings with origin `round-<k> fix`), all counted from the loop's triage files.
+- Majority yes → re-reviews 4–5, under the round 2+ table and the same rules; with a box, R6's
+  time rule still holds for each re-review. No, `split`, `no consensus` or no time for the panel
+  → TODO, reason `review bound (3 re-reviews)`.
+- One panel per loop. After the 5th re-review the open findings go to TODO, reason
+  `review bound (5 re-reviews)`; no second panel.
+- The result goes into `decisions.md` (`reference/queue.md`). Present mode: one line to the
+  owner, no question; away: `decisions.md` only.
+
+**Why:** in that project one loop's r2-r4 took ~26 min for fixes of fixes. The panel: the
+owner, 2026-10-29: "maybe allow up to 5 reviews if important things are still left, but only
+after a 3amigos assessment of whether to go on with the reviews after the 3rd round"; "The trap
+(a mechanism with findings in two rounds) keeps its priority."
+
+## The UI fix counter (UP6)
+
+A UI check FAIL (`reference/ui-check.md`) is counted apart from the review rounds: a separate
+counter per group, at most 3 UI fix rounds, under the R6 rules (triage, the same writer). A
+FAIL is a verifier failure: FIX NOW in every round, the trap does not apply. It does not use up
+the task's review rounds; each fix gets its review (R5) and group test run (R20).
+
+- **Where it is kept:** main keeps the UI fix counter in the group's `State` cell in `run.md`
+  `## Groups`, as `UI fix <k>/3` (`UI fix <k>/5` after a panel yes), next to the test state,
+  the way `## Tasks` keeps `review k/3`.
+- **Impact classes:** the writer fills the R6 `impact` field for each FAIL at triage; main
+  checks it. Critical = `data loss`, `security`, `build/test broken` or `wrong result` (the R6
+  panel impacts). Major = `degraded`. Minor = `none` (nit/style).
+- **After the 3rd UI round:** a critical FIX NOW still open keeps the R6 rule: one 3amigos
+  panel (full consensus, `reference/consensus.md`): "2 more rounds or TODO". Majority yes → UI
+  rounds 4–5 for those FAILs; anything else → TODO. All other FAILs, and every FAIL left after
+  the 5th round, go to TODO. TODO order: critical, major, minor; within a class, in the R6
+  `impact` order above; each with its screenshot path as evidence (TD1). An open FAIL holds the
+  push (commit, no push).
+
+**Why:** the owner, 2026-10-30 (VA3): a separate UI counter of 3, the rest to TODO by impact;
+a critical leftover keeps the 3amigos panel.
 
 ## The register
 
@@ -237,7 +306,8 @@ git history even when a round has no fix commit; decisions.md lives in ignored t
 ## New work between rounds; the verifier
 
 - An owner request between rounds is a new task in `run.md` `## Tasks`, with its own round 1
-  and its own 3 re-reviews. The old loop's round 2 reviews only its own fixes. Both reviews may
+  and its own re-review bound (3, or 5 after the review-bound panel). The old loop's round 2
+  reviews only its own fixes. Both reviews may
   run in parallel.
 - Work with a path through hardware or real local data gets the verifier right after the
   round-1 fixes, in parallel with review round 2. A verifier failure is FIX NOW in every round

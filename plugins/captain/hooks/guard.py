@@ -17,8 +17,8 @@ The merge flow (R1, R10) gets live checks the audit cannot make afterwards: a me
 command runs alone in its Bash call; `merge` and `commit --no-edit` land only on an allowed
 HEAD: a `captain/*` branch, the run's base branch for the same repository (set by the owner
 with a typed `/captain base <branch>` or `base=<branch>` among the start arguments, or by the
-model's Skill call `captain base <branch>` when the auto-base conditions AB1–AB6 hold, see
-`auto_base_problem`), or the branch of a live grant; never on a detached HEAD, and
+model's Skill call `captain base <branch>` at start when the KB9 start-branch checks hold, see
+`start_base_check`), or the branch of a live grant; never on a detached HEAD, and
 main/master/the origin default branch only with the grant. `commit --no-edit` and `merge --abort` only while a merge is in
 progress; `switch` and `push` only for the branch the owner named in a typed
 `/captain merge <branch>`. The grant is bound to the repository (git common dir), the branch
@@ -28,6 +28,19 @@ UserPromptSubmit: a Skill call made by the model never records it; the base is n
 main/master/the origin default. The source of a merge is a local branch, or the remote-tracking
 `origin/<default>` (`--no-ff --no-edit` or `--ff-only` into a `captain/*` or base HEAD,
 `--ff-only` only into a granted HEAD).
+
+Cowboy mode (KB8) adds a merge gate that no grant lifts: a `merge` (or the `commit --no-edit`
+that concludes one) whose source brings a cowboy commit no green record covers is denied unless
+it lands on the cowboy branch itself or on one of its own agent branches (`<branch>-*`).
+The records are keyed by repository (git common dir) and branch, in <state dir>/cowboy/, and
+come only from the model's Skill calls `captain cowboy on [<branch>]` (that branch, else
+HEAD's, becomes the cowboy branch; later commits on it and its agent branches are cowboy
+commits), `captain cowboy off` (cowboy mode ends; the record stays and keeps gating up to the
+branch tip) and `captain cowboy green <sha>` (a checkout has HEAD at <sha>, a cowboy branch tip
+is <sha>, and tmp/captain/<run>/tests/<sha>.json in any worktree shows every command exit 0).
+`/captain off`, the end of the run, a handoff and a new session leave them; an unreadable record
+denies every gated merge of its repository (`cowboy_problem`). The gate also runs with no
+session marker, alone, in a repository that has a cowboy record (`cowboy_gate_only`).
 
 A deny caused by the command form or the checkout state names the canonical forms and says to
 fix the form; only a protected HEAD or a missing grant tells the coordinator to ask the owner.
@@ -45,6 +58,7 @@ boundary. Bad or unknown input never blocks anything: the hook exits 0 without o
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -88,10 +102,9 @@ WRITERS = {"cp", "mv", "tee", "ln", "install", "rsync", "touch", "dd", "truncate
 GRANT_MAX_SECONDS = 12 * 3600  # audit-main.py keeps the same backstop
 STATE_DENIAL = ("{name}: the captain state files are written only by the guard, from "
                 "`/captain` commands")
-FETCH_SECONDS = 15  # AB2; hooks.json gives the PostToolUse entry 30 s in all
-REMOTE_SECONDS = 10
-RUN_STATE = "tmp/captain"  # the run's own state, written before start step 5 (AB6)
-LOCAL_SETTINGS = ".claude/settings.local.json"  # start step 3 writes it (AB6)
+FETCH_SECONDS = 12  # KB9; hooks.json gives the PostToolUse entry 30 s in all
+REMOTE_SECONDS = 8
+MERGE_SECONDS = 8  # the KB9 fast-forward of a start branch behind origin/<default>
 
 
 def state_dir() -> Path:
@@ -243,22 +256,27 @@ def base_arg(args: str) -> str | None:
 
 def set_base(session: str, args: str, cwd: str, typed: bool = True) -> str | None:
     """Record the run's base branch: main may merge into it without a grant. Typed by the owner
-    (`/captain base <branch>`, or `base=<branch>` among the start arguments): any branch. Made
-    by the model (a Skill call `captain base <branch>`, BR1): only while AB1–AB6 hold, checked
-    now. main, master and the origin default are never recorded (they stay behind the grant).
-    Returns a line for the model on the Skill path, else None."""
+    (`/captain base <branch>`, or `base=<branch>` among the start arguments): any branch, the
+    override. Made by the model at start step 5 (a Skill call `captain base <branch>`, KB9):
+    only while the start-branch checks hold, checked now; then a start branch behind
+    origin/<default> with no commits of its own is fast-forwarded. main, master and the origin
+    default are never recorded (they stay behind the grant). Returns a line for the model on
+    the Skill path, else None."""
     branch = base_arg(args)
     if branch is None or not cwd or not os.path.isabs(cwd):
         return None
     identity = repo_identity(cwd)
     if identity is None:
         return None
+    check = None
     if not typed:
-        problem = auto_base_problem(cwd, branch)
-        if problem:
-            return (f"captain guard: base `{branch}` NOT recorded ({problem}). No automatic "
-                    "base: present → one question to the owner (a typed `/captain base "
-                    "<branch>` sets it); away → bootstrap makes a new captain/* branch.")
+        kept = typed_base(session, identity[1])
+        if kept:  # the owner's override of this run wins over the start branch (r1 F2)
+            return (f"captain guard: base `{branch}` NOT recorded: the owner's typed base "
+                    f"`{kept}` of this run stays (the override). Skip § Auto base.")
+        check = start_base_check(cwd, branch)
+        if check.problem:
+            return refused_note(branch, check)
     elif protected(cwd, branch):
         return None
     state_dir().mkdir(parents=True, exist_ok=True)
@@ -267,42 +285,118 @@ def set_base(session: str, args: str, cwd: str, typed: bool = True) -> str | Non
                                               "auto": not typed, "run": current_run(session),
                                               "since": int(time.time())}) + "\n",
                                   encoding="utf-8")
-    return None if typed else (f"captain guard: base `{branch}` recorded (AB1–AB6 hold).")
+    if check is None:
+        return None
+    return f"captain guard: base `{branch}` recorded (KB9 checks hold){fast_forward(cwd, check)}."
 
 
-def auto_base_problem(directory: str, branch: str) -> str | None:
-    """Why `branch` cannot become the run's base from a model Skill call now, else None (BR1).
-    Every condition is checked at this moment, never from a cache; HEAD is read again after
-    the network calls, right before the record (review r1 F1)."""
+def typed_base(session: str, common_dir: str) -> str | None:
+    """The branch of a base the owner typed in this run for this repository, else None."""
+    try:
+        base = json.loads(base_file(session).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(base, dict) or base.get("auto") is not False \
+            or base.get("common_dir") != common_dir or base.get("run") is None \
+            or base.get("run") != current_run(session) or not isinstance(base.get("branch"), str):
+        return None
+    return base["branch"]
+
+
+class StartCheck:
+    """The outcome of `start_base_check`: `problem` (None when every check holds) and whether
+    the branch is protected (ask the owner) or only failed a check (the fallback); on success
+    the origin default, its fetched tip and the HEAD SHA the checks saw."""
+
+    def __init__(self, problem: str | None = None, guarded: bool = False, default: str = "",
+                 tip: str = "", head: str = "", branch: str = ""):
+        self.problem, self.guarded = problem, guarded
+        self.default, self.tip, self.head, self.branch = default, tip, head, branch
+
+
+def start_base_check(directory: str, branch: str) -> StartCheck:
+    """KB9: may `branch`, the branch this session started on, become the run's base now? The
+    checks that stay of AB1–AB6: AB1 HEAD is that branch, not main, master, the origin default
+    (also the default origin names now, r1 F2) or detached; origin is readable; origin has no
+    `<branch>`, or origin/<branch> is an ancestor of (or equal to) HEAD; AB5 it is not checked
+    out in another worktree. AB3 (HEAD on the fetched tip) and AB6 (clean tree) are dropped.
+    HEAD is read again after the network calls, right before the record (review r1 F1). The
+    integration-branch judgment (develop, staging, release/*) is main's, before this call."""
     head = head_branch(directory)
     if head is None:
-        return "AB1: HEAD is detached or unreadable"
+        return StartCheck("AB1: HEAD is detached or unreadable")
     if head != branch:
-        return f"AB1: HEAD is `{head}`, not `{branch}`"
+        return StartCheck(f"AB1: HEAD is `{head}`, not `{branch}`",
+                          protected(directory, head) or protected(directory, branch))
     if origin_default(directory) is None:  # protected() would let captain/* through
-        return "AB1: origin/HEAD is unreadable, the default branch is unknown"
+        return StartCheck("AB1: origin/HEAD is unreadable, the default branch is unknown", True)
+    if protected(directory, branch):
+        return StartCheck(f"AB1: `{branch}` is main, master or the origin default", True)
+    sha = git_out(directory, "rev-parse", "-q", "--verify", "HEAD^{commit}")
     remote = remote_state(directory, branch)  # the default origin names now (r1 F2)
-    if remote is None:
-        return "AB2: `git ls-remote --symref origin HEAD` failed or named no default branch"
+    if sha is None or remote is None:
+        return StartCheck("origin: `git ls-remote --symref origin HEAD` failed or named no "
+                          "default branch")
     default, remote_branch = remote
-    if protected(directory, branch) or branch == default:
-        return f"AB1: `{branch}` is main, master or the origin default"
-    tip = fetched_tip(directory, default)
-    if tip is None:
-        return f"AB2: `git fetch origin {default}` failed"
-    if git_out(directory, "rev-parse", "-q", "--verify", "HEAD^{commit}") != tip:
-        return f"AB3: HEAD is not the fetched origin/{default} ({tip[:12]})"
-    if remote_branch and remote_branch != tip:
-        return f"AB4: origin/{branch} exists on another commit"
+    if branch == default:
+        return StartCheck(f"AB1: `{branch}` is the default branch origin names now", True)
+    tips = fetched_tips(directory, [default] + ([branch] if remote_branch else []))
+    if tips is None or tips.get(default) is None \
+            or (remote_branch and tips.get(branch) != remote_branch):
+        return StartCheck(f"origin: `git fetch origin {default}` failed (origin unreachable)")
+    if remote_branch and not is_ancestor(directory, remote_branch, sha):
+        return StartCheck(f"origin/{branch} ({remote_branch[:12]}) is not an ancestor of HEAD: "
+                          "origin is ahead or diverged")
     if checked_out_elsewhere(directory, branch):
-        return f"AB5: `{branch}` is checked out in another worktree"
-    problem = dirty_problem(directory)
-    if problem:
-        return problem
+        return StartCheck(f"AB5: `{branch}` is checked out in another worktree")
     if head_branch(directory) != branch \
-            or git_out(directory, "rev-parse", "-q", "--verify", "HEAD^{commit}") != tip:
-        return "AB1: HEAD moved during the check"
-    return None
+            or git_out(directory, "rev-parse", "-q", "--verify", "HEAD^{commit}") != sha:
+        return StartCheck("AB1: HEAD moved during the check")
+    return StartCheck(default=default, tip=tips[default], head=sha, branch=branch)
+
+
+def refused_note(branch: str, check: StartCheck) -> str:
+    """The line for the model when the start branch is not recorded: a protected branch → ask
+    the owner; any other failed check → the fallback with no question (KB9)."""
+    if check.guarded:
+        return (f"captain guard: base `{branch}` NOT recorded ({check.problem}). Protected "
+                "start branch: present → ask the owner about a new worktree or branch "
+                "(KB9); away → bootstrap makes a new captain/* branch from origin/<default>. "
+                "Never the fallback from this branch's HEAD.")
+    return (f"captain guard: base `{branch}` NOT recorded ({check.problem}). Fallback, no "
+            f"question: bootstrap makes a new captain/* feature branch from the HEAD of "
+            f"`{branch}`; write this reason to run.md. No base is recorded: the merge back "
+            f"into `{branch}` needs the owner's `/captain merge {branch}` (R10).")
+
+
+def fast_forward(directory: str, check: StartCheck) -> str:
+    """KB9, after the record: a start branch behind origin/<default> with no commits of its own
+    (HEAD a strict ancestor of the fetched tip) gets `merge --ff-only` to that tip, with HEAD
+    read again right before it. The text appended to the recorded line ("" when HEAD is not
+    behind, or has commits of its own). A failed fast-forward leaves the base recorded."""
+    if check.head == check.tip or not is_ancestor(directory, check.head, check.tip):
+        return ""
+    target = f"origin/{check.default} ({check.tip[:12]})"
+    if head_branch(directory) != check.branch \
+            or git_out(directory, "rev-parse", "-q", "--verify", "HEAD^{commit}") != check.head:
+        return (f"; fast-forward to {target} NOT run: HEAD moved after the record. Stop and "
+                "tell the owner")
+    try:
+        out = subprocess.run(["git", "-C", directory, "merge", "--ff-only", "--quiet",
+                              check.tip], capture_output=True, text=True,
+                             timeout=MERGE_SECONDS, env=git_env())
+    except (OSError, subprocess.SubprocessError) as error:
+        return (f"; fast-forward to {target} FAILED ({type(error).__name__}). Stop and tell "
+                "the owner")
+    if out.returncode != 0:
+        reason = " ".join((out.stderr or out.stdout).split())[:300] or f"exit {out.returncode}"
+        return f"; fast-forward to {target} FAILED ({reason}). Stop and tell the owner"
+    return f"; fast-forwarded to {target}"
+
+
+def is_ancestor(directory: str, older: str, newer: str) -> bool:
+    """`older` is an ancestor of, or equal to, `newer` (both commit SHAs)."""
+    return git_out(directory, "merge-base", "--is-ancestor", older, newer) is not None
 
 
 def head_branch(directory: str) -> str | None:
@@ -313,52 +407,30 @@ def head_branch(directory: str) -> str | None:
     return head[len("refs/heads/"):]
 
 
-def dirty_problem(directory: str) -> str | None:
-    """AB6: any change refuses, except untracked files of the run's own state under
-    tmp/captain/ (main writes recon and run.md before start step 5; bootstrap adds the
-    exclude only later) and an untracked .claude/settings.local.json (start step 3 writes it).
-    A tracked change to either still refuses."""
-    try:
-        out = subprocess.run(["git", "-C", directory, "status", "--porcelain", "-z",
-                              "--untracked-files=all"], capture_output=True, text=True,
-                             timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        return "AB6: `git status` failed"
-    if out.returncode != 0:
-        return "AB6: `git status` failed"
-    entries = out.stdout.split("\0")
-    while entries:
-        entry = entries.pop(0)
-        if not entry:
-            continue
-        code, path = entry[:2], entry[3:]
-        if "R" in code or "C" in code:
-            entries.pop(0)  # the source path of a rename or copy
-        if code != "??" or not (path.startswith(f"{RUN_STATE}/") or path == LOCAL_SETTINGS):
-            return f"AB6: the working tree has changes ({code} {path})"
-    return None
-
-
 def git_env() -> dict:
     """No terminal prompt for a password can hang the hook; the timeouts bound the rest."""
     return {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 
 
-def fetched_tip(directory: str, default: str) -> str | None:
-    """AB2: `git fetch origin <default>` into a ref of its own, so no other fetch can change
-    the SHA it compares (FETCH_HEAD is shared, review r1 F3); the SHA, else None."""
-    ref = f"refs/captain-guard/fetch-{os.getpid()}-{os.urandom(4).hex()}"
+def fetched_tips(directory: str, branches: list[str]) -> dict[str, str | None] | None:
+    """One `git fetch origin <branch>...` into refs of its own, so no other fetch can change
+    the SHAs it compares (FETCH_HEAD is shared, review r1 F3); {branch: SHA}, else None."""
+    refs = {name: f"refs/captain-guard/fetch-{os.getpid()}-{os.urandom(4).hex()}"
+            for name in branches}
     try:
         out = subprocess.run(["git", "-C", directory, "fetch", "--quiet", "--no-tags", "origin",
-                              f"+refs/heads/{default}:{ref}"], capture_output=True, text=True,
-                             timeout=FETCH_SECONDS, env=git_env())
+                              *(f"+refs/heads/{name}:{ref}" for name, ref in refs.items())],
+                             capture_output=True, text=True, timeout=FETCH_SECONDS,
+                             env=git_env())
         if out.returncode != 0:
             return None
-        return git_out(directory, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}")
+        return {name: git_out(directory, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}")
+                for name, ref in refs.items()}
     except (OSError, subprocess.SubprocessError):
         return None
     finally:
-        git_out(directory, "update-ref", "-d", ref)
+        for ref in refs.values():
+            git_out(directory, "update-ref", "-d", ref)
 
 
 def remote_state(directory: str, branch: str) -> tuple[str, str] | None:
@@ -400,13 +472,16 @@ def checked_out_elsewhere(directory: str, branch: str) -> bool:
 
 
 def recorded_base(session: str, directory: str) -> str | None:
-    """The base branch the owner set for the repository of `directory`, else None."""
+    """The base branch recorded in this session's current run for the repository of
+    `directory`, else None. A base of an earlier run (a new `/captain` start makes a new run
+    ID) does not count (review r1 F1); a handoff carries the run ID with the base."""
     try:
         base = json.loads(base_file(session).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     if not isinstance(base, dict) or not isinstance(base.get("branch"), str) \
-            or not isinstance(base.get("common_dir"), str):
+            or not isinstance(base.get("common_dir"), str) or base.get("run") is None \
+            or base.get("run") != current_run(session):
         return None
     identity = repo_identity(directory)
     if identity is None or identity[1] != base["common_dir"]:
@@ -580,6 +655,11 @@ def merge_problem(audit, command: str, cwd: str | None, session: str) -> tuple[s
     if not head or not head.startswith("refs/heads/"):
         return f"HEAD is detached or unreadable in {directory}", FORM_REASON
     head = head[len("refs/heads/"):]
+    incoming = merge_source_sha(directory, sub, rest)  # KB8, before the grant (r3 F1)
+    if incoming is not None:
+        problem = cowboy_problem(directory, head, incoming, session)
+        if problem:
+            return problem, COWBOY_REASON
     # an allow-list, also for the commit (r1 F3): the grant, then captain/* or the base
     # protected first: a default branch named captain/* is no run branch (Codex r2 F3)
     guarded = protected(directory, head)
@@ -614,6 +694,307 @@ def todo_commit_problem(directory: str, files: list[str], in_merge: bool) -> str
                 or git_out(directory, "ls-files", "--error-unmatch", "--", name) is None:
             return (f"`{name}` is not a tracked TODO file at the top level; a new TODO file is "
                     "added and committed by a captain:runner")
+    return None
+
+
+# --- cowboy mode (KB8): the merge gate of untested cowboy commits ------------------------
+
+COWBOY_ARGS = re.compile(r"^\s*cowboy\s+(on|off|green)(?:\s+(\S+))?\s*$", re.I)
+FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
+RUN_STATE = "tmp/captain"  # the run directories, where the test pass writes tests/<sha>.json
+COWBOY_REASON = ("Captain cowboy gate (KB8): {detail}. Untested cowboy commits never land outside "
+                 "the cowboy branch and its own agent branches; a `/captain merge` grant does not "
+                 "lift this. Run the test pass on the cowboy branch tip, have its runner write "
+                 "tmp/captain/<run>/tests/<sha>.json, then make the Skill call `captain cowboy "
+                 "green <sha>` with that exact tip; or write the KB6 TODO entry and leave the "
+                 "branch unmerged. Never rewrite the command around this.")
+
+
+class CowboyUnreadable(Exception):
+    """A cowboy record exists but cannot be read: every gated merge in that repository is
+    denied (KB8: an unreadable record → deny)."""
+
+
+def cowboy_file(common_dir: str) -> Path:
+    """The cowboy records of one repository (its git common dir), for every branch. They sit in
+    a subdirectory of the state directory: the session archive and cleanup look at files only,
+    `/captain off` removes only the session's own files, and the state-directory denial covers
+    it."""
+    digest = hashlib.sha256(common_dir.encode("utf-8")).hexdigest()[:24]
+    return state_dir() / "cowboy" / f"{digest}.json"
+
+
+def read_cowboy(common_dir: str) -> dict:
+    """{branch: record} of the repository; {} without a file; CowboyUnreadable for a file that
+    is not a valid record set."""
+    path = cowboy_file(common_dir)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise CowboyUnreadable(f"{path}: {error}") from error
+    branches = data.get("branches") if isinstance(data, dict) else None
+    if not isinstance(branches, dict) or data.get("common_dir") != common_dir:
+        raise CowboyUnreadable(f"{path}: not a cowboy record set of {common_dir}")
+    for branch, record in branches.items():
+        if not isinstance(record, dict) or not isinstance(record.get("start"), str) \
+                or not FULL_SHA.match(record["start"]) or not isinstance(record.get("on"), bool) \
+                or not all(record.get(key) is None or (isinstance(record[key], str)
+                                                       and FULL_SHA.match(record[key]))
+                           for key in ("end", "green", "tip")):
+            raise CowboyUnreadable(f"{path}: the record of `{branch}` is malformed")
+    return branches
+
+
+def write_cowboy(common_dir: str, branches: dict) -> None:
+    path = cowboy_file(common_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temp.write_text(json.dumps({"common_dir": common_dir, "branches": branches}, indent=1) + "\n",
+                    encoding="utf-8")
+    os.replace(temp, path)
+
+
+def commit_sha(directory: str, ref: str) -> str | None:
+    return git_out(directory, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}")
+
+
+def rev_list(directory: str, *refs: str) -> set[str] | None:
+    out = git_out(directory, "rev-list", *refs, "--")
+    return None if out is None else set(out.split())
+
+
+def untested_commits(directory: str, branch: str, record: dict,
+                     bases: tuple[str, ...] = ()) -> set[str] | None:
+    """The cowboy commits of `branch` no green record covers: the commits after `start` up to
+    the tips of the branch and of its own agent branches (`<branch>-*`, r1 F4; `cowboy off`
+    freezes nothing, r1 F2), minus the green commit and its ancestors, and minus what the integration branches already hold (origin/<default>, main,
+    master, the record's base and `bases`): a sync of the cowboy branch brings their commits
+    in, and those were never cowboy commits. An integration branch that holds a commit made on
+    the cowboy branch itself (its first-parent line) is not subtracted. A deleted branch counts
+    as ending at its green commit; with no green record its commits are unknown. None when git
+    cannot tell (the caller denies)."""
+    tip = commit_sha(directory, f"refs/heads/{branch}") or record.get("green")
+    agents = agent_tips(directory, branch)
+    if tip is None or agents is None:
+        return None
+    refs = [tip, *agents, f"^{record['start']}"] \
+        + ([f"^{record['green']}"] if record.get("green") else [])
+    own_line = rev_list(directory, "--first-parent", *refs)
+    if own_line is None:
+        return None
+    default = origin_default(directory)
+    names = [f"refs/remotes/origin/{default}"] if default else []
+    names += [f"refs/heads/{name}" for name in ("main", "master", record.get("base"), *bases)
+              if isinstance(name, str) and name]
+    for name in dict.fromkeys(names):
+        sha = commit_sha(directory, name)
+        if sha is None:
+            continue
+        held = rev_list(directory, sha, f"^{record['start']}")
+        if held is None:
+            return None
+        if not held & own_line:  # a leak keeps its holder out of the subtraction
+            refs.append(f"^{sha}")
+    return rev_list(directory, *refs)
+
+
+def agent_tips(directory: str, branch: str) -> list[str] | None:
+    """The tip SHAs of the cowboy branch's own agent branches, None when git cannot list them."""
+    out = git_out(directory, "for-each-ref", "--format=%(refname:short) %(objectname)",
+                  "refs/heads/")
+    if out is None:
+        return None
+    tips = []
+    for line in out.splitlines():
+        name, _, sha = line.partition(" ")
+        if name != branch and own_branch(name, branch) and sha:
+            tips.append(sha)
+    return tips
+
+
+def own_branch(head: str, branch: str) -> bool:
+    """`head` is the cowboy branch itself or one of its own agent branches (`<branch>-*`, the
+    captain/<run>-<task> naming). The name is enough: untested commits that reach an agent
+    branch stay gated on every merge out of it."""
+    return head == branch or head.startswith(f"{branch}-")
+
+
+def cowboy_problem(directory: str, head: str, source: str, session: str) -> str | None:
+    """Why merging the commit `source` into the branch `head` would land an untested cowboy
+    commit outside its cowboy branch (KB8), else None. No record in the repository → None; an
+    unreadable record or a git failure → a problem (deny)."""
+    identity = repo_identity(directory)
+    if identity is None:
+        return None
+    try:
+        records = read_cowboy(identity[1])
+    except CowboyUnreadable as error:
+        return f"the cowboy record is unreadable ({error})"
+    if not records:
+        return None
+    incoming = None
+    for branch, record in sorted(records.items()):
+        if own_branch(head, branch):
+            continue
+        base = recorded_base(session, directory)
+        untested = untested_commits(directory, branch, record, (base,) if base else ())
+        if incoming is None:
+            incoming = rev_list(directory, source, f"^refs/heads/{head}")
+        if untested is None or incoming is None:
+            return f"git cannot tell whether `{source[:12]}` holds untested commits of `{branch}`"
+        if untested & incoming:
+            green = (record.get("green") or "none")[:12]
+            return (f"the merge into `{head}` brings {len(untested & incoming)} untested cowboy "
+                    f"commit(s) of `{branch}` (green record: {green})")
+    return None
+
+
+def merge_source_sha(directory: str, sub: str, rest: list[str]) -> str | None:
+    """The commit a `merge <ref>` brings, or the MERGE_HEAD a `commit --no-edit` concludes."""
+    if sub == "merge" and rest and rest != ["--abort"]:
+        return commit_sha(directory, rest[-1])
+    if sub == "commit" and rest == ["--no-edit"]:
+        return commit_sha(directory, "MERGE_HEAD")
+    return None
+
+
+def cowboy_call(session: str, args: str, cwd: str) -> str | None:
+    """The model's Skill call `captain cowboy on|off|green <sha>` (KB8); a line for the model,
+    else None when the arguments are no cowboy call."""
+    match = COWBOY_ARGS.match(args)
+    if not match:
+        return None
+    action, value = match.group(1).lower(), match.group(2)
+    if (action == "green" and value is None) or (action == "off" and value is not None) \
+            or (action == "on" and value is not None and base_arg(f"base {value}") is None):
+        return ("captain guard: cowboy NOT changed: the forms are `cowboy on`, `cowboy on "
+                "<branch>`, `cowboy off` and `cowboy green <sha>`")
+    identity = repo_identity(cwd) if cwd and os.path.isabs(cwd) else None
+    if identity is None:
+        return "captain guard: cowboy NOT changed: the working directory is no git checkout"
+    try:
+        records = read_cowboy(identity[1])
+    except CowboyUnreadable as error:
+        return (f"captain guard: cowboy NOT changed: the record is unreadable ({error}); every "
+                "gated merge in this repository stays denied; ask the owner")
+    handler = {"on": cowboy_on, "off": cowboy_off, "green": cowboy_green}[action]
+    note = handler(session, cwd, records, value)
+    if not note.startswith("captain guard: cowboy NOT"):
+        write_cowboy(identity[1], records)
+    return note
+
+
+def cowboy_on(session: str, cwd: str, records: dict, value: str | None) -> str:
+    """Mark the run's cowboy feature branch: `value`, else HEAD's branch (main's checkout may
+    sit on the start branch while the run checkout holds the feature branch). The commits after
+    its tip now are cowboy commits. Never main, master, the origin default or the run's base."""
+    head = value or head_branch(cwd)
+    if head is None:
+        return "captain guard: cowboy NOT on: HEAD is detached or unreadable; name the branch"
+    if protected(cwd, head) or head == recorded_base(session, cwd):
+        return (f"captain guard: cowboy NOT on: `{head}` is a protected branch or the run's base; "
+                "make the cowboy feature branch first, then `cowboy on <branch>`")
+    sha = commit_sha(cwd, f"refs/heads/{head}")
+    if sha is None:
+        return f"captain guard: cowboy NOT on: `{head}` is no local branch with a commit"
+    record = records.get(head)
+    if record is None:
+        records[head] = {"start": sha, "on": True, "end": None, "green": None, "tip": sha,
+                         "base": recorded_base(session, cwd), "run": current_run(session),
+                         "since": int(time.time())}
+        return f"captain guard: cowboy on for `{head}` from {sha[:12]}"
+    record.update(on=True, end=None, tip=sha)
+    return f"captain guard: cowboy on again for `{head}` (record kept, start {record['start'][:12]})"
+
+
+def cowboy_off(session: str, cwd: str, records: dict, _value) -> str:
+    """End cowboy mode for the run's cowboy branch (HEAD's branch, else the only one this run
+    turned on). The record stays and keeps gating every commit up to the branch tip, later
+    ones too, until a green record covers the tip: `off` never lifts the gate (KB8: only a
+    green record closes it; r1 F2)."""
+    head = head_branch(cwd)
+    if head not in records:
+        mine = [name for name, record in records.items()
+                if record["on"] and record.get("run") == current_run(session)]
+        head = mine[0] if len(mine) == 1 else None
+    if head is None:
+        return "captain guard: cowboy NOT off: no cowboy branch of this run is checked out here"
+    record = records[head]
+    if not record["on"]:
+        return f"captain guard: cowboy already off for `{head}`"
+    record.update(on=False, end=None,
+                  tip=commit_sha(cwd, f"refs/heads/{head}") or record.get("tip"))
+    return (f"captain guard: cowboy off for `{head}`; the record stays and its commits stay "
+            "gated until a green record covers the branch tip")
+
+
+def cowboy_green(session: str, cwd: str, records: dict, value: str) -> str:
+    """Record a green test pass for exactly the commit `value`: a checkout of this repository
+    has it as HEAD, a cowboy branch has it as its tip, and the test-pass runner left a passing
+    result file for it (OP5). Any later commit is not covered."""
+    sha = commit_sha(cwd, value)
+    if sha is None:
+        return f"captain guard: cowboy NOT green: `{value}` is no commit"
+    if sha not in checkout_heads(cwd):
+        return f"captain guard: cowboy NOT green: no checkout of this repository has HEAD at {sha[:12]}"
+    problem = test_result_problem(cwd, sha)
+    if problem:
+        return f"captain guard: cowboy NOT green: {problem}"
+    named = [name for name in sorted(records) if commit_sha(cwd, f"refs/heads/{name}") == sha]
+    if not named:
+        return f"captain guard: cowboy NOT green: no cowboy branch has its tip at {sha[:12]}"
+    for name in named:
+        records[name].update(green=sha, tip=sha)
+    return f"captain guard: cowboy green {sha[:12]} for {', '.join(f'`{n}`' for n in named)}"
+
+
+def checkout_heads(directory: str) -> set[str]:
+    """The HEAD commit of every worktree of the repository of `directory`."""
+    listing = git_out(directory, "worktree", "list", "--porcelain", "-z") or ""
+    heads = {field[len("HEAD "):] for field in listing.split("\0") if field.startswith("HEAD ")}
+    own = commit_sha(directory, "HEAD")
+    return heads | ({own} if own else set())
+
+
+def checkout_tops(directory: str) -> list[Path]:
+    """The top level of `directory`'s checkout and of every worktree of its repository: the
+    test-pass runner may write its result file in a temporary worktree (r1 F7)."""
+    tops = []
+    top = git_out(directory, "rev-parse", "--show-toplevel")
+    if top:
+        tops.append(Path(top))
+    listing = git_out(directory, "worktree", "list", "--porcelain", "-z") or ""
+    tops += [Path(field[len("worktree "):]) for field in listing.split("\0")
+             if field.startswith("worktree ")]
+    return tops
+
+
+def test_result_problem(directory: str, sha: str) -> str | None:
+    """OP5: the newest `tmp/captain/<run>/tests/<sha>.json` under any worktree of the
+    repository names `sha`, lists at least one command, and every exit code is 0; else why not.
+    It catches a mistake, not a forged file."""
+    found = sorted({path for top in checkout_tops(directory)
+                    for path in top.glob(f"{RUN_STATE}/*/tests/{sha}.json")},
+                   key=lambda path: path.stat().st_mtime, reverse=True)
+    if not found:
+        return f"no test result file {RUN_STATE}/<run>/tests/{sha}.json"
+    path = found[0]
+    try:
+        result = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return f"the test result file {path} is unreadable"
+    if not isinstance(result, dict) or result.get("sha") != sha:
+        return f"the test result file {path} names another SHA"
+    commands = result.get("commands")
+    if not isinstance(commands, list) or not commands:
+        return f"the test result file {path} lists no commands"
+    for entry in commands:
+        if not isinstance(entry, dict) or not isinstance(entry.get("cmd"), str) \
+                or isinstance(entry.get("exit"), bool) or entry.get("exit") != 0:
+            cmd = entry.get("cmd") if isinstance(entry, dict) else entry
+            return f"the test result file {path} has a failed or malformed command ({cmd!r})"
     return None
 
 
@@ -670,13 +1051,208 @@ def bash_writes_state(audit, command: str, cwd: str | None) -> bool:
     return any(in_state_dir(target, cwd) for target in targets)
 
 
+UNKNOWN_HEAD = object()  # a switch or checkout in the chain whose target the guard cannot tell
+SWITCH_NEW = {"-c", "-C", "-b", "-B", "--create", "--force-create", "--orphan"}
+SWITCH_QUIET = {"-q", "--quiet", "--no-track", "--track", "--no-guess", "--guess"}
+
+
+def cowboy_gate_only(name: str, tool_input: dict, cwd: str | None, session: str) -> None:
+    """Outside captain mode (no session marker: after `/captain off`, or a plain session) only
+    the cowboy gate runs, and only in a repository with a cowboy record; nothing else of captain
+    mode applies (r1 F1). The command is split on the shell separators (audit-main.py `parse`:
+    &&, ||, ;, |, newlines) and every `git merge` / `git commit` part is checked against the
+    HEAD a preceding `cd` and `git switch` / `git checkout <branch>` of the same chain set
+    (OP9, r2 F1). A chain whose target the guard cannot tell is denied. pull, rebase and
+    cherry-pick are not seen."""
+    command = tool_input.get("command") if name == "Bash" else None
+    if not isinstance(command, str) or "git" not in command \
+            or not ("merge" in command or "commit" in command):
+        return
+    problem = chain_problem(load_audit(), command, cwd, session)
+    if problem:
+        deny(problem, COWBOY_REASON)
+
+
+def gated_repo(directory: str | None) -> bool:
+    """`directory` is absolute and in a repository with a cowboy record."""
+    if not directory or not os.path.isabs(directory) or not os.path.isdir(directory):
+        return False
+    identity = repo_identity(directory)
+    return identity is not None and cowboy_file(identity[1]).exists()
+
+
+def chain_problem(audit, command: str, cwd: str | None, session: str) -> str | None:
+    """The cowboy problem of the first gated `git merge` / `git commit` in the chain, else None.
+    Fail closed (OP10, r3 F1-F3): HEAD is tracked per checkout (its top level), not per
+    directory; a `cd` the guard cannot resolve to a checkout, or a switch, checkout or cd joined
+    to a later merge by anything but `&&` (it may have failed), denies that merge."""
+    try:
+        audit.parse(command)  # the grammar check; the walk below keeps the separators
+        tokens = audit._Lexer(command, strict=True).run()
+    except audit.Unverifiable as error:
+        return (f"the command `{command[:120]}` cannot be split into its parts ({error}) and "
+                "the repository has a cowboy record; run the merge as its own command"
+                if gated_repo(cwd) and "merge" in command else None)
+    state = {"dir": cwd, "heads": {}, "moved": False, "fragile": False, "lost": False,
+             "cwd_gated": None}
+    words: list[str] = []
+    for token in [*tokens, ("OP", "")]:
+        if token[0] == "W":
+            words.append(token[1])
+            continue
+        if token[0] != "OP":
+            continue
+        if token[1] == "\n" and not words:
+            continue  # a line break after `&&` or between commands
+        problem = chain_part(words, state, cwd, session)
+        if problem:
+            return problem
+        words = []
+        if token[1] not in {"&&", ""} and state["moved"]:
+            state["fragile"] = True  # the move before may have failed, the next part still runs
+    return None
+
+
+def chain_part(words: list[str], state: dict, cwd: str | None, session: str) -> str | None:
+    """One command of the chain: `cd` and `git switch`/`checkout` update `state`; a merge or a
+    commit concluding one is checked."""
+    while words and (words[0] in {"command", "exec"} or re.match(r"^\w+=", words[0])):
+        words = words[1:]
+    if not words:
+        return None
+    if words[0] == "cd":
+        target = words[1] if len(words) > 1 else "~"
+        state["dir"] = None if target == "-" else \
+            os.path.normpath(os.path.join(state["dir"] or "", os.path.expanduser(target)))
+        state["moved"] = True
+        return None
+    if words[0] != "git":
+        return None
+    return git_part_problem(words[1:], state, cwd, session)
+
+
+def checkout_top(directory: str | None) -> str | None:
+    """The real top level of the checkout at `directory`, else None."""
+    if not directory or not os.path.isabs(directory) or not os.path.isdir(directory):
+        return None
+    top = git_out(directory, "rev-parse", "--show-toplevel")
+    return os.path.realpath(top) if top else None
+
+
+def git_part_problem(args: list[str], state: dict, cwd: str | None, session: str) -> str | None:
+    """One `git ...` part of a chain: a switch or checkout records the HEAD it sets per checkout;
+    a merge or a commit concluding one is checked with the cowboy gate."""
+    directory = state["dir"]
+    while args and args[0].startswith("-"):
+        if args[0] in {"-C", "-c"} and len(args) > 1:
+            if args[0] == "-C":
+                directory = os.path.join(directory or "", os.path.expanduser(args[1])) \
+                    if directory or os.path.isabs(args[1]) else None
+            args = args[2:]
+        else:
+            args = args[1:]
+    if not args or args[0] not in {"switch", "checkout", "merge", "commit"}:
+        return None
+    sub, rest = args[0], args[1:]
+    top = checkout_top(directory)
+    if sub in {"switch", "checkout"}:
+        state["heads"][top] = switch_target(rest)
+        state["moved"] = True
+        return None
+    if state["cwd_gated"] is None:
+        state["cwd_gated"] = gated_repo(cwd)
+    if top is None:  # a `cd` or `-C` the guard cannot resolve to a checkout
+        return ("the merge runs in a directory the guard cannot resolve to a checkout, in a "
+                "command started in a repository with a cowboy record; run it as its own "
+                "command" if sub == "merge" and state["cwd_gated"] else None)  # r4 F3
+    if not gated_repo(top):
+        return None
+    concludes = sub == "commit" or "--continue" in rest
+    if state["fragile"] and (sub == "merge" and not concludes
+                             or concludes and commit_sha(top, "MERGE_HEAD")):  # r4 F2
+        return ("a `cd`, `git switch` or `git checkout` earlier in this command is joined to "
+                "the merge or its concluding commit by a separator other than `&&`: if it "
+                "failed, the merge lands on another branch; run the move and the merge as "
+                "separate commands")
+    head = state["heads"][top] if top in state["heads"] else head_branch(top)
+    if head is UNKNOWN_HEAD:
+        return ("a `git switch`/`git checkout` earlier in this command moves HEAD to a branch "
+                "the guard cannot tell, before a merge in a repository with a cowboy record; "
+                "run the switch and the merge as separate commands")
+    if concludes:
+        sources = [commit_sha(top, "MERGE_HEAD")]
+    elif "--abort" in rest or "--quit" in rest:
+        return None
+    else:
+        named = merge_sources(rest)
+        if "-" in named:
+            return "`git merge -` names the previous branch, which the guard cannot tell"
+        if not named:  # git merges the upstream of HEAD (r3 F3)
+            upstream = commit_sha(top, f"{head}@{{upstream}}") \
+                if isinstance(head, str) else None
+            if upstream is None:
+                return ("`git merge` with no source merges the upstream of HEAD, which the "
+                        "guard cannot resolve; name the branch")
+            named = [upstream]
+        sources = [commit_sha(top, word) for word in named]
+    sources = [sha for sha in sources if sha]
+    if not sources or head is None:
+        return None  # nothing to merge, or a detached HEAD: the merge lands on no branch
+    for source in sources:
+        problem = cowboy_problem(top, head, source, session)
+        if problem:
+            return problem
+    return None
+
+
+MERGE_VALUE_OPTIONS = {"-m", "-F", "-s", "-X", "--message", "--file", "--strategy",
+                       "--strategy-option", "--into-name", "--cleanup"}
+
+
+def merge_sources(rest: list[str]) -> list[str]:
+    """The source words of `git merge <rest>`: the positional words, without the values of the
+    options that take one as the next word (-m <msg>, -s <strategy>, ..., r4 F1); attached
+    values (`-mmsg`, `--message=msg`, `-S<key>`) are part of their option word. `-` stays."""
+    sources, i = [], 0
+    while i < len(rest):
+        word = rest[i]
+        if word == "--":
+            sources += rest[i + 1:]
+            break
+        if word in MERGE_VALUE_OPTIONS:
+            i += 2
+            continue
+        if word.startswith("-") and word != "-":
+            i += 1
+            continue
+        sources.append(word)
+        i += 1
+    return sources
+
+
+def switch_target(rest: list[str]):
+    """The branch `git switch` / `git checkout` with `rest` puts HEAD on, None for a detach, or
+    UNKNOWN_HEAD when the words do not tell (paths, `-`, unknown options)."""
+    if any(word in {"--detach", "-d"} for word in rest):
+        return None
+    for i, word in enumerate(rest):
+        if word in SWITCH_NEW:
+            return rest[i + 1] if i + 1 < len(rest) else UNKNOWN_HEAD
+    plain = [word for word in rest if word not in SWITCH_QUIET]
+    if len(plain) == 1 and not plain[0].startswith("-") and plain[0] != "-" \
+            and BRANCH_NAME.match(plain[0]):
+        return plain[0]
+    return UNKNOWN_HEAD
+
+
 def pre_tool_use(event: dict, session: str) -> None:
     name, tool_input = event.get("tool_name"), event.get("tool_input")
     if not isinstance(name, str) or not name or not isinstance(tool_input, dict):
         return  # malformed input never blocks
-    if not (state_dir() / session).is_file():
-        return
     cwd = event.get("cwd") if isinstance(event.get("cwd"), str) and event.get("cwd") else None
+    if not (state_dir() / session).is_file():
+        cowboy_gate_only(name, tool_input, cwd, session)  # KB8 also outside captain mode (r1 F1)
+        return
     if writes_state(name, tool_input, cwd):
         deny(STATE_DENIAL.format(name=name))
         return
@@ -722,6 +1298,13 @@ def needs_grant(audit, name: str, tool_input: dict, root, cwd: str | None, comma
     return kind == audit.OK
 
 
+def post_note(note: str | None) -> None:
+    """A line for the model after its Skill call, when there is one."""
+    if note:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse",
+                                                 "additionalContext": note}}, ensure_ascii=False))
+
+
 def handle(event: dict) -> None:
     session, name = event.get("session_id"), event.get("hook_event_name")
     if not isinstance(session, str) or not SESSION_ID.match(session) or "agent_id" in event:
@@ -744,17 +1327,18 @@ def handle(event: dict) -> None:
         tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
         if tool_input.get("skill") in CAPTAIN_SKILLS:
             args = tool_input.get("args") if isinstance(tool_input.get("args"), str) else ""
+            if COWBOY_ARGS.match(args):
+                # KB8: a cowboy call changes only its record, never the mode: `cowboy off`
+                # after a typed `/captain off` must not turn captain mode back on
+                post_note(cowboy_call(session, args, cwd))
+                return
             # a model call never grants; a start it makes ends the grant with a new run ID
             audit = load_audit()
             if audit.ends_grant(args, typed=False):
                 end_grant(session)
             set_mode(session, not wants_off(args), cwd, audit.starts_run(args))
             if not wants_off(args):
-                note = set_base(session, args, cwd, typed=False)  # BR1: the auto base
-                if note:
-                    print(json.dumps({"hookSpecificOutput": {
-                        "hookEventName": "PostToolUse", "additionalContext": note}},
-                        ensure_ascii=False))
+                post_note(set_base(session, args, cwd, typed=False))  # KB9: the start branch as base
     elif name == "PreToolUse":
         pre_tool_use(event, session)
 

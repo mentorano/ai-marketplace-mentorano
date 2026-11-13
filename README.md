@@ -392,6 +392,15 @@ Small helpers for working with Claude Code.
   user cannot answer or explicitly defers stays in the report, marked as
   deferred.
   See [`plugins/utils/skills/one-by-one/SKILL.md`](plugins/utils/skills/one-by-one/SKILL.md).
+- `share-artifact` (since 0.6.0) shares one or more claude.ai artifacts with
+  the people the user names. No tool can do it, so a background subagent opens
+  each artifact's Share dialog in the user's own Chrome (Claude in Chrome, in a
+  new tab it closes at the end), invites only the addresses not yet invited, at
+  Commenter unless the user asks for Viewer or Editor, and reports per artifact
+  who was already there, who was added, General access and when the invites
+  expire. It never makes an artifact public, changes another setting or removes
+  anyone; a dry-run only reads who has access.
+  See [`plugins/utils/skills/share-artifact/SKILL.md`](plugins/utils/skills/share-artifact/SKILL.md).
 
 ## Tests
 

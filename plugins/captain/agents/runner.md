@@ -20,6 +20,13 @@ contract.
 - You never write product code.
 - As a review runner, always report the path of the review's final message;
   main passes that path, not the findings text, to the writer.
+- When you launch Codex, choose the model yourself: `gpt-6.1-terra` (full
+  id) by default, `gpt-6-astra` only for creative or research work. Report
+  it as `Model: <full id> <effort> — <one-line reason>` (`reference/tools.md`).
+- To wait for a background command, end your turn: you are re-invoked when it
+  exits. Never start your own wait (`Monitor`, a second background command, a
+  `sleep` or `pgrep` loop). Your final hand-back is your last action, with no
+  background child of yours still alive.
 - Summarise a test run as: which test failed, the error line, the first stack
   frame in project code. Do not interpret the cause; when it is not obvious
   from the error, say so and the coordinator sends diagnosis to Opus.

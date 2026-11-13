@@ -91,6 +91,7 @@ violations found, but part of the transcript could not be checked). Only 0 is a 
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
@@ -107,10 +108,27 @@ REQUIRED_INPUT = {
     "ReadNotifications": (), "ListAgents": (), "EnterWorktree": (),
 }
 ANY_OF_INPUT = {"SendMessage": ("to", "recipient"), "TaskStop": ("task_id", "shell_id")}
-# the captain skill, its setup, and the 3amigos panel main runs itself (AM1)
+# the captain skill, its setup, the 3amigos panel main runs itself (AM1), the owner's
+# one-by-one questions and the new-session-tab handover: only main talks to the owner (PR9)
 ALLOWED_SKILLS = {"captain", "captain:captain", "captain-setup", "captain:captain-setup",
-                  "3amigos", "3amigos:3amigos"}
+                  "3amigos", "3amigos:3amigos", "one-by-one", "utils:one-by-one",
+                  "new-session-tab", "utils:new-session-tab"}
+# serena lookups that only read the symbol graph (SA5); its edits stay agent work
+SERENA_READS = {"find_symbol", "find_referencing_symbols", "find_implementations",
+                "find_declaration", "get_symbols_overview"}
 READ_COMMANDS = {"cat", "head", "tail", "wc", "ls", "find"}  # DL1 read-only Bash, file operands
+# printf conversions main may use; anything else with a % (%n, %10n, %ln ...) can assign (r3 F1)
+PRINTF_SAFE = re.compile(r"%(%|-?\d*(\.\d+)?[sdb])")
+GLOB_COMMANDS = {"ls", "wc"}  # a glob only names files: these print names or counts (PR6)
+NEW_SESSION_FLAGS = re.compile(  # new-session-tab.py without --fresh-worktree (PR9)
+    r"^--((dir|prompt-file|name|name-prefix|reply-to|terminal|wait)=[^\s]+|"
+    r"permission-mode=(default|acceptEdits|plan|auto))$")  # never bypassPermissions
+SED_PRINT = re.compile(  # `sed -n <range>p`: prints lines, no w/e/r command (PR4)
+    r"^(\d+|\$|/[^/]*/)(,(\d+|\$|/[^/]*/))?p$")
+GREP_SHORT = re.compile(r"^-[nrlLiEFowvcHhsxI]+$")  # no -R: it follows symlinks (r1 F4)
+GREP_VALUE = re.compile(r"^-[ABCm]\d*$")  # -A4, or -A with the count as the next word
+GREP_LONG = re.compile(r"^--(include|exclude|exclude-dir)=[^\s]+$|^--color=never$")
+GREP_LONG_VALUE = {"--include", "--exclude", "--exclude-dir"}  # the value as the next word
 FIND_ACTIONS = re.compile(r"^-(exec|execdir|ok|okdir|delete|fprint\w*|fls|fprintf)$")
 DOC_SUFFIXES = {".md", ".mdx", ".markdown", ".txt", ".rst", ".adoc"}
 MAX_TIMEOUT_MS = 120_000  # DL2: a longer Bash call is agent work
@@ -166,6 +184,10 @@ class Unverifiable(Exception):
     pass
 
 
+class GlobWord(str):
+    """A word with an unquoted `*`, `?` or `[`: the shell expands it to file names (PR6)."""
+
+
 # ---------------------------------------------------------------- lexer
 
 class _Lexer:
@@ -175,6 +197,7 @@ class _Lexer:
         self.text, self.i, self.strict = text, 0, strict
         self.tokens: list[tuple] = []
         self.word: list[str] | None = None
+        self.globbed = False
 
     def fail(self, why: str):
         if self.strict:
@@ -182,8 +205,9 @@ class _Lexer:
 
     def end_word(self):
         if self.word is not None:
-            self.tokens.append(("W", "".join(self.word)))
-        self.word = None
+            word = "".join(self.word)
+            self.tokens.append(("W", GlobWord(word) if self.globbed else word))
+        self.word, self.globbed = None, False
 
     def add(self, chars: str):
         self.word = (self.word or []) + [chars]
@@ -287,9 +311,10 @@ class _Lexer:
                 self.op(next(o for o in ("&&", "||", "|&", ";;", "|", "&", ";", "\n", "(", ")")
                              if rest.startswith(o)))
             else:
-                if ch in "{}*?[":
-                    self.fail("unquoted brace or glob expansion")
+                if ch in "{}":
+                    self.fail("unquoted brace expansion")
                 self.add(ch)
+                self.globbed = self.globbed or ch in "*?["
                 self.i += 1
         self.end_word()
         return self.tokens
@@ -531,14 +556,60 @@ def _fetch_ok(rest: list[str]) -> bool:
     return all(a in FETCH_FLAGS if a.startswith("-") else valid_ref(a) for a in rest)
 
 
+BRANCH_FLAGS = {"-v", "-vv", "-a", "-r", "--show-current"}
+BRANCH_FILTERS = {"--list", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at"}
+
+
+def _branch_ok(rest: list[str]) -> bool:
+    """`git branch` that lists: the flags, and names only after a filter (`--list <pattern>`,
+    `--contains <rev>`, ...). A bare name creates a branch, `-m`/`-d` rename or delete one."""
+    if any(a.startswith("-") and a not in BRANCH_FLAGS | BRANCH_FILTERS for a in rest):
+        return False
+    return not [a for a in rest if not a.startswith("-")] \
+        or any(a in BRANCH_FILTERS for a in rest)
+
+
+def _git_grep_ok(rest: list[str]) -> bool:
+    """`git grep` with the read-only grep flags; never -O (it runs a pager on the files) or
+    -f (patterns from a file). Operands are a pattern, revisions and pathspecs."""
+    i, options = 0, True
+    while i < len(rest):
+        arg = rest[i]
+        if options and arg == "--":
+            options = False
+        elif options and arg in {"-e", "-A", "-B", "-C", "-m"}:
+            i += 1
+        elif options and arg.startswith("-") and not (
+                re.match(r"^-[nliEFowvcHhI]+$", arg) or GREP_VALUE.match(arg)
+                or arg in {"--count", "--name-only", "--cached"}):
+            return False
+        elif not arg.startswith("-") and names_output(arg):
+            return False
+        i += 1
+    return True
+
+
 GIT_READS = {  # DL1 git inspection
-    "branch": lambda rest: set(rest) <= {"-v", "-vv", "-a", "-r", "--show-current"},
+    "branch": _branch_ok,
     "worktree": lambda rest: rest in (["list"], ["list", "--porcelain"]),
     "remote": lambda rest: rest == ["-v"],
     "diff": _diff_ok,
     "show": _diff_ok,
     "rev-parse": lambda rest: True,
     "fetch": _fetch_ok,
+    "merge-base": lambda rest: [a for a in rest if a.startswith("-")] in ([], ["--is-ancestor"])
+    and len([a for a in rest if not a.startswith("-")]) == 2,
+    "rev-list": lambda rest: "--count" in rest and all(
+        a in {"--count", "--left-right", "--first-parent", "--no-merges", "--merges", "--all"}
+        or not a.startswith("-") for a in rest),
+    "grep": _git_grep_ok,
+    # a remote by name, as fetch: never a URL to another host
+    "ls-remote": lambda rest: all(a in {"--heads", "--tags", "--refs", "-h", "-t", "-q"}
+                                  if a.startswith("-") else valid_ref(a) for a in rest),
+    "check-ignore": lambda rest: bool(rest) and all(
+        a in {"-v", "-q", "-n", "--verbose", "--non-matching", "--"} or not a.startswith("-")
+        for a in rest),
+    "stash": lambda rest: rest == ["list"],
 }
 
 
@@ -558,8 +629,11 @@ def _git_ok(args: list[str], grant: str | None = None) -> bool:
         return _merge_ok(sub, rest, grant)
     if sub in GIT_READS:
         return GIT_READS[sub](rest)
-    if sub == "status":
-        return all(GIT_STATUS_FLAGS.match(a) or not a.startswith("-") for a in rest)
+    if sub == "status":  # ZP0 runs `status ... -- .agent-memory` (PR3)
+        flags, paths = (rest[:rest.index("--")], rest[rest.index("--") + 1:]) \
+            if "--" in rest else (rest, [])
+        return all(GIT_STATUS_FLAGS.match(a) or not a.startswith("-") for a in flags) \
+            and not any(names_output(a) for a in paths)
     if sub != "log":
         return False
     count, j = None, 0
@@ -578,7 +652,9 @@ def _git_ok(args: list[str], grant: str | None = None) -> bool:
         elif arg.startswith("-") and not GIT_LOG_FLAGS.match(arg):
             return False
         j += 1
-    return count is not None and COUNT.match(count) is not None and int(count) > 0
+    if count is None:  # a range `a..b` bounds the log on its own (PR5); --all would not
+        return "--all" not in rest and any(".." in a and not a.startswith("-") for a in rest[:j])
+    return COUNT.match(count) is not None and int(count) > 0
 
 
 def _grep_kind(args: list[str]) -> str:
@@ -591,13 +667,83 @@ def _grep_kind(args: list[str]) -> str:
             if i + 1 >= len(args):
                 return UNVERIFIABLE
             patterns, i = patterns + 1, i + 1
+        elif options and arg in {"-A", "-B", "-C", "-m"}:
+            if i + 1 >= len(args) or not COUNT.match(args[i + 1]):
+                return UNVERIFIABLE
+            i += 1
         elif options and arg.startswith("-"):
-            if not re.match(r"^-[Eivc]+$", arg):
+            # no -r/-R: a filter grep with them searches the cwd instead of the pipe
+            if not (re.match(r"^-[niEFowvcHhsx]+$", arg) or re.match(r"^-[ABCm]\d+$", arg)):
                 return UNVERIFIABLE
         else:
             positional += 1
         i += 1
     return OK if (patterns and not positional) or (not patterns and positional == 1) else UNVERIFIABLE
+
+
+def _grep_read_kind(args: list[str], cwd: Path | None) -> str:
+    """grep as the first command (PR1): the Grep tool's reach in Bash form. The grep_kind
+    flags plus -r/-R/-l/-L/-I and --include/--exclude; never an agent output file, never a
+    recursive search of a directory that holds one (DL4)."""
+    words, recursive, i, options, patterns = [], False, 0, True, 0
+    while i < len(args):
+        arg = args[i]
+        if options and arg == "--":
+            options = False
+        elif options and arg in {"-e", "-A", "-B", "-C", "-m"} | GREP_LONG_VALUE:
+            if i + 1 >= len(args) or arg in {"-A", "-B", "-C", "-m"} and not COUNT.match(args[i + 1]):
+                return UNVERIFIABLE
+            patterns += arg == "-e"
+            i += 1
+        elif options and arg.startswith("-"):
+            if not (GREP_SHORT.match(arg) or GREP_VALUE.match(arg) and arg[2:]
+                    or GREP_LONG.match(arg)):
+                return UNVERIFIABLE
+            recursive = recursive or GREP_SHORT.match(arg) is not None and "r" in arg
+        else:
+            words.append(arg)
+        i += 1
+    files = words if patterns else words[1:]
+    if not patterns and not words:
+        return UNVERIFIABLE
+    kind = _operands_kind(files, cwd)
+    if kind != OK:
+        return kind
+    base = cwd if cwd is not None and cwd != LOST_CWD else None
+    targets = [Path(os.path.expanduser(f)) for f in files] or ([Path(".")] if recursive else [])
+    for target in targets:
+        if not target.is_absolute():
+            if base is None:
+                return UNVERIFIABLE
+            target = base / target
+        real = Path(os.path.realpath(target))
+        if real.is_dir() and (real.name == "tasks" or _holds_outputs(real)):
+            return VIOLATION
+    return OK
+
+
+def _operands_kind(values: list[str], cwd: Path | None) -> str:
+    """File operands read from the tracked cwd: VIOLATION when one is or resolves to an agent
+    output (a relative symlink after `cd`, r2 F3), UNVERIFIABLE for a relative one without a cwd."""
+    for value in values:
+        if names_output(value):
+            return VIOLATION
+        target = Path(os.path.expanduser(value))
+        if not target.is_absolute():
+            if cwd is None or cwd == LOST_CWD:
+                return UNVERIFIABLE
+            target = cwd / target
+        if agent_output(str(target)):
+            return VIOLATION
+    return OK
+
+
+def _sed_kind(args: list[str], cwd: Path | None = None, filtered: bool = False) -> str:
+    """`sed -n '<range>p' [file...]` prints lines (PR4); every other sed edits or runs."""
+    if len(args) < 2 or args[0] != "-n" or not SED_PRINT.match(args[1]) \
+            or any(a.startswith("-") for a in args[2:]):
+        return VIOLATION
+    return OK if filtered else _operands_kind(args[2:], cwd)
 
 
 def _filter_kind(words: list[str]) -> str:
@@ -607,11 +753,13 @@ def _filter_kind(words: list[str]) -> str:
     if program == "grep":
         return _grep_kind(args)
     if program in {"head", "tail"}:
-        ok = not args or args[:1] == ["-n"] and len(args) == 2 and COUNT.match(args[1]) \
-            or len(args) == 1 and re.match(r"^-n\d+$", args[0])
+        ok = not args or args[:1] in (["-n"], ["-c"]) and len(args) == 2 and COUNT.match(args[1]) \
+            or len(args) == 1 and re.match(r"^-[nc]\d+$", args[0])
         return OK if ok else UNVERIFIABLE
     if program == "wc":
         return OK if all(a in {"-l", "-w", "-c"} for a in args) else UNVERIFIABLE
+    if program == "sed":
+        return _sed_kind(args, filtered=True) if len(args) == 2 else VIOLATION
     return VIOLATION
 
 
@@ -643,27 +791,134 @@ def agent_output(path: str) -> bool:
     return False
 
 
-def _read_kind(name: str, args: list[str]) -> str:
+# head/tail options whose value is the next word, not a file: -n/-c/-b alone or ending a
+# cluster (`-qn 5`), and the long --lines/--bytes; `-n5` and `--lines=5` carry it themselves
+COUNT_OPTION = re.compile(r"^(-[A-Za-z]*[ncb]|--lines|--bytes)$")
+
+
+def _read_operands(name: str, args: list[str]) -> list[str]:
+    """The file operands of cat/head/tail/wc: the words that are not an option or the count
+    after a head/tail count option; after `--` every word but `-` (stdin) is one (r1 F1)."""
+    operands, skip, options = [], False, True
+    for arg in args:
+        if skip:
+            skip = False
+        elif options and arg == "--":
+            options = False
+        elif arg == "-" or options and arg.startswith("-"):
+            skip = options and name in {"head", "tail"} and COUNT_OPTION.match(arg) is not None
+        else:
+            operands.append(arg)
+    return operands
+
+
+def _read_kind(name: str, args: list[str], cwd: Path | None = None) -> str:
     """DL1 read-only commands with file operands: cat, head, tail, wc, ls, find. Never an
-    agent output file (DL4), never `tail -f` (a process that outlives the call), never a find
-    action that runs or deletes."""
-    if any(names_output(a) for a in args if not a.startswith("-")):
+    agent output file (DL4), also through a relative symlink after `cd` (KP8), never `tail -f`
+    (a process that outlives the call), never a find action that runs or deletes."""
+    operands = None if name in {"ls", "find"} else _read_operands(name, args)
+    if any(names_output(a) for a in args if not a.startswith("-")) \
+            or any(names_output(a) for a in operands or []):
         return VIOLATION
+    # a record without a cwd keeps the name check alone (DL1 relative reads stay allowed)
+    kind = OK if operands is None or cwd is None else _operands_kind(operands, cwd)
+    if kind == VIOLATION:
+        return kind
     if name == "tail" and any(a.startswith("--follow") or a == "--retry"
                               or re.match(r"^-[A-Za-z0-9]*[fF]", a) for a in args):
         return VIOLATION
     if name == "find" and any(FIND_ACTIONS.match(a) for a in args):
         return VIOLATION
-    return OK
+    return kind
+
+
+PLUGIN_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def plugin_script(path: str, skill_root: Path, plugin: str, script: str) -> bool:
+    """`script` (a path inside the plugin) of a plugin from the marketplace that holds this
+    skill: `plugins/<plugin>/<script>` in the repository, `<marketplace>/<plugin>/<version>/
+    <script>` in the plugin cache, any version (an update during a session, PR8)."""
+    if len(skill_root.parents) < 4:
+        return False
+    target = Path(os.path.normpath(os.path.expanduser(path)))
+    if not PLUGIN_VERSION.match(skill_root.parents[1].name):  # the repository: plugins/<name>/
+        return skill_root.parents[2].name == "plugins" and target == skill_root.parents[2] / plugin / script
+    try:  # the cache: <marketplace>/<name>/<version>/ (r1 F3: never both layouts)
+        parts = target.relative_to(skill_root.parents[3]).parts
+    except ValueError:
+        return False
+    return len(parts) > 2 and parts[0] == plugin and PLUGIN_VERSION.match(parts[1]) is not None \
+        and Path(*parts[2:]) == Path(script)
 
 
 def _context_kind(args: list[str], skill_root: Path) -> str | None:
     """`python3 <skill root>/scripts/agent-context.py <agentId>...`; else None."""
-    if not args or os.path.normpath(os.path.expanduser(args[0])) \
-            != os.path.normpath(str(skill_root / "scripts" / "agent-context.py")):
+    script = "skills/captain/scripts/agent-context.py"
+    if not args or not (plugin_script(args[0], skill_root, "captain", script)
+                        or os.path.normpath(os.path.expanduser(args[0]))
+                        == os.path.normpath(str(skill_root / "scripts" / "agent-context.py"))):
         return None
     ids = args[1:]
     return OK if ids and all(AGENT_ID.match(i) for i in ids) else UNVERIFIABLE
+
+
+def _new_session_kind(args: list[str], skill_root: Path) -> str | None:
+    """`python3 <utils>/skills/new-session-tab/scripts/new-session-tab.py --dir=... ...` (PR9):
+    the handover tab main opens itself; never --fresh-worktree, which creates a worktree."""
+    script = "skills/new-session-tab/scripts/new-session-tab.py"
+    if not args or not plugin_script(args[0], skill_root, "utils", script):
+        return None
+    flags = args[1:]
+    if flags == ["--version"]:
+        return OK
+    if not flags or not all(NEW_SESSION_FLAGS.match(a) for a in flags):
+        return VIOLATION
+    # the script reads the prompt and writes its copy next to it: only the handover prompt of
+    # --dir, named without a symlink, so every write stays in <dir>/tmp (r1 F2, r2 F2)
+    values = {a.split("=", 1)[0]: a.split("=", 1)[1] for a in flags}
+    if len(values) != len(flags) or "--dir" not in values or "--prompt-file" not in values:
+        return VIOLATION
+    return OK if handover_prompt(values["--prompt-file"], values["--dir"]) else VIOLATION
+
+
+def handover_prompt(value: str, directory: str) -> bool:
+    """`<dir>/tmp/handover-<topic>-<date>.md`, the new-session-tab prompt file (PR9): lexically
+    there and the same path after resolving symlinks."""
+    lexical = Path(os.path.normpath(os.path.expanduser(value)))
+    base = Path(os.path.normpath(os.path.expanduser(directory)))
+    return lexical.is_absolute() and base.is_absolute() and lexical.parent == base / "tmp" \
+        and lexical.name.startswith("handover-") and lexical.suffix == ".md" \
+        and Path(os.path.realpath(lexical)) == Path(os.path.realpath(base)) / "tmp" / lexical.name
+
+
+def _diff_files_kind(args: list[str], cwd: Path | None) -> str:
+    """`diff [-u|-q] <file> <file>` (PR12); never a directory (diff compares the files in it,
+    r1 F5) or an agent output file."""
+    flags = [a for a in args if a.startswith("-")]
+    files = [a for a in args if not a.startswith("-")]
+    if not all(a in {"-u", "-q", "--brief"} or re.match(r"^-U\d+$", a) for a in flags) \
+            or len(files) != 2:
+        return UNVERIFIABLE
+    kind = _operands_kind(files, cwd)
+    if kind != OK:
+        return kind
+    for value in files:
+        target = Path(os.path.expanduser(value))
+        if not target.is_absolute():
+            if cwd is None or cwd == LOST_CWD:
+                return UNVERIFIABLE
+            target = cwd / target
+        if Path(os.path.realpath(target)).is_dir():
+            return VIOLATION
+    return OK
+
+
+def _lsof_kind(args: list[str]) -> str:
+    """`lsof -nP -iTCP:<port> -sTCP:LISTEN`: is a dev server listening (PR12)."""
+    ok = args and all(a in {"-n", "-P", "-nP", "-Pn", "-t"} or re.match(r"^-iTCP(:\d+)?$", a)
+                      or a == "-sTCP:LISTEN" for a in args)
+    return OK if ok else VIOLATION
 
 
 def _first_kind(words: list[str], background: bool, skill_root: Path = SKILL_ROOT,
@@ -671,9 +926,10 @@ def _first_kind(words: list[str], background: bool, skill_root: Path = SKILL_ROO
     program, args = words[0], words[1:]
     name = os.path.basename(program)
     if program == "python3":
-        kind = _context_kind(args, skill_root)
-        if kind is not None:
-            return kind
+        for check in (_context_kind, _new_session_kind):
+            kind = check(args, skill_root)
+            if kind is not None:
+                return kind
     if args == ["--help"] and os.path.expanduser(program) in SETUP_HELP:
         return OK
     if name == "chmod" and "/" not in program:
@@ -685,10 +941,21 @@ def _first_kind(words: list[str], background: bool, skill_root: Path = SKILL_ROO
         return VIOLATION if name in FORBIDDEN or name.startswith("build-") else UNVERIFIABLE
     if name == "date":
         return _date_kind(args)
-    if name in {"stat", "ps", "cd"}:
+    if name in {"stat", "ps", "cd", "pwd", "echo"}:
         return OK
+    if name == "printf":  # never -v/-vNAME, and only the %s %d %b %% conversions (r1-r3 F1)
+        return VIOLATION if any(a.startswith("-v") or "%" in PRINTF_SAFE.sub("", a) for a in args) \
+            else OK
+    if name == "grep":
+        return _grep_read_kind(args, cwd)
+    if name == "sed":
+        return _sed_kind(args, cwd)
+    if name == "diff":
+        return _diff_files_kind(args, cwd)
+    if name == "lsof":
+        return _lsof_kind(args)
     if name in READ_COMMANDS:
-        return _read_kind(name, args)
+        return _read_kind(name, args, cwd)
     if name == "git":
         if not _git_ok(args, grant):
             return VIOLATION
@@ -729,6 +996,20 @@ def _cd(words: list[str], here: Path | None) -> Path | None:
     return moved if os.path.isdir(moved) else here
 
 
+def _glob_matches(patterns: list[str], cwd: Path | None) -> list[str] | None:
+    """The files the patterns match, as the shell would expand them; None when a relative
+    pattern has no known cwd."""
+    matched = []
+    for pattern in patterns:
+        pattern = os.path.expanduser(pattern)
+        if not os.path.isabs(pattern):
+            if cwd is None or cwd == LOST_CWD:
+                return None
+            pattern = str(cwd / pattern)
+        matched += glob.glob(pattern)
+    return matched
+
+
 def bash_violation(command: str, background: bool, skill_root: Path = SKILL_ROOT,
                    grant: str | None = None, cwd: Path | None = None) -> str | None:
     """Return the offending command of a Bash call, or None when allowed; raise Unverifiable.
@@ -759,6 +1040,19 @@ def bash_violation(command: str, background: bool, skill_root: Path = SKILL_ROOT
                 return " ".join(words)
             if kind == UNVERIFIABLE or any(not safe for _, _, safe in redirs):
                 unclear = unclear or f"not plainly recognised: {' '.join(words)}"
+            # a glob only names files: allowed where the files are listed or counted (PR6)
+            globs = [w for w in words if isinstance(w, GlobWord)]
+            if globs and (position or isinstance(words[0], GlobWord)
+                          or os.path.basename(words[0]) not in GLOB_COMMANDS):
+                unclear = unclear or f"unquoted glob outside ls/wc: {' '.join(words)}"
+            elif any("**" in g for g in globs):  # zsh's recursive glob, not what glob.glob sees (r2 F4)
+                unclear = unclear or f"recursive glob: {' '.join(words)}"
+            elif globs:  # the shell hands over the matched files: none an agent output (r1 F6)
+                matched = _glob_matches(globs, cwd)
+                if matched is None:
+                    unclear = unclear or f"glob without a known cwd: {' '.join(words)}"
+                elif any(names_output(m) for m in matched):
+                    return " ".join(words)
     simple = [w[1:] if w and w[0] == "command" else w for p in pipelines for w, _ in p]
     if len(simple) > 1:  # a merge-flow command runs alone in its call (Codex r1 F7)
         for words in simple:
@@ -783,12 +1077,26 @@ def _inside(path: Path, base: Path) -> bool:
 
 
 def _writable(path: Path, root: Path) -> bool:
-    """DL1 edits: run state, TODO files at the repo root, docs and the local settings. A plugin
+    """DL1 edits: run state, a handover prompt, TODO files and docs at the repo root or in the
+    run checkout, and the local settings. A plugin
     skill file (SKILL.md, anything under a `skills` directory) is product code: agent work."""
     real_root = Path(os.path.realpath(root))
     if _inside(path, real_root / "tmp" / "captain") \
             or path == real_root / ".claude" / "settings.local.json":
         return True
+    # the new-session-tab handover prompt, `tmp/handover-<topic>-<date>.md` (PR9)
+    if path.parent == real_root / "tmp" and path.name.startswith("handover-") \
+            and path.suffix == ".md":
+        return True
+    worktrees = real_root / ".claude" / "worktrees"
+    if worktrees in path.parents:  # the run checkout keeps its own TODO and docs (PR10)
+        run = worktrees / path.relative_to(worktrees).parts[0]
+        return run.name.startswith("captain-run-") and run != path and _doc_or_todo(path, run)
+    return _doc_or_todo(path, real_root)
+
+
+def _doc_or_todo(path: Path, real_root: Path) -> bool:
+    """A TODO file at the checkout root, or a doc under its `docs/` but never a skill file."""
     if path.parent == real_root and todo_name(path.name):
         return True
     docs = real_root / "docs"
@@ -998,13 +1306,37 @@ def classify(name: str, tool_input, root: Path | None, skill_root: Path,
         return _classify_path(name, tool_input, root, skill_root, cwd)
     if name == "Edit":
         return _classify_edit(tool_input, root, cwd)
-    if name == "Artifact" and tool_input.get("action") == "open":
+    # read: PR11, never with out_dir, which saves the file outside the scratchpad
+    if name == "Artifact" and tool_input.get("action") in {"open", "read"} \
+            and "out_dir" not in tool_input:
         url = tool_input.get("url")
-        return (OK, "") if isinstance(url, str) and url else (UNVERIFIABLE, "Artifact open without url")
+        return (OK, "") if isinstance(url, str) and url \
+            else (UNVERIFIABLE, f"Artifact {tool_input.get('action')} without url")
+    if name == "SendUserFile":
+        return _classify_send(tool_input, root, cwd)
+    parts = name.split("__")
+    if len(parts) == 3 and parts[0] == "mcp" and parts[1] in {"serena", "plugin_serena_serena"} \
+            and parts[2] in SERENA_READS:
+        return OK, ""
     return VIOLATION, escape(json.dumps(tool_input, ensure_ascii=False)[:200])
 
 
 _TOPLEVEL: dict[str, Path | None] = {}
+
+
+def _classify_send(tool_input: dict, root: Path | None, cwd: Path | None):
+    """SendUserFile of run evidence (PR11): every file under the run state, `tmp/captain/`."""
+    files = tool_input.get("files")
+    if not isinstance(files, list) or not files or not all(isinstance(f, str) and f for f in files):
+        return UNVERIFIABLE, "SendUserFile without files"
+    if root is None:
+        return UNVERIFIABLE, "no repo root to check SendUserFile"
+    state = Path(os.path.realpath(root)) / "tmp" / "captain"
+    for value in files:
+        real = _resolve(value, cwd or root)
+        if not _inside(real, state) or names_output(value):
+            return VIOLATION, escape(value)
+    return OK, ""
 
 
 def repo_root(cwd) -> Path | None:
@@ -1055,12 +1387,13 @@ def first_word(args: str) -> str:
 
 # `experiment` (also „експеримент“) is no longer an argument, but a start typed with it out of
 # habit still ends the previous run's merge grant.
-START_WORD = re.compile(r"^((\d+h)?(\d+m)?|\d+|away|strict|точно|experiment|експеримент|base=\S+)$",
-                        re.I)
+START_WORD = re.compile(r"^((\d+h)?(\d+m)?|\d+|away|strict|точно|experiment|експеримент|base=\S+"
+                        r"|cowboy|каубой|каубойски|tests=(merge|night))$", re.I)
 
 
 def starts_run(args: str) -> bool:
-    """A new `/captain` start: `[<timebox>] [away] [strict] [base=<branch>]` or no
+    """A new `/captain` start: `[<timebox>] [away] [strict] [cowboy] [tests=merge|night]
+    [base=<branch>]` or no
     arguments (SKILL.md Arguments). Free text (a question, a resume note) keeps the run."""
     return all(START_WORD.match(word) for word in args.split())
 

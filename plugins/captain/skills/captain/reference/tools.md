@@ -23,11 +23,15 @@ that writer by `SendMessage` (DL3), before the DL1 list. In doubt → delegate (
   `ReadNotifications`, `ListAgents` (the R21 successor handshake, `reference/handoff.md`),
   `EnterWorktree`.
 - `Read`, `Grep` and `Glob` anywhere: the config, handovers, specs in a run worktree, source to
-  understand a question. A plan over ~300 lines → a subagent summarizes.
+  understand a question. A plan over ~300 lines → a subagent summarizes. The serena lookups
+  `find_symbol`, `find_referencing_symbols`, `find_implementations`, `find_declaration` and
+  `get_symbols_overview` count as reads; serena edits are DL2. Main checks one place; a survey
+  of the code is a subagent's.
 - `Write` and `Edit` of the run state (`./tmp/captain/<run>/`), TODO files at the repo root
   (`TODO`, or `TODO*` with a doc suffix below; never `TODO.py`),
   `docs/**` (plans, specs, notes: `.md`, `.mdx`, `.markdown`, `.txt`, `.rst`, `.adoc`),
-  `.claude/settings.local.json` (the change the owner approved, R15), and the session's auto
+  `.claude/settings.local.json` (the change the owner approved, R15), the TODO files and
+  `docs/**` of the run checkout `.claude/worktrees/captain-run-<id>` (same rules), and the session's auto
   memory `~/.claude/projects/<project>/memory/*.md`. A plugin skill file (`SKILL.md`, anything
   under `plugins/*/skills/`, also under `docs/`, in any letter case) is product code: DL2.
 - `Write` / `Edit` of `.agent-memory/<topic>.md` in the run checkout (PK3, PT1, not
@@ -35,15 +39,24 @@ that writer by `SendMessage` (DL3), before the DL1 list. In doubt → delegate (
   existing real `.agent-memory/`; never through `.claude/rules/project-memory/`, never in an
   agent worktree, never with Bash (`cp`, `mv`, a redirection stay DL2).
 - Read-only Bash: `cat`, `head`, `tail` (never `-f`/`-F`), `wc`, `ls`, `find` (no `-exec`,
-  `-ok`, `-delete`, `-fprint`), `date`, `stat`, `ps`, `cd`; git inspection: `log -n <N>` (no
-  `-p`), `status`, `diff`, `show` (only the options
+  `-ok`, `-delete`, `-fprint`), `grep` (also `-r`, never `-R`, `-A/-B/-C N`, `--include`; never over an agent
+  output), `sed -n '<range>p'` (never `-i` or another command), `echo`, `printf` (no `-v`; only `%s`, `%d`, `%b`, `%%`),
+  `pwd`, `diff [-u|-q] <file> <file>` (never a directory), `lsof -nP -iTCP:<port> -sTCP:LISTEN`, `date`, `stat`,
+  `ps`, `cd`; an unquoted glob only in `ls` and `wc`, never matching an agent output; git inspection: `log -n <N>` or
+  `log <a>..<b>` (no `-p`), `status [-- <path>]`, `diff`, `show` (only the options
   `audit-main.py` lists, spelled out in full: no `--output`, `--ext-diff`, `--textconv`), `branch -vv` (also `-v`,
-  `-a`, `-r`, `--show-current`), `worktree list [--porcelain]`, `remote -v`, `rev-parse`,
+  `-a`, `-r`, `--show-current`, and names only after `--list`, `--contains`, `--merged`),
+  `worktree list [--porcelain]`, `remote -v`, `rev-parse`, `merge-base [--is-ancestor]`,
+  `rev-list --count`, `grep` (no `-O`, `-f`), `ls-remote`, `check-ignore`, `stash list`,
   `fetch [<remote> [<branch>...]]` (no refspec with `:`, no `+`);
   `python3 '<skill root>/scripts/agent-context.py' <agentId>...` (R6; it prints only token
   counts).
 - `CronCreate`, `CronDelete`, `CronList` for the timers; a lone background `sleep N`
   (`run_in_background: true`) as a fallback timer, the only background call main makes; a shell `&` is denied.
+- `Skill` for `utils:one-by-one` (only main talks to the owner) and `utils:new-session-tab`
+  (args `prefix=<session_prefix>` when the config has one, so the new session gets it) with its `python3 '<utils>/skills/new-session-tab/scripts/new-session-tab.py' --dir=... ...`
+  (never `--fresh-worktree`; the prompt file is the skill's `./tmp/handover-<topic>-<date>.md`).
+  `Artifact` `open` and `read`; `SendUserFile` of files under `./tmp/captain/`.
 - `Skill` for `captain`, `captain:captain`, `captain:captain-setup` (the config start step) and
   `3amigos:3amigos` (main runs the panel itself; its voters are `Agent` launches; `panel.py`,
   `tally.py` and the Codex voter are script runs, so a `captain:runner` runs them: DL2).
@@ -68,8 +81,9 @@ that writer by `SendMessage` (DL3), before the DL1 list. In doubt → delegate (
   `commit --no-edit` in this order: a detached HEAD is denied; the granted branch passes; a
   protected HEAD (`main`, `master`, the origin default, or with no readable `origin/HEAD` every
   branch outside `captain/*`) is denied, even one named `captain/*`; then a `captain/*` HEAD or
-  the recorded base branch (a typed `/captain base <branch>`, or the auto base of a Skill call
-  `captain base <branch>` while AB1–AB6 hold, `reference/prompts.md`) passes without the grant;
+  the recorded base branch of the current run (a typed `/captain base <branch>`, or the start
+  branch of a Skill call `captain base <branch>` while the KB9 checks hold, `reference/prompts.md`
+  § Auto base) passes without the grant;
   any other HEAD is denied. The base is never `main`, `master` or the origin default, and it
   is not honoured while `origin/HEAD` is unreadable. A remote-tracking source is only
   `origin/<default>`, and `--ff-only` only for it: into a `captain/*` or base HEAD both sync
@@ -82,10 +96,12 @@ that writer by `SendMessage` (DL3), before the DL1 list. In doubt → delegate (
   needs the owner (a protected HEAD; `switch` or `push` without the grant; a push to a remote
   with a push mapping or mirror, or with `push.followTags` on) says to ask the owner; every
   other merge-flow denial is a form or checkout-state problem.
-- `Artifact` with `action: open` and a `url` (show a page to the owner; never publish).
+- `Artifact` with `action: open` or `read` and a `url` (show or read a page; never publish).
 - Pipe filters after those reads, stdin only, exactly as `audit-main.py` enforces them:
-  - `grep` with only `-E`, `-i`, `-v`, `-c`, `-e PATTERN`, `--`, and a pattern (no file operand);
-  - `head -n N`, `tail -n N`;
+  - `grep` with only `-E`, `-F`, `-i`, `-v`, `-c`, `-n`, `-o`, `-w`, `-x`, `-h`, `-H`, `-s`,
+    `-A/-B/-C/-m N`, `-e PATTERN`, `--`, and a pattern (no file operand, no `-r`);
+  - `head -n N`, `tail -n N`, `head -c N`, `tail -c N`;
+  - `sed -n '<range>p'` with no file operand;
   - `wc -l`, `wc -w`, `wc -c`;
   - `date` — bare, `+FORMAT`, or the timer forms `date -v±N<unit> '+FORMAT'` (BSD) /
     `date -d '<±N unit | now + N unit>' '+FORMAT'` (GNU); never a positional date or `-s`.
@@ -119,7 +135,7 @@ allowed. For details, `SendMessage` the agent or launch a diagnosis agent.
   mode is on (from `/captain` until `/captain off`, across the end of the run) with "This
   is agent work (R1, DL2): delegate it to a captain:runner or the writer that owns the file."
   The guard's state files (the mode marker, `.merge`, `.base`) are written only by the guard,
-  from `/captain` commands (`.base` also from the checked auto base): a `Write`/`Edit`, a Bash redirection or a `cp`/`mv`/`tee`/`rm`
+  from `/captain` commands (`.base` also from the checked start branch, KB9): a `Write`/`Edit`, a Bash redirection or a `cp`/`mv`/`tee`/`rm`
   into the state directory is denied. Without the plugin (a symlinked skill) there is no
   hook; the rule still holds.
 
@@ -181,18 +197,30 @@ bypasses the alias, because `codex` is an argument of `timeout`, not a shell wor
 also portable to Linux, where `timeout` cannot exec the shell builtin `command`. (Typed
 directly without a timeout, the equivalent is `command codex exec …`.)
 
-Model id: `gpt-6-astra`. People say "astra", but the bare short name fails with HTTP 400 "The
-'astra' model is not supported when using Codex with a ChatGPT account" — always the full id.
+Model id (KB7): `gpt-6.1-terra` by default, for every review, consult and mini-consensus vote;
+`gpt-6-astra` only for complex creative or research work (a creative draft, a research
+consult, a hard architecture vote). Always the full id: a bare short name ("terra", "astra")
+fails with HTTP 400 "The 'astra' model is not supported when using Codex with a ChatGPT
+account".
 
-**Effort (EF1):** `-c model_reasoning_effort=medium` by default; `high` only for a review of a
-very complex spec or implementation, the assessment of a critical action, and a full
-consensus vote (EF2). The flag is always passed: `~/.codex/config.toml` defaults to `high`.
-Use Codex freely; there is no quota to save. Only the usage-limit fallback below applies.
-**Why:** 30.09.2026 the owner confirmed `medium` for astra reviews (EF3): no source measures
+**Model choice:** the agent that launches the Codex call chooses the model itself: the
+`captain:runner` for a review or a consult, a writer for its own mini-consensus, main for a
+direct call. Terra unless the task is creative or research; then astra. Every such agent
+writes the choice and a one-line reason to its report (`Model: <full id> <effort> — <reason>`)
+and main records that line in `run.md`; for its own call main writes the line there itself. Main's prompt to a runner states this rule and the
+task, never a chosen model.
+
+**Effort (EF1):** terra `-c model_reasoning_effort=high` for a review (R6, R7), `medium` for a
+quick consult and a mini-consensus vote (R9); a full consensus vote runs through `panel.py`
+at `high` (EF2). Astra: `medium`, `high` only for a very complex creative or research task. The flag is always passed: `~/.codex/config.toml` defaults to
+`high`. Use Codex freely; there is no quota to save. Only the usage-limit fallback below
+applies.
+**Why:** 30.10.2026: the owner moved the captain skill's Codex calls to terra: it reviews
+faster. 30.09.2026 the owner had confirmed `medium` for astra reviews (EF3): no source measures
 review quality by effort, and the one index by level shows +1 point for +22% cost from
 `medium` to `high`.
 
-The runner (`captain:runner`) works in three steps:
+The runner (`captain:runner`) chooses the model and effort (above), then works in three steps:
 
 1. One Bash call fixes the log prefix and prints it:
    `mkdir -p ./tmp/claude-logs && echo "./tmp/claude-logs/codex-review-<slug>-$(date +%Y%m%d-%H%M%S).log"`.
@@ -202,10 +230,13 @@ The runner (`captain:runner`) works in three steps:
 
 ```bash
 LOG='<literal log prefix from step 1>'
-(command timeout 1200 codex exec -m gpt-6-astra -c model_reasoning_effort=medium \
+(command timeout 1200 codex exec -m gpt-6.1-terra -c model_reasoning_effort=high \
    -s read-only -C '<abs repo or worktree>' -o "$LOG.final.md" - < "$LOG.prompt.md" \
    > "$LOG" 2>&1; echo $? > "$LOG.exit")
 ```
+
+- `-m` and the effort are the runner's choice: `-m gpt-6-astra -c model_reasoning_effort=medium`
+  for a creative or research task.
 
 - With a box, when the R6 bound applies, replace `1200` with the time left before park, in
   seconds, never under 300; below 300 no review starts (R6). Park here is the one time boundary
@@ -213,14 +244,25 @@ LOG='<literal log prefix from step 1>'
   the last possible hard end.
 - The runner ends its turn; it is re-invoked when the command exits. It then reads
   `$LOG.exit`, `$LOG.final.md` and, on failure, the last 40 lines of `$LOG`.
+- That command is the runner's only background call, and the re-invocation is its only wait:
+  no `Monitor`, no second background command, no `sleep`, `pgrep` or `tail -f` loop on the
+  codex process or on `.final.md`. `$LOG.exit` exists once the command has exited; a runner
+  resumed earlier by a message answers it and ends its turn again, with no hand-back. The final
+  hand-back is its last action, with no background child of its own left alive.
+  **Why:** 20.10.2026: four review runners handed back, then kept their own monitor or `pgrep`
+  loop alive; the harness showed them running for 10–60 min until main stopped them, and one
+  loop matched its own command line.
 - Review success = exit `0` **and** a non-empty `$LOG.final.md` whose verdict line is exactly
   `Verdict: approve` or `Verdict: changes`. Any other value is a failure (empty output row).
   Only a review checks `Verdict:`; votes have their own contracts (below).
   The runner returns the verdict line, the count of findings (blocking / non-blocking), the
-  path of the `-o` final file and the exit code; the findings go to the writer by that path,
-  never through main (KT1).
+  path of the `-o` final file, the exit code and its `Model:` line; the findings go to the
+  writer by that path, never through main (KT1).
+- The runner's prompt carries the model rule, unchanged (it holds without the plugin agent
+  types, R4):
+  `Choose the Codex model yourself: gpt-6.1-terra (effort high for a review, medium for a consult or vote) by default, gpt-6-astra only for a creative or research task.`
 - The runner's prompt ends with this line, unchanged:
-  `Your final report (after re-invocation, not an interim one): the verdict line VERBATIM, the count of findings (blocking / non-blocking), the path of the -o final file, and the exit code. Not the findings themselves. No commentary.`
+  `Your final report (after re-invocation, not an interim one): the verdict line VERBATIM, the count of findings (blocking / non-blocking), the path of the -o final file, and the exit code. Not the findings themselves. No commentary. Add one line: Model: <full id> <effort> — <one-line reason for the choice>.`
   A hand-back that says it waits on background work is interim: it carries no verdict. Main
   keeps the agent at `notified: no`, records nothing from it, and waits for the next
   notification of the same agent.
@@ -230,8 +272,9 @@ LOG='<literal log prefix from step 1>'
 - Reviews take 1.5–6 min, sometimes 14.
 
 Alternative: the `codex:codex-rescue` agent with a prompt starting
-`--model gpt-6-astra --effort medium`. When it returns only the first log lines, the main
-session sends a subagent to wait for the rest; it never polls.
+`--model gpt-6.1-terra --effort high` (astra for a creative or research task, as above).
+When it returns only the first log lines, the main session sends a subagent to wait for the
+rest; it never polls.
 
 ### Failure table (R7)
 
@@ -250,9 +293,10 @@ current reviewer for that loop (R6).
 
 **As a voter (R9):** in a full consensus Codex is the 3amigos panel's Codex voter: a
 `captain:runner` runs `panel.py --voters codex --effort high` with `--deadline` min(300 s, park
-− 5 min), 300 s with no box (`reference/consensus.md`). For a mini-consensus opinion: the same
-command as a review with `medium` and `command timeout 240` (with a box, never past the park
-deadline) and the mini-consensus template. A usage limit or any failure → that vote counts as
+− 5 min), 300 s with no box (`reference/consensus.md`). That voter keeps the 3amigos model
+(`gpt-6-astra`, set in `panel.py`), not captain's choice. For a mini-consensus opinion: the
+same command as a review with terra `medium` and `command timeout 240` (with a box, never past
+the park deadline) and the mini-consensus template. A usage limit or any failure → that vote counts as
 missing; in a panel the Fable stand-in replaces it.
 
 ### Output contracts - checked per use, for every voter (Codex, agy, Fable, Opus)

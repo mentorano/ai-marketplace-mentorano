@@ -9,9 +9,12 @@
 - [Owner `!` commands (R16)](#owner--commands-r16)
 - [Memory step (R17, PK2-PK4) - only with `Project memory: on`](#memory-step-r17-pk2-pk4---only-with-project-memory-on)
 - [decisions.md (R9, R18)](#decisionsmd-r9-r18)
+- [Owner feedback file](#owner-feedback-file)
 - [TODO entry (R18)](#todo-entry-r18)
 - [TODO entry for a deferred finding (R6, R18)](#todo-entry-for-a-deferred-finding-r6-r18)
+- [TODO entry for a cowboy run (R22, KB6)](#todo-entry-for-a-cowboy-run-r22-kb6)
 - [Status, park and end reports - `Remaining:` (R12)](#status-park-and-end-reports---remaining-r12)
+- [End-of-run sweep (R17)](#end-of-run-sweep-r17)
 - [End report (R17) - in the user's language, in this order, every item with its ID](#end-report-r17---in-the-users-language-in-this-order-every-item-with-its-id)
 - [runs.jsonl (R17)](#runsjsonl-r17)
 
@@ -23,9 +26,12 @@ The main session writes these files with `Write` (R1).
 Two capital letters plus a number on every item shown to the owner and every TODO
 entry the run writes. The letters name the area; items in one area count up;
 an item keeps its ID in later messages and later runs. Before choosing
-letters, read the IDs already in the TODO file and continue an area's letters
-from its highest number. Answer options get their own IDs (`OP1`, `OP2`),
-unique within the reply. Review findings may keep `F1`, `F2`.
+letters, read the IDs already in the TODO file, the repo's history and changelog
+files and the subjects of the whole `git log` (`git log --oneline | grep -oE '<letters>[0-9]+'`),
+and continue an area's letters from the highest number found in any of them.
+Answer options get their own IDs (`OP1`, `OP2`), unique within the reply. Review findings may keep `F1`, `F2`.
+**Why:** 19.10.2026, a new TODO entry took a number free in TODO but already used for a closed
+item in the project's history log, so one ID pointed to two different things.
 
 Example area letters (this table is an example; the run never edits this file):
 
@@ -47,17 +53,18 @@ A new area: pick two letters from the area's name; record them in `run.md` under
 ```markdown
 # captain run <YYYYMMDD-HHMMSS>
 - Repo: <abs path>   Start branch: <branch>   Default branch: <name>
-- Feature branch: captain/<YYYYMMDD>-<slug>, based on <origin/<default> | <owner's branch>, chosen OP2> | none: auto base (R2)
-- Mode: present | away   Box: <N> min (given) | none   time: normal | strict — <reason> (a box only)
+- Feature branch: captain/<YYYYMMDD>-<slug>, based on <origin/<default> | <owner's branch>, chosen OP2 | fallback: the start branch's HEAD <branch | sha> (KB9)> | none: auto base (R2)
+- Mode: present | away | cowboy, tests: merge | night   Box: <N> min (given) | none   time: normal | strict — <reason> (a box only)
+  (`cowboy` is present mode, R22: exactly `Mode: cowboy, tests: merge` or `Mode: cowboy, tests: night`; `reference/cowboy.md`)
 - Start: <HH:MM>   Box end: <HH:MM>   Hard end: <HH:MM> (extensions <k>/3, outages +<N> min)   Park: <HH:MM>   Deadline: <HH:MM>
   (no box: `- Start: <HH:MM>   outages +<N> min` only)
 - Last check: <HH:MM>
 - Uncommitted changes at start: <none | list, untouched>
 - Checkout mode (R2): shared | shared-multi | worktree — <one-line reason>
 - Run checkout: <abs run worktree .claude/worktrees/captain-run-<run-id>, every mode | the session's own checkout, auto base>   Writers: <the run worktree | per-writer worktrees>
-- Base branch (R10): <branch, recorded by the guard (typed | auto: base: <branch> — <reason>), checkout <abs> | none: feature branch only>
+- Base branch (R10): <branch, recorded by the guard (auto: start branch — <reason> | typed: the owner's override), checkout <abs> | none: feature branch only (<protected or integration start branch | fallback: <the guard's reason>>)>
 - Base SHA (bootstrap): <sha>   Last pushed SHA (feature branch): <sha | none>
-- Config: read | setup done | missing, away (notify none, tools from `command -v`)
+- Config: read | setup done | missing, away (notify none, tools from `command -v`)   browser: agent-browser | playwright-repo | playwright-mcp | none (start step 1 writes only agent-browser or none; main sets playwright-repo or playwright-mcp later, per repo, in `reference/ui-check.md`)
 - Tools: codex on/off, agy on/off   Notify: <method> | none
 - Codex: available | off in config | usage limit, resets at <time>
 - Agent types: plugin | fallback
@@ -83,13 +90,13 @@ No box: only the health row.
 ## Tasks
 | ID | Task | Group | Touches | After | Agent | State |
 |---|---|---|---|---|---|---|
-| ZD1 | <one line> | backend-auth | `auth/service.py`: `login()`; new `auth/tokens.py` | - | w-auth | todo / queued / running / review k/3 / merged / cut |
+| ZD1 | <one line> | backend-auth | `auth/service.py`: `login()`; new `auth/tokens.py` | - | w-auth | todo / queued / running / review k/3 (k/5 after a review-bound panel) / merged / cut → <TODO ID> |
 | ZD2 | <one line> · KL 6/6 | web-app | `web/routes.ts`: new `/login` entry | ZD1 — <the overlap or output it needs> | lc-web | running |
 
 ## Groups
 | Group | Test command | Shared resource | Tasks | State |
 |---|---|---|---|---|
-| backend-auth | <the module's test command> | <test DB / port / none> | ZD1 (+ waits for ZDn, ZDm: every contract producer, direct or through another, PL2) | waiting / running / green <log path> / failed <test> → ZDn |
+| backend-auth | <the module's test command> | <test DB / port / none> | ZD1 (+ waits for ZDn, ZDm: every contract producer, direct or through another, PL2) | waiting / running / green <log path> / failed <test> → ZDn / UI fix <k>/3 (<k>/5 after a panel yes) |
 
 ## Outages
 - <from>–<to>, <N> min, evidence: <error line, or the transcript timestamps a runner read>
@@ -98,6 +105,16 @@ The plan-split start step writes the plan here; every event updates the row. An 
 that arrives while its writer is busy gets a new row with state `queued` (R6). Status (R12) is
 read from
 this table, not from the chat scrollback.
+
+Every phase or wave of the plan or handover is rows here from the start, never a prose line. A
+phase whose split waits for an earlier one gets one placeholder row now (state `todo`, `After`
+= the earlier rows) and is split into its own rows when it starts. No box: the phase is done in
+this run (TP4: it always fits); only the owner defers it by choice → state `cut → <TODO ID>`,
+reason `owner decision` (R18). The R6 review bound and trap and the other TP6 reasons still
+send open work to TODO.
+**Why:** 28.10.2026: a handover planned wave 2 (K1–K6, code); `## Tasks` held it only as a
+prose sentence, no `ZDn` row. It was neither done nor deferred, ended as an `[info]` line, and
+the owner had it written to TODO by hand later.
 
 A coding task carries its light test (`reference/light-test.md`). `Group`, `Touches`, `After`,
 `## Groups` and `## Outages`: the parallel plan, the test groups and the outage extension
@@ -205,7 +222,7 @@ mode, worktree mode too.
    the agent's commits are already on the feature branch: nothing to merge. With an auto base
    (R2) there is no feature branch: the agent branch merges straight into the base in the run
    checkout, and the R5 push gate pushes the base (step 3). Else the feature branch then goes
-   into the owner-confirmed base branch (R10; never `main`, `master` or the default
+   into the recorded base branch (R10; never `main`, `master` or the default
    branch), without asking: `git -C '<abs base checkout>' merge --no-ff --no-edit '<feature-branch>'`, in
    the checkout where that branch is checked out, and only when a runner reported
    `git -C '<abs base checkout>' status --porcelain` empty there. The captain never stashes;
@@ -213,8 +230,8 @@ mode, worktree mode too.
    `.claude/worktrees/captain-base-<run-id>` for it. `hooks/guard.py` checks the HEAD in this
    order: detached → denied; the granted branch → allowed; `main`, `master` or the origin
    default (with no readable `origin/HEAD`, every branch outside `captain/*`) → denied; a
-   `captain/*` HEAD or the recorded base (a typed `/captain base <branch>`, or the auto base,
-   `reference/prompts.md`) → allowed;
+   `captain/*` HEAD or the recorded base (the start branch the guard recorded at start, KB9,
+   `reference/prompts.md`, or the owner's typed `/captain base <branch>`) → allowed;
    anything else → denied (`reference/tools.md`).
 2. A conflict → main does not resolve it. A `captain:worker` gets the conflict prompt
    (`reference/prompts.md`): it resolves the listed files, stages them by path and does not
@@ -222,7 +239,8 @@ mode, worktree mode too.
    product choice → `git merge --abort` and the question goes to the owner.
 3. The tests, and the push of the feature branch, go to an agent (R5 push gate). The group's
    runner runs the group's tests after the group's last merge (TS1, `reference/parallel.md`);
-   the full-build script runs once before the first push. The push of a
+   the full-build script runs once before the first push. Cowboy mode (R22): neither runs in
+   the loop, and the test pass below comes before any merge into the base branch. The push of a
    base branch: the agent checks the upstream with `git -C '<abs base checkout>' branch -vv`,
    then pushes an explicit refspec, `git push <remote> <sha>:refs/heads/<branch>`. Agents never
    push a base branch that is `main`, `master` or the default branch.
@@ -250,6 +268,21 @@ mode, worktree mode too.
    handoff successor (R21) takes it over with its `/captain resume` (same repository and
    working directory). Ask again only
    after one of these.
+
+**The test pass of a cowboy run (R22, KB5).** Every merge of a cowboy feature branch, or of
+any branch that contains one of its commits, into a branch other than the cowboy branch and its
+own agent branches waits for it: step 1 (into the base), step 5 (a `/captain merge` grant does
+not lift the gate) and the merge back into a KB9 fallback's start branch. A
+`captain:runner` runs every skipped `Group` test run and the full build at the feature branch
+tip (TS1, `reference/parallel.md`), and the UI check of every UI group; failures go through the
+normal R6 loop. Green at one exact SHA → the runner writes
+`<abs repo>/tmp/captain/<run>/tests/<sha>.json` (an absolute path in the run dir, full SHA) as `{"sha": "<sha>", "commands": [{"cmd": "<command>", "exit": <code>}, ...]}`, one
+entry per skipped `Group` run and the full build, and reports it; main makes the skill call
+`cowboy green <sha>` with the run checkout's HEAD at `<sha>`. The guard refuses the call without
+a valid file, and the merge without a green record for the source tip (KB8); any later commit
+makes the record stale and the pass runs again. A guard denial here is final (R16). Policy
+`night`, a pass that cannot finish, or `/captain off` → no merge, the cowboy TODO entry below.
+Details: `reference/cowboy.md`.
 
 A guard denial caused by the command FORM (a chain, a `-m` message, a `-C` with `~` or an
 unknown working directory, a source other than a local branch or `origin/<default>`) or the
@@ -361,19 +394,47 @@ review loop.
 ## decisions.md (R9, R18)
 
 ```markdown
-- KN1 | tier: full | away: product | <question> | options: A <...> / B <...> / C <...>
+- KN1 | tier: full | scope: run | source: agent | away: product | <question> | options: A <...> / B <...> / C <...>
   | votes: Codex A, agy B, Fable A, Opus A | result: A (majority | no consensus) | reason: <...>
-- AR1 | tier: mini | <decision> | reason: <...> | rejected: <...> | second opinion: Codex agree
+- AR1 | tier: mini | scope: run | source: agent | <decision> | reason: <...> | rejected: <...> | second opinion: Codex agree
+- NS2 | scope: run | source: denial | <the denied call, one line> | to the owner as `!` commands (R16); no rule follows
+- RSH3 | scope: permanent | source: owner | "<the owner's words, verbatim>" | status: open / done <sha> / deferred to <phase/task>: <reason>
 - VR2 | scope cut | <subtask> → TODO.md | reason: does not fit: needs ~40 min, 25 min to hard end
 - VR3 | extension 1/3 | open: ZD3, ZD5
 - VR4 | time: strict — <reason from the kickoff wording> (away mode; present: shown with the plan)
 - ZD1 r2 F6 | ACCEPT artificial timing | <file:line> — <problem, one line>
 - ZD1 r3 F2 | TODO owner decision → <TODO ID> | <file:line> — <problem, one line>
+- KN2 | tier: full | scope: run | source: agent | review bound | ZD1 after r4 (3rd re-review): <F-list> FIX NOW open | options: A re-reviews 4–5 / B TODO | data: new real defects per round <n>/<n>/<n>/<n>, fix-of-fix <n> | votes: Codex A, Fable A, Opus B | result: A re-reviews 4–5 (majority) | reason: <...> | panel: tmp/captain/<run>/amigos-<ID>/
 ```
 
 Review register (R6): one line per ACCEPT or TODO finding, `<task ID> r<k> F<n> | <class>
 <reason> | <file:line> — <problem>`. From round 2 the review prompt carries these lines
 verbatim. Refuted findings and nits live only here (`reference/triage.md`).
+
+A rule or decision line (KN, AR, NS, RSH) carries `scope: run|permanent` and
+`source: owner|agent|denial`, after its `tier:` field when it has one. A review-register line
+and a time line (VR) carry neither: `check-run-end.py` reads their class in the second field.
+A line without the fields counts as `scope: run | source: agent`; only the owner's words make a
+line `permanent`. A `source: denial` line records the one denied call (R16), never a rule. A
+recorded decision is settled for the run (R9). A handoff inside the run carries every line that
+still stands; at run end (R17) the `scope: run` lines expire, and a new run inherits only
+`source: owner` or `scope: permanent` (`reference/handoff.md`). Main sets an owner line's
+`status: done <sha>` when the task that carries it merges. An owner decision that asks for work
+carries `status:` and gets a `## Tasks` row when it is recorded, so it is open work
+(`reference/parallel.md`); a standing owner rule ("the tests one after another") carries no
+`status:` and never becomes work or a TODO entry.
+**Why:** 11.11.2026: NS2, an owner rule born from one classifier denial,, was read
+as settled and outlived its run.
+
+## Owner feedback file
+
+Owner feedback on the work (on a page, a film, a screen; not a new task) → before any agent
+hears of it, main writes it verbatim, with the time, to
+`<abs run dir>/owner-review-<YYYYMMDD>.md` with `Write` or `Edit` (a second feedback of the day
+is appended). A `captain:runner` copies each screenshot the owner gave into
+`<abs run dir>/owner-review/` (main runs no `cp`), and main links the copies in the file, never
+a temp or clipboard path. Writers and handoffs get the file's path (`reference/prompts.md`,
+`reference/handoff.md`), never the words rewritten as rule codes or a summary.
 
 ## TODO entry (R18)
 
@@ -381,7 +442,7 @@ The repo's existing TODO file (root `TODO.md` first, else `docs/plans/TODO.md`;
 one file only); none → create `TODO.md` in the root.
 
 ```markdown
-- **<ID>** <what> — deferred: <reason: owner decision | production or external system: <name> | out of the task's scope | review bound (3 re-reviews) | does not fit: needs ~<N> min, <M> min to hard end> (<date>).
+- **<ID>** <what> — deferred: <reason: owner decision | production or external system: <name> | out of the task's scope | review bound (3 re-reviews) | review bound (5 re-reviews) | does not fit: needs ~<N> min, <M> min to hard end> (<date>).
   Resume: <files>, branch `<branch>`, spec <section>. Open findings: <F-list or none>.
 ```
 
@@ -405,17 +466,34 @@ committed and pushed without review, and the report marks it "pushed unreviewed"
 pushes through an unreviewed commit (R5 push gate). Code and other docs changes made after park
 are committed on their branch but not pushed or merged.
 
+## TODO entry for a cowboy run (R22, KB6)
+
+Same file and IDs as above. One entry per cowboy feature branch whose tests did not go green in
+the run: policy `night`, a `merge` pass that cannot finish, or `/captain off` before the pass.
+A green `merge` pass → no entry. The entry's commit never lands on the tested branch after its
+green record (KB8).
+
+```markdown
+- **<ID>** cowboy branch `<feature branch>` — tests not run (<date>), policy: <merge | night>. Do not merge into the base branch before these tests are green.
+  Last reviewed SHA: <sha>. Tests: <every skipped `Group` test command>; full build: <command>; UI check: <groups | none>.
+  Reviewed once only: <task IDs and files, one line each>. Resume: a normal `/captain` run on `<feature branch>` with this ID.
+```
+
+Its reason is the skipped test pass itself (R22): the one reason outside the TP6 list, for this entry only.
+
 ## Status, park and end reports - `Remaining:` (R12)
 
 A status report (the owner asked), the park report and the end report end with two parts.
 
 1. `Remaining:` — built from run state, never from memory: open rows of `run.md` `## Tasks`,
    `queue.md` items, TODO entries added in this run, commits held back (R17), cleanup
-   items that were skipped, and groups of `## Groups` with merged tasks whose test run, its
-   fixes or the full build is not green yet. One line each, with its ID. `Nothing remains.` only when all six
-   are empty. Each line ends with `[waits on you]` or `[info]`: `[waits on you]` when its next step
-   needs the owner (an answer, a decision, a `!` command, a manual check, a merge or push the
-   owner approves); `[info]` when the run or a later run handles it, or nothing is to be done. E.g.
+   items that were skipped, groups of `## Groups` with merged tasks whose test run, its
+   fixes or the full build is not green yet, and owner decisions decided but not done
+   (`source: owner` lines of `decisions.md` with a `status:` other than `done <sha>`; the
+   handoff's §2 table is their copy). One line each, with its ID. `Nothing remains.` only when all seven are empty.
+   Each line ends with `[waits on you]` or `[info]`: `[waits on you]` when its next step needs the
+   owner (an answer, a decision, a `!` command, a manual check, a merge or push the owner
+   approves); `[info]` when the run or a later run handles it, or nothing is to be done. E.g.
    `- ZD4 review 2/3 running [info]`, `- PSH1 merge of the feature branch into main [waits on you]`.
 2. The last line says what happens next: `Continuing with <ID>.` (only when that action starts
    in the same turn), `Waiting for you on <ID>.`, or at the end of the run
@@ -424,11 +502,45 @@ A status report (the owner asked), the park report and the end report end with t
 The R13 health line is not a report: one line, no `Remaining:`.
 **Why:** 15 sessions, 09–13.10.2026: the owner asked "status?" 8 times and "what is left / are
 we done" 7 times. 17–20.10.2026: four times "which of these wait on me?" ("anything waiting
-on me?").
+on me?"). 09–11.11.2026: decided owner decisions (RSH3, RSH6) were in no task, and the
+morning report was silent about them.
 
 **Notify (R12).** `~/.claude/captain/notify.sh "<message>"`: present mode for a waiting
 question and the end report; away mode for the end report only. If it fails, the message stays
 in the chat.
+
+## End-of-run sweep (R17)
+
+Before the end report, the R17 agent that updates TODO and docs writes a TODO entry with an ID
+(formats above) for each of:
+
+- every `## Tasks` row whose State does not start with `merged`;
+- every `decisions.md` line of class `TODO`;
+- every finding still open at the review bound;
+- every `source: owner` line of `decisions.md` with a `status:` that is not `done <sha>`
+  (reason `owner decision`); a standing owner rule has no `status:` and is skipped.
+
+Then its row or line gets `→ <ID>`: the State cell becomes `cut → <ID>`, the decisions line
+`TODO <reason> → <ID>`, the owner line `status: deferred → <ID>`. An item that already has
+its entry keeps it; a phase or wave written only as prose in `## Tasks` becomes a row first.
+The agent commits this with the TODO file.
+
+Then a `captain:runner` runs, from the run checkout:
+
+    python3 '<skill root>/scripts/check-run-end.py' --run-dir='<abs run dir>' --todo='<abs TODO file>'
+
+It prints one `MISSING <rows|decisions|phase> <ID or line> — <what>` line per problem and a last
+line `PASS: …` or `FAIL: <n> problem(s)`; exit 0 clean, 1 problems, 2 bad input (no run.md, no
+`## Tasks` table, no TODO file). The runner reports the exit code and every line. Exit 1 → the
+agent fixes each `MISSING` item and the runner reruns the check; a `PROCESS <PID>` line (a live
+`## Processes` row) → a `captain:runner` stops the named rows by the R14 match
+(`reference/health.md`), then reruns the check; exit 2 → main fixes the input. A `KEPT <PID>`
+line (a row marked `kept: owner`) is no problem: it goes to the end report with its stop
+command (`reference/ui-check.md`).
+Only exit 0 lets the end report go out.
+**Why:** 28.10.2026: wave 2 (K1–K6) of the handover was one prose line in `## Tasks` ("Wave 2 …
+its plan is written after wave 1."), no `ZDn` row; at the end it was only an `[info]` line, and
+the owner had to ask "did you leave them in TODO"; nothing checked that every open row had a TODO ID.
 
 ## End report (R17) - in the user's language, in this order, every item with its ID
 
@@ -443,16 +555,22 @@ else it goes into item 6.
    proposal to remove them (main writes that after the owner's yes).
 3. Subtasks cut to fit the box (a box only), and the TODO file they went to.
 4. External-system parts that were stopped.
-5. Decisions: away mode all; present mode the consensus ones.
-6. Short report: done (with evidence: log path + result line, sha) / not done / review findings
-   rejected, each with its reason; branches and worktrees the run created; every cleanup
+5. Decisions: away mode all; present mode the consensus ones. Away mode also lists each
+   unasked behaviour change a writer stopped on and reported (`reference/prompts.md`, Agent
+   frame), with its `decisions.md` ID.
+6. Short report: done (with evidence: log path + result line, sha) / not done, each item with its
+   TODO ID (no "not done" without one) / review findings rejected, each with its reason;
+   branches and worktrees the run created; every cleanup
    `SKIPPED` line with its reason (`ALREADY-REMOVED` is left out), and once, when a worktree
    was removed: a log path `<worktree>/tmp/claude-logs/<file>` is now `<copy>/<file>`, with
    the `logs=<copy>` value of its line (it may end in `-<n>`; no `logs=`, no copy)
    (`reference/health.md`, worktree cleanup);
    how late any timer fired; with a box, work extensions used (`<k>/3`); outage minutes; a TODO-only change pushed
    unreviewed after park, if any; a missing config in away mode (nothing created, notify none,
-   tools from `command -v`); the `audit-main.py` exit code if it was run.
+   tools from `command -v`); the `check-run-end.py` exit code and its lines (End-of-run sweep,
+   above); the `audit-main.py` exit code if it was run; a cowboy run (R22) whose test pass did
+   not go green: `tests not run`, the branch, the last reviewed SHA
+   and its TODO ID.
 7. `Remaining:` and the last line (above).
 
 After the report, one `~/.claude/captain/notify.sh "<one-line summary>"` call (R12), in both

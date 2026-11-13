@@ -16,9 +16,13 @@
 - [Mini-consensus prompt (R9) - Codex (medium), else Fable, else `captain:worker`](#mini-consensus-prompt-r9---codex-medium-else-fable-else-captainworker)
 - [Full consensus prompt (R9) - 3amigos `task.md` for a captain decision](#full-consensus-prompt-r9---3amigos-taskmd-for-a-captain-decision)
 - [Panel runner prompt (R9) - to the `captain:runner` of a 3amigos panel](#panel-runner-prompt-r9---to-the-captainrunner-of-a-3amigos-panel)
+- [Server runner prompt (UP3) - a `captain:runner`, add the R3 frame](#server-runner-prompt-up3---a-captainrunner-add-the-r3-frame)
+- [Checking runner prompt (UP4) - a `captain:runner`, add the R3 frame](#checking-runner-prompt-up4---a-captainrunner-add-the-r3-frame)
+- [Classifier prompt (UP2) - one `captain:worker` per project, add the R3 frame](#classifier-prompt-up2---one-captainworker-per-project-add-the-r3-frame)
 
 Fill every `<...>`. Keep the wording of the fixed lines; the rules rely on it. Quote every
-path in a command with single quotes (`'<abs path>'`).
+path in a command with single quotes (`'<abs path>'`). In `round <k>/<n>`, `<n>` is the
+re-review bound: 3, or 5 after the review-bound panel (R6, `reference/triage.md`).
 
 Every `record-created.py` call passes `--agent='<agent name>'`: the agent's `Name` in
 `run.md` `## Agents` (the bootstrap agent: `bootstrap`; a group test runner: its row name).
@@ -97,6 +101,14 @@ House rules:
   config marks off; with a park time, recompute
   the time to park before each; none left → defer it); list each decision with reason and rejected
   alternatives.
+- A behaviour change the task text does not ask for (also one an earlier review note
+  suggests) is scope, not an R9 choice: do not make it; stop and report it as item 1. Main
+  takes it as a product/scope question (R9: present → the owner; away → recorded in
+  `decisions.md` and flagged in the end report).
+- A task over a data set (files, pages, rows, records) reports "processed N of M" and each
+  excluded part with its reason.
+- An empty result (no rows, an empty file, exit 0 with no output) is first checked for a
+  failed command (stderr, the job or server log) before you report it as empty.
 - Mark anything you could not confirm or check, and say where you looked.
 - Your final message carries the evidence itself (output lines, log path, sha), never a
   placeholder or "see above".
@@ -106,6 +118,8 @@ House rules:
   second page.
 - Owner constraints from the kickoff, verbatim: <e.g. "the tests one after another"; the repo's
   canonical test command with its env variables; or "none">.
+- Owner feedback to fix: <'<abs run dir>/owner-review-<YYYYMMDD>.md' (the owner's text verbatim)
+  and the screenshots it links, read both first; or "none">. Never the owner's words rewritten as rule codes.
 
 Approvals: <e.g. "commit on <agent-branch> allowed; push to feature branch <x> allowed;
 NO merge or push to main/master; no force push">. An action the owner asked for (a cleanup
@@ -150,6 +164,12 @@ back "placeholder" twice; an agent stopped twice on a key the owner had exported
 a publish from a new path made a second page; a runner ran the suites in parallel against
 "one after another" and without the test DB variable; an agent refused a cleanup the owner had
 asked for, because its first prompt forbade the unlock, and the consent had to be relayed.
+**Why (unasked change, coverage, empty result):** 19.10.2026: an agent told to hide values in
+an audit view also narrowed which corrections a role sees, taking a review note as a settled
+decision, and the owner had to choose it afterwards; a generation script read only every
+second page, and its task would have closed as done with half the input never processed; a
+query script exited 0 with an empty CSV when its SQL failed, and the error was only in the
+job log, so a wrong query looked like "no such rows".
 
 **Spec first (R5).** A run that starts from a new spec, or from one no review loop has passed,
 makes the spec's Codex review loop (R6) its first task. Code writers start after round 1;
@@ -161,23 +181,61 @@ started after spec round 1 and the spec loop ended (r3 approve) while they worke
 
 ## Auto base (R2 exception, start step 5)
 
-Before bootstrap, main compares the name of the session's current branch with the task (the
-prompt, the handover, the spec). Clear match → `base: <branch> — <one-line reason>` in
-`run.md`, then the Skill call `captain` with args `base <branch>`. `hooks/guard.py` records the
-base only while these hold at that moment: AB1 HEAD is that named branch, not `main`, `master`,
-the origin default or detached; AB2 `git fetch origin <default>` succeeds; AB3 HEAD is the
-fetched tip (no commits of its own); AB4 origin has no `<branch>`, or has it on the same SHA;
-AB5 it is not checked out in another worktree; AB6 the tree is clean (untracked run state under
-`tmp/captain/` and an untracked `.claude/settings.local.json` aside). Only the hook's line ``captain guard: base `<branch>` recorded`` in the
-context counts; any other result, also no line at all (no plugin hook, a hook timeout), means
-not recorded. Use the args form `base <branch>`: `base=<branch>` is a start argument and
-begins a new run. Recorded → one line to the owner,
-`Base branch: <branch> (automatic: a new branch on top of origin/<default>, <reason>)`, and bootstrap
-gets `auto base <branch>`. Not recorded, or a match main is not sure of →
-present: one question with a recommendation (the base question below); away: the normal
-bootstrap with a new `captain/*` branch. With an auto base the run works on the base: no
-`captain/*` feature branch; the run checkout is the session's own checkout; writer worktrees
-branch off the base; reviewed merges land in it; the R5 push gate pushes it.
+At every start main resolves the base before bootstrap (KB9); there is no `Base branch`
+question and the owner types no `/captain base`. The start branch is the session's current
+branch. A `base=<branch>` among the start arguments (or a typed `/captain base <branch>`) is
+the owner's override: skip this section, `run.md` says `typed`; the guard keeps that typed
+base of the run against a later Skill call.
+
+1. `main`, `master` or the origin default → protected, step 3. A detached HEAD → step 5,
+   from that HEAD SHA.
+2. Else main judges whether the start branch is an integration branch, with git inspection
+   only: its name (`develop`, `dev-*`, `staging`, `release/*`); whether it exists on origin;
+   the merges that land in it and not in the default (`git rev-list --count --merges
+   --first-parent 'origin/<default>..<branch>'` and the branches they bring, from
+   `git log --merges --first-parent --format='%h %s' -n 10 'origin/<default>..<branch>'`);
+   its last commits and their authors (`git log -n 10 --format='%h %an %ar %s' <branch>`);
+   deploy files that name it (`git grep -n -e '<branch>' -- .github/ deploy/`).
+   Many merges from other branches, a deploy branch or a long-lived shared branch →
+   integration, step 3. Made for this task, few or no merges from others → work branch,
+   step 4. In doubt → integration. `run.md` gets
+   `Base judgment: <branch> — <work | integration>: <the evidence, one line>`.
+3. Protected or integration → present: one `AskUserQuestion` with an R19 ID — `OP1` a new
+   `captain/*` feature branch from `origin/<default>` (recommended) or `OP2` this branch as the
+   base (only for an integration branch; the owner then types `/captain base <branch>`, the
+   override). Away: no question, `OP1`. Never the fallback of step 5.
+4. Work branch → the Skill call `captain` with args `base <branch>` (not `base=<branch>`,
+   which is a start argument and begins a new run). `hooks/guard.py` records the base only
+   while these hold at that moment: HEAD is that branch, not `main`, `master`, the origin
+   default (also the default origin names now) or detached; origin is readable; origin has no
+   `<branch>`, or `origin/<branch>` is an ancestor of (or equal to) the local tip; it is not
+   checked out in another worktree. Uncommitted files are no guard check: the start question
+   about them stays (`SKILL.md` start step 5). After the record, a start branch behind
+   `origin/<default>` with no commits of its own is fast-forwarded by the guard
+   (`merge --ff-only` to the fetched tip, HEAD read again before it); a branch with commits
+   of its own is never moved.
+   Only the hook's line in the context counts; no line at all (no plugin hook, a hook
+   timeout) means not recorded, as step 5:
+   - ``captain guard: base `<branch>` recorded (KB9 checks hold)`` → one line to the owner,
+     `Base branch: <branch> (automatic: start branch, <reason>)`, and bootstrap gets
+     `auto base <branch>`. With ``fast-forward to origin/<default> ... FAILED`` or ``NOT run``
+     in that line the base stays recorded and the start stops: tell the owner the reason.
+   - ``NOT recorded (...). Protected start branch`` → step 3.
+   - ``NOT recorded (...). Fallback, no question`` → step 5.
+5. Fallback, a work branch that failed a check: no question. Bootstrap gets
+   `fallback from <branch | HEAD SHA>`: a new `captain/*` feature branch from the start
+   branch's HEAD (not from `origin/<default>`, so the owner's commits stay); `run.md` gets the
+   guard's reason. No base is recorded: the merge back into the start branch needs the owner's
+   `/captain merge <start branch>` (R10). A detached HEAD has no branch to merge back into:
+   the feature branch is the run's result, and `run.md` says so.
+
+With an auto base the run works on the base: no `captain/*` feature branch; the run checkout
+is the session's own checkout; writer worktrees branch off the base; reviewed merges land in
+it; the R5 push gate pushes it. In cowboy mode the KB1 feature branch still sits between the
+agents and this base.
+**Why:** 2026-10-30, the owner: a branch made for the task outside captain is the base
+without a question; captain asks about a new worktree or branch only on a protected or
+integration branch (KB9).
 
 ## Bootstrap prompt (`captain:runner`) - add the R3 frame
 
@@ -190,13 +248,15 @@ checkout, and do not touch uncommitted changes.
    if that fails: main if `git -C '<abs repo>' rev-parse --verify --quiet origin/main`
    succeeds, else master if the same check on origin/master succeeds; neither → stop here
    and report the blocker "no origin/HEAD, origin/main or origin/master; base unknown".
-   Count `git -C '<abs repo>' rev-list --count 'origin/<default>..HEAD'`. Count above 0 (any
-   current branch, a local default branch ahead of origin included) → present mode: stop
+   Count `git -C '<abs repo>' rev-list --count 'origin/<default>..HEAD'`. With `auto base
+   <branch>` or `fallback from <branch | sha>`: report the count and go on. Else, count above 0 (a
+   local default branch ahead of origin included) → present mode: stop
    here and report the branch and count (the coordinator asks the owner); away mode: go on
    with origin/<default>, report it.
 3. With `auto base <branch>` (R2): skip steps 3 and 5; the base SHA is
    `git -C '<abs repo>' rev-parse HEAD` and the run checkout is '<abs repo>'. Else create the
-   feature branch from the chosen base (default: origin/<default>) without checking it out:
+   feature branch from the chosen base (default: origin/<default>; with `fallback from
+   <branch | sha>`: that branch's HEAD, or that SHA) without checking it out:
    git -C '<abs repo>' branch --no-track 'captain/<YYYYMMDD>-<slug>' '<base>'
    Report the base SHA: `git -C '<abs repo>' rev-parse 'captain/<YYYYMMDD>-<slug>'`.
 4. For each of tmp/ and .claude/worktrees/: if git -C '<abs repo>' check-ignore -q '<path>'
@@ -212,8 +272,9 @@ checkout, and do not touch uncommitted changes.
    python3 '<skill root>/scripts/record-created.py' --run-dir='<abs repo>/tmp/captain/<run-id>' --worktree='<abs repo>/.claude/worktrees/captain-run-<run-id>' --agent='bootstrap'
 6. Report `git -C '<abs repo>' remote -v`, `git -C '<abs repo>' branch -vv` for the current
    branch, and the captain versions in the plugin cache: `command ls ~/.claude/plugins/cache/*/captain/`.
-7. Report the base-branch candidates (R10): the start branch when it is not main, master or
-   the default branch, and the local branches from
+7. Only when the coordinator asks (a protected or integration start branch, `reference/prompts.md`
+   § Auto base step 3): report the base-branch candidates (R10): the start branch when it is
+   not main, master or the default branch, and the local branches from
    git -C '<abs repo>' for-each-ref --sort=-committerdate --count=5 --format='%(refname:short)' refs/heads
    that are not main, master, the default branch or captain/*; for each, the checkout where it
    is checked out (`git -C '<abs repo>' worktree list`), or none.
@@ -235,21 +296,15 @@ any code agent starts (they are never touched either way); in away mode → note
 agent to go on with that base. Away mode: base on the default branch; `run.md` and the end
 report note the skipped branch. Worktree-mode agent branches start from the feature branch.
 
-Base branch (R10), present mode, only when no base is recorded yet (an auto base above skips
-this paragraph): once bootstrap has reported the branch and the base candidates, one
-`AskUserQuestion`, header exactly `Base branch`, one option per candidate,
-each labelled `base: <branch>`, the recommended one first. It is only a question: no hook
-records its answer. After the answer the captain asks the owner to type
-`/captain base <branch>` (or `/captain 1h base=<branch>` at the start); only that typed command
-(or the auto base above) is what `hooks/guard.py` records, for this repository. The typed `/captain base <branch>` is the
-verified path; if the guard did not record the base, the captain asks the owner to type it.
-The guard never records `main`, `master` or the origin default as the base, nor any branch
-outside `captain/*` while `origin/HEAD` is unreadable; until a base is recorded, a merge into an
-unprotected branch is denied as a checkout-state problem. With no readable `origin/HEAD` every
-branch outside `captain/*` is protected: a merge into the base gets the protected-HEAD denial,
-typing `/captain base` again does not help, and it goes to the owner (R16). No candidate → no
-question; the run merges only into the feature branch. Away mode: no question; without a typed
-or auto base the run merges only into the feature branch. `run.md` records the base branch.
+Base branch (R10): § Auto base above resolves it at every start; there is no `Base branch`
+question. The typed `/captain base <branch>` (or `/captain 1h base=<branch>` at the start)
+stays as the owner's override and is recorded for this repository. The guard never records
+`main`, `master` or the origin default as the base, nor any branch outside `captain/*` while
+`origin/HEAD` is unreadable; until a base is recorded, a merge into an unprotected branch is
+denied as a checkout-state problem. With no readable `origin/HEAD` every branch outside
+`captain/*` is protected: a merge into the base gets the protected-HEAD denial, typing
+`/captain base` again does not help, and it goes to the owner (R16). Without a recorded base
+the run merges only into the feature branch. `run.md` records the base branch and the reason.
 
 ## Memory commit prompt (`captain:runner`) - add the R3 frame
 
@@ -310,6 +365,9 @@ For each difference: the user steps that show it, and the measured values.
 
 ## Review prompt (R6, R7) - Codex and the Opus fallback
 
+The runner that sends it to Codex picks the model: `gpt-6.1-terra`, effort `high`; astra only
+for a creative or research review. It reports its `Model:` line (`reference/tools.md`, KB7).
+
 ```text
 Review <the spec at '<path>' | the changes on branch <agent-branch> vs <feature-branch>
 in '<abs checkout>' (R2 worktree) | the commits <base-sha>..<head-sha> in '<abs checkout>',
@@ -322,6 +380,9 @@ this branch: <path — branch, reviewed, merged into <feature-branch> in <sha> |
 merged yet>. They are not in this checkout; read them with git show '<branch>:<path>'. Do not
 report them as missing.
 Read-only: do not edit files (an Opus reviewer writes only its output file, next line).
+Read the reviewed files with Read, Grep or git show/diff. Never run, syntax-check or lint
+them (bash -n, shellcheck, an interpreter, the script itself): nobody answers the
+permission prompt that asks for.
 <Opus reviewer only:> Write the output below to '<abs run dir>/reviews/<task ID>-r<k>.md' and
 hand back only the Verdict line, the finding count and that path.
 <round 1:> Report every finding. Label each blocking or non-blocking.
@@ -348,6 +409,13 @@ No findings → "Verdict: approve" and "Findings: none".
 
 On a timeout retry, repeat the no-web line at the top as well.
 
+The no-run line holds in every mode, not only away: in auto mode the command is flagged and
+the reviewer waits, which only a transcript tail shows (`reference/health.md`, correction ladder
+step 2). git and read commands stay allowed; the template itself needs `git show`.
+**Why:** 17.10.2026: two away-mode reviewers of a deploy script ran `bash -n` and
+`shellcheck` on it, hit a `dangerous_tool_use` prompt and waited 54 and 29.5 min; a
+Read-only reviewer of the same script finished in about one minute.
+
 Sibling files: fill the sibling line above. A merge of the sibling into the feature branch
 alone does not help: the writer's checkout still lacks the files, and a two-dot diff against
 the new feature head shows them as deleted.
@@ -362,7 +430,7 @@ its output to '<abs run dir>/reviews/<task ID>-r<k>.md' and reports that path); 
 the writer that path, never the findings text.
 
 ```text
-Review findings <F-list> for your work (reviewer: <Codex|Opus fallback>, round <k>/3) are in
+Review findings <F-list> for your work (reviewer: <Codex|Opus fallback>, round <k>/<n>) are in
 '<abs path of the review's final message>'; read the whole file (F1..., the "Non-blocking:" line).
 Do not edit or commit yet. Revalidate each finding against the source first, then write one
 triage block per finding to '<abs run dir>/reviews/<task ID>-r<k>-triage.md', in this shape
@@ -388,7 +456,7 @@ several per line: `F<n> <normal|artificial|not shown>/<impact>/<mechanism or ->/
 ## Fix list message (R6) - after main applies the round threshold
 
 ```text
-Fix now, round <k>/3: <F-list>. Start at once; report once, when the fixes are committed; do
+Fix now, round <k>/<n>: <F-list>. Start at once; report once, when the fixes are committed; do
 not answer this message with a report first. Keep each fix minimal. Commit on your branch, do not push or
 merge. In the commit body, list each real risk accepted on purpose under "Accepted risks:",
 one line each: - <loop> r<k> F<n> <risk> (in <sha of the commit that holds the risk>),
@@ -431,14 +499,17 @@ Command: <the group's test command from run.md ## Groups, with its env variables
 Log: ./tmp/claude-logs/group-<group>-$(date +%Y%m%d-%H%M%S).log, full output; then read the log.
 Shared resource: <test DB / port / container / none>; another group run may hold it: <yes, wait
 for it | no>.
-Report: 1. pass or fail, with the summary line and counts; 2. each failing test, with its
-error line; 3. the files each failing test touches, mapped to the group's merge range
-<base>..<sha> (`git -C '<abs checkout>' log --name-only <base>..<sha>`), as a hint of the task
-(<ZDn: files> per task); 4. the log path.
+Report: 1. pass or fail, with the summary line and counts, the skip count included; 2. each
+failing test, with its error line; 3. each skipped test in a file of the group's merge range,
+with its skip reason; 4. the files each failing or skipped test touches, mapped to the group's
+merge range <base>..<sha> (`git -C '<abs checkout>' log --name-only <base>..<sha>`), as a hint
+of the task (<ZDn: files> per task); 5. the log path.
 ```
 
 **Why:** the owner's answer OP2, 20.10.2026: writers run nothing; one runner per group runs the
 tests once, after the group's review and fixes.
+**Why (skips):** 14.10.2026, integration tests skipped on a laptop that had a data snapshot; the
+suite was green and had not run them, and only the skip count showed it.
 
 ## Hand-off prompt (R6) - a fresh writer replaces one at 30% context
 
@@ -453,7 +524,7 @@ in '<abs checkout>'; head <sha>. The checkout exists: do not create a worktree o
 Read only what your task needs.
 What the branch does so far, in <= 10 lines: <summary from the old writer's reports>.
 Settled decisions you must keep (decisions.md IDs): <list or "none">.
-Your task: <the next queued task, or the path of the review findings, their F-IDs and round <k>/3>.
+Your task: <the next queued task, or the path of the review findings, their F-IDs and round <k>/<n>>.
 ```
 
 The extra writer for a trapped mechanism in a `fix-all` run (`reference/triage.md`) gets this
@@ -463,7 +534,7 @@ block too, plus:
 Mechanism <name> is in the trap: <what the code does now; the fixes tried so far, one line each>.
 New hypothesis to test first: <one or two lines: what the earlier fixes assumed, and the
 different cause to try>. This is the last writer for this mechanism; the loop's re-review
-count does not reset (round <k>/3).
+count does not reset (round <k>/<n>).
 ```
 
 After an `ESCALATE` of a light coder (R4 MR3), add to the block:
@@ -475,6 +546,9 @@ Decide the escalated point, record it (R9), then finish the task.
 ```
 
 ## Mini-consensus prompt (R9) - Codex (medium), else Fable, else `captain:worker`
+
+Codex: `gpt-6.1-terra`, effort `medium`; astra only for a research consult. The launcher picks
+the model and reports its `Model:` line (`reference/tools.md`, KB7).
 
 ```text
 Second opinion on technical decisions made in <repo>, task <one line>.
@@ -542,4 +616,165 @@ Report in at most 8 lines plus one line per decision: each status line in short;
 decision ID from data.md the winning letter, the kind (agree, majority) or "no consensus"
 (split, insufficient, no valid vote, unknown letter), and one reason of a winning voter;
 the missing voters.
+```
+
+## Server runner prompt (UP3) - a `captain:runner`, add the R3 frame
+
+The UI check of a group (`reference/ui-check.md`): the runner starts the app at one exact SHA
+and keeps it up while the checking runners work. A named R3 exception: it sends **two**
+messages. Drop the frame's writer `worktree add` step; the runner makes its own clean worktree.
+Main sends `stop` before a recheck at a new SHA (a new server runner starts there), and `stop`
+or `keep` after the last checking runner reported.
+
+```text
+Start the app of group <group> for its UI check at SHA <sha>, then keep it up until main
+says otherwise. Do not edit, commit, merge or push anything, and do not run in
+'<abs checkout>': first
+git -C '<abs repo>' worktree add '<abs repo>/.claude/worktrees/ui-<run-id>-<group>-<n>' -b 'ui-<run-id>-<group>-<n>' '<sha>'
+python3 '<skill root>/scripts/record-created.py' --run-dir='<abs run dir>' --worktree='<abs repo>/.claude/worktrees/ui-<run-id>-<group>-<n>' --agent='<agent name>'
+and run every server from that clean worktree. Leave the worktree there: the run's cleanup
+removes it, or keeps it on `keep`.
+Start commands (source <1 CLAUDE.md ui_check | 2 run skill | 3 package script: a guess, report
+the script and the port you used>): <one line per server: command, port and how it takes it
+(the entry's port field: PORT=, --port, a placeholder, or fixed; "not given" for sources 2
+and 3), its env variables>.
+Health URL: <health or url>. Seed: <the repo's seed or migration command, or "none">.
+Stubs on (every stub verdict of the classifier): <VAR=value per stub, or "none">; set them
+in the env of every server.
+Before any seed or start: note `git status --porcelain --ignored` of the worktree, so that
+on `stop` you know the files the seed and the servers added.
+- Env and config: read the env files, the config and your own environment (env) each command
+  will use. A DB or auth host that is not localhost, 127.0.0.1 or a local container → no
+  seed, start nothing (R10).
+- Ports: command lsof -iTCP:<port> -sTCP:LISTEN for each port. A busy port that is not a
+  `## Processes` row of this run is the owner's: never stop it. How a command takes its port
+  is not given → read its script; still unclear → it is fixed. The command takes a port → use
+  the given port when free, else a free one, and pass the chosen ports to every command that
+  names them; it is fixed and the port is busy → start nothing, report the port.
+- Test data: only the local or in-memory DB, set up by the seed above; never a test DB a group
+  test run is using now (<the shared test resource, or "none">).
+Start each server detached, in its own session and process group (not as a background command
+of your own that the harness waits on), the same way on Linux and macOS, from the worktree:
+LOG='<abs run dir>/ui-check/<server>-'"$(date +%Y%m%d-%H%M%S)"'.log'
+python3 -c 'import subprocess,sys; print(subprocess.Popen(["sh","-c",sys.argv[2]], start_new_session=True, stdin=subprocess.DEVNULL, stdout=open(sys.argv[1],"ab"), stderr=subprocess.STDOUT).pid)' "$LOG" '<cmd>'
+It returns at once and prints the PID (the timestamp is outside the single quotes, so a
+restart writes a new log). The moment a server starts, add its `run.md`
+`## Processes` row: PID, start time (LC_ALL=C command ps -o lstart= -p <PID>), working
+directory, agent <agent name>.
+Health: poll the health URL every 3 s; it must answer 2xx within 90 s; log every poll. A
+server that exits before health passes is a failure at once: stop polling. A failure → stop
+what you started (as on `stop` below), remove its rows, and send your done report with the
+log paths, the exit code of a server that exited and the last lines of the failing log. No
+READY.
+Started nothing (a check above, or a health failure): no READY; the first line of your done
+report is NOT STARTED <reason>.
+Message 1, once the health check passes, exactly one line, as your hand-back; then idle: end
+your turn with no wait loop, Monitor or sleep of your own:
+READY <url> <ports> <PIDs> <SHA> <log paths>
+Main resumes you by SendMessage with `stop` or `keep`:
+- stop: stop each of your processes by its recorded PID and its process group, only after
+  the R14 match (PID, start time and working directory all match the row): kill <PID> with
+  literal PIDs, the group's other members listed by pgrep -g <PID>, each by its literal PID
+  (no kill of a negative group id). A process that does not match is listed as "not verified
+  as ours, not stopped". Check that none is left alive, remove your `## Processes` rows,
+  delete by name the files the seed and the servers added to the worktree since your note
+  above (never git clean), so the run's cleanup can remove it, then send your normal done
+  report (message 2). The same on a health failure.
+- keep: the owner will test too. Leave the servers and the worktree running, mark each of
+  your rows `kept: owner`, and send your done report (message 2) with the URL, the kept PIDs
+  and one stop command per process (kill <PID>).
+```
+
+**Why:** the owner started the app by hand, or asked for it, at the end of three UI runs in
+four days; a known source order gives one place per repo and a fallback for plain scripts.
+
+## Checking runner prompt (UP4) - a `captain:runner`, add the R3 frame
+
+One per data-disjoint slice of the use-case list (UP5, at most 3), all against the one set of
+servers the server runner reported READY. The procedure and the tool table are in
+`reference/ui-check.md`.
+
+```text
+Check use cases <STS IDs> of group <group> in a browser against <url> (SHA <sha>, servers
+started by <server runner name>; do not start, stop or restart them). Do not edit, commit,
+merge or push anything; add no file to the repo.
+Use cases, in this order (from '<abs run dir>/ui-check.md'):
+<STSn | <screen or route> | <steps> | <expected visible result> | ZDn | reads/writes <data>>
+External writes: <per STS: stub <how> is on in the servers | skip as not checked: external write
+| none>. Never submit the form of a skipped use case, also not as a step of another one.
+Login: only the seeded test user <user, from the seed>; no stored profile of the owner and no
+real account.
+Tool, in this order (report the choice and the reason):
+1. The repo's Playwright setup (a playwright.config.* that the repo's package scripts, CI or
+   docs run, at any path, or one at the repo root or in a workspace package whose
+   package.json has @playwright/test; fixtures; a copy nothing runs is not a setup), if it
+   has one: analyse whether @playwright/test resolves from the worktree without an install
+   (node -e "require.resolve('@playwright/test')"; install nothing; a Playwright in another
+   tool's cache, such as the npx cache of @playwright/mcp, is not the repo's runtime), its
+   base URL, fixtures, login or seed setup, and whether it can run against <url>. Usable →
+   write the checks as a throwaway script under '<abs run dir>/ui-check/', with the repo's
+   config and fixtures, outside the repo's test tree.
+2. Else, if command -v agent-browser succeeds, agent-browser, the default when step 1 does
+   not fit: first run
+   agent-browser skills get core and follow it; your session is captain-<run>-<agent>
+   (--session captain-<run>-<agent> on every call).
+3. Else, only when command -v agent-browser fails, the repo has no usable Playwright setup and
+   the probe passes, Playwright MCP (one ToolSearch batch). Probe: the args of the playwright
+   MCP server (a user or project mcpServers.playwright entry wins; else the .mcp.json under
+   the installPath that ~/.claude/plugins/installed_plugins.json gives for the Playwright
+   plugin) include --headless (<away: required | present: headed allowed>), and no other
+   runner of this run holds the MCP browser. A failed probe → every use case
+   not checked: no browser.
+Headless; <headed: only when main says the owner asked to watch>.
+Close your browser with the tool you used on every exit path (PASS, FAIL, timeout, an error):
+agent-browser --session <name> close, browser.close() in a finally of the Playwright script,
+or the Playwright MCP browser_close. Leave no browser for the owner. After an agent-browser
+close only, wait up to 5 s until agent-browser session list no longer shows your session
+(after the repo's Playwright setup or Playwright MCP, run no agent-browser command). A browser
+process of yours still alive after the close, with any tool → add its `run.md` `## Processes` row (PID, start time from
+LC_ALL=C command ps -o lstart= -p <PID>, working directory, agent <agent name>) and list it
+under item 6.
+Evidence: a screenshot per use case at its expected state,
+'<abs run dir>/ui-check/<SHA7>-s<k>-STSn.png' (k = <the server runner's number>); on a FAIL
+also '<abs run dir>/ui-check/<SHA7>-s<k>-STSn-console.txt' with the console errors. Never
+overwrite an existing file. Report paths, never
+images.
+Item 2 of the report: one line per use case, in list order, beyond the 8 lines:
+STSn PASS <screenshot>
+STSn FAIL <screenshot> — <expected> vs <seen>
+STSn not checked: <reason>
+```
+
+**Why:** `agent-browser` behaved better in practice than the alternatives (owner, VA8), and a
+repo's own Playwright setup already knows its login and seed; a browser left open is a process
+nobody owns.
+
+## Classifier prompt (UP2) - one `captain:worker` per project, add the R3 frame
+
+Before the first run of every writing `STS` without a verdict in `ui-check.md`, a `STS` of a later
+group in the same run included; again when a fix touches the env, the config or the outbound
+call. Main turns every `stub` verdict on (the server runner's `Stubs on`), marks every
+`external` one `not checked: external write`, and writes the verdicts and the decisions to
+`ui-check.md` and `decisions.md`.
+
+```text
+Classify the writing use cases <STS IDs> of '<abs checkout>' at SHA <sha>: does a local write
+reach an external system (webhook, email, payments, cloud storage, a shared DB, an outbound
+API)? Read the env files, the config and the code behind each use case; follow the write
+from the UI to the handler and every outbound call it makes. Read only: edit nothing, start
+nothing, send no request.
+Use cases: <STSn | <screen or route> | <steps> | reads/writes <data>>
+Exactly one verdict per use case:
+local — the write stays in the local or in-memory DB;
+stub: <how> — the outbound call goes to the repo's own mail catcher, fake provider, mock
+server or env flag, and how to turn it on; also when that stub is off by default: then say
+what the default reaches;
+external: <what> — it reaches a real external system, and which.
+For stub and external: also the host or the log line that only the real external call leaves
+in the server log (never one the stub's own local request leaves), for main's grep after the
+check.
+Item 2 of the report: one line per use case, beyond the 8 lines:
+STSn | local | <file:line evidence>
+STSn | stub: <how> | grep: <host or log marker> | <file:line evidence>
+STSn | external: <what> | grep: <host or log marker> | <file:line evidence>
 ```

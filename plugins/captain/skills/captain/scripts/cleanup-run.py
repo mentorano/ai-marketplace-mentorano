@@ -9,6 +9,7 @@ The first line says what it read from run.md (`-`: the label is missing; `none`:
   READ feature=<branch|-> base=<branch|none|-> default=<branch|-> checkout=<path|-> base_sha=<sha|-> agents=<n>
   WARN run.md has no <label> line; <what that disables>
 Then, for each recorded worktree and branch that still exists, exactly one line:
+  KEPT <worktree>                                    (kept for the owner, see below)
   REMOVED <worktree> branch=<branch> [logs=<copy>]
   WOULD-REMOVE <worktree> branch=<branch>            (--dry-run: nothing changes)
   SKIPPED <worktree> branch=<branch> [logs=<copy>] reason=<reason>
@@ -17,6 +18,11 @@ tmp/claude-logs/, on every line of an item whose worktree was removed (REMOVED, 
 only the branch step failed); a symlink in tmp/claude-logs/ or a failed copy skips the item.
 Items whose worktree and branch are both gone (git read the repository and found neither)
 print no line of their own; the last line is then `ALREADY-REMOVED <n>` (n > 0).
+
+An item is kept, worktree and branch untouched, when its worktree is or contains the
+`Working dir` of a row of the first table under `## Processes` in run.md that holds
+`kept: owner` in any cell: a server the owner tests too (reference/health.md, R14/R17
+exception). The row counts whether its PID is alive or not.
 
 An item is skipped when:
 - its worktree is not the one the run created: the manifest line has `git_ino`/`git_dev` and
@@ -78,6 +84,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 SESSION_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+KEPT_MARK = "kept: owner"  # the same mark check-run-end.py reads
+UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")
+# `## Processes` ends at a level 1 or 2 heading; `###` stays inside (as in check-run-end.py).
+SECTION_END = re.compile(r"#{1,2}(?:\s|$)")
 MARKER_MAX_AGE = 5 * 24 * 3600  # seconds; the same stale rule as archive-sessions.py
 PROCESS_TIMEOUT = 10  # seconds, for each ps and lsof call
 LOGS_DIR = "tmp/claude-logs"
@@ -165,6 +175,50 @@ class Run:
     base_sha: str | None = None
     base_label: bool = True  # False: run.md has no `Base branch (R10):` line at all
     rows: list[dict[str, str]] = field(default_factory=list)  # data rows of ## Agents
+    kept_dirs: set[str] = field(default_factory=set)  # Working dir of `kept: owner` rows
+
+
+def process_rows(text: str) -> tuple[list[str], list[list[str]]]:
+    """(header, every body row) of the first table under `## Processes`, all cells kept: a
+    trailing note cell has no header of its own. The section ends at the next `#` or `##`
+    heading, not at a `###` subheading. Cells split on unescaped pipes only, as in
+    check-run-end.py."""
+    lines = text.splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if line.strip() == "## Processes")
+    except StopIteration:
+        return [], []
+    header: list[str] | None = None
+    rows: list[list[str]] = []
+    for line in lines[start + 1:]:
+        stripped = line.strip()
+        if SECTION_END.match(stripped):
+            break
+        if not stripped.startswith("|"):
+            if header is not None:
+                break
+            continue
+        body = stripped[1:-1] if stripped.endswith("|") and len(stripped) > 1 else stripped[1:]
+        cells = [cell.strip() for cell in UNESCAPED_PIPE.split(body)]
+        if header is None:
+            header = cells
+        elif not all(re.fullmatch(r":?-+:?", cell) for cell in cells if cell):
+            rows.append(cells)
+    return header or [], rows
+
+
+def kept_dirs(text: str) -> set[str]:
+    """The `Working dir` of every `## Processes` row that holds `kept: owner` in any cell."""
+    header, rows = process_rows(text)
+    column = header.index("Working dir") if "Working dir" in header else 2
+    found = set()
+    for cells in rows:
+        if not any(KEPT_MARK in cell for cell in cells):
+            continue
+        directory = cells[column] if len(cells) > column else ""
+        if directory.strip("`'\" "):
+            found.add(real(directory))
+    return found
 
 
 def read_run(text: str) -> Run:
@@ -181,7 +235,7 @@ def read_run(text: str) -> Run:
                checkout=real(checkout) if checkout else None,
                agents=agents if readable else None,
                base_sha=field_value(text, "Base SHA (bootstrap)"),
-               base_label=base is not None, rows=rows)
+               base_label=base is not None, rows=rows, kept_dirs=kept_dirs(text))
 
 
 MISSING_LABELS = (
@@ -657,7 +711,12 @@ def handle(entry: dict, ctx: Context) -> str | None:
             return f"SKIPPED {item} reason={problem}"
         if not exists:
             return None
-    reason = identity_reason(entry, listed) or skip_reason(entry, ctx, listed)
+    reason = identity_reason(entry, listed)
+    if not reason and entry.get("run_id") != ctx.run_id:
+        reason = f"recorded for run {entry.get('run_id')}, not {ctx.run_id}"
+    if not reason and any(inside(directory, path) for directory in ctx.run.kept_dirs):
+        return f"KEPT {path}"
+    reason = reason or skip_reason(entry, ctx, listed)
     if reason:
         return f"SKIPPED {item} reason={reason}"
     if ctx.dry_run:

@@ -664,6 +664,27 @@ class SuccessorTabWrapperTest(unittest.TestCase):
         self.assertFalse((self.handoff.parent / "proj-c5-r2.prompt.md").exists(),
                          "the resume slash command runs unwrapped: it sends its own STARTED")
 
+    def test_the_session_prefix_goes_in_front_of_the_successor_name(self):
+        self.install_utils("0.3.0")
+        result = self.run_wrapper(config={"successor_terminal": "supacode", "session_prefix": "dev1-"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(" dev1-proj-c5-r2 ", result.stdout)
+        prompt = self.handoff.parent / "successor-prompt-dev1-proj-c5-r2.md"
+        self.assertIn("name=dev1-proj-c5-r2", prompt.read_text(encoding="utf-8"))
+        spec = importlib.util.spec_from_file_location("successor_tab_copy", SUCCESSOR_TAB)
+        wrapper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(wrapper)
+        for config, want in (({"session_prefix": "proj-"}, "proj-"), ({"session_prefix": "bad x"}, ""),
+                             ({"session_prefix": 3}, ""), ({}, ""), (None, "")):
+            with self.subTest(config=config):
+                self.assertEqual(wrapper.session_prefix(config), want)
+
+    def test_a_name_that_carries_the_prefix_keeps_one(self):
+        self.install_utils("0.3.0")
+        result = self.run_wrapper(config={"successor_terminal": "supacode", "session_prefix": "proj-"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(" proj-c5-r2 ", result.stdout)
+
     def test_the_highest_version_is_picked_numerically(self):
         self.install_utils("0.3.0")
         self.install_utils("0.10.0", answers="FAILED STUB from 0.10.0")

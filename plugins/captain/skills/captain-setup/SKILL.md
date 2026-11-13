@@ -85,18 +85,36 @@ Use AskUserQuestion, one question per call, in the user's language. Mark the rec
    - "No, I have no such aliases" → `false`.
    The captain's `!` command rules use it (`reference/queue.md` of the captain skill). No
    detection command runs for it.
+7. "What prefix should the Captain's session names start with?"
+   - "`<login>-`" (recommended; `<login>` is the last part of the home directory,
+     `$HOME`) → `"<login>-"`. Colleagues then tell their sessions apart in shared lists.
+   - "Another prefix" → ask for it: letters, digits, `.`, `_`, `-`, starting with a letter or
+     digit, at most 32 characters; reject anything else and ask again.
+   - "No prefix" → leave the key out.
+   The captain uses it when it proposes a session name at the start and for every handoff
+   successor (`scripts/successor-tab.py` puts it in front of a name that lacks it).
+8. "Cowboy mode: when should the tests the loop skips run?"
+   - "At the merge, in the same run" (recommended) → `merge`. The tests run once, when the owner is
+     satisfied, before any merge into the base branch.
+   - "In a separate night shift that I start" → `night`. The run writes a TODO entry; the owner
+     starts a normal captain run for the tests by hand.
+   The captain's cowboy mode uses it (R22, `reference/cowboy.md` of the captain skill); a kickoff
+   `tests=merge` or `tests=night` overrides it for one run. When the captain finds the key
+   missing it asks this question alone and writes only that key.
 
 ## 3. Write
 
 1. `~/.claude/captain/config.json` with the Write tool, exactly this shape:
-   `{"version":1,"notify":{"method":"msg-notify|command|none","quiet_hours":{"from":"22:00","to":"06:00"},"away_minutes":15},"tools":{"codex":true,"agy":false},"context_threshold":250000,"successor_terminal":"supacode|cmux|none","shell":{"command_prefix":true},"updated":"YYYY-MM-DD"}`.
+   `{"version":1,"notify":{"method":"msg-notify|command|none","quiet_hours":{"from":"22:00","to":"06:00"},"away_minutes":15},"tools":{"codex":true,"agy":false},"context_threshold":250000,"successor_terminal":"supacode|cmux|none","shell":{"command_prefix":true},"session_prefix":"<login>-","cowboy":{"tests":"merge|night"},"updated":"YYYY-MM-DD"}`.
    No quiet hours → `"quiet_hours":null` (that means no quiet hours). Method `none` →
    `"away_minutes":0`. `context_threshold` is the answer to question 4, a string like `"45%"`
    or a number of tokens; question 4 skipped → `250000`.
    `successor_terminal` is the answer to question 5; question 5 skipped → leave the key out.
    A config without it means: a Supacode tab when the session runs in Supacode, a cmux tab when it
    runs in cmux, else `/clear`. `shell.command_prefix` is the answer to question 6 (`true` or
-   `false`); a config without it means `true`. So `version` stays 1. `updated` is today. An
+   `false`); a config without it means `true`. `session_prefix` is the answer to question 7;
+   no prefix → leave the key out. `cowboy.tests` is the answer to question 8. So `version`
+   stays 1. `updated` is today. An
    existing config's `dev_targets` is kept unchanged (section 5); a new config has none.
 2. `~/.claude/captain/notify.sh`: read `notify.sh.tmpl` next to this file, replace every
    placeholder, then Write it and run `chmod +x ~/.claude/captain/notify.sh`.
@@ -116,7 +134,7 @@ Use AskUserQuestion, one question per call, in the user's language. Mark the rec
 
 ## 4. Report
 
-Eight lines, in the user's language, then one line: "You can run the setup again with
+Ten lines, in the user's language, then one line: "You can run the setup again with
 `/captain:captain-setup`."
 
 ```
@@ -127,6 +145,8 @@ Tools: codex <yes|no>, agy <yes|no>
 Handoff at context: <N>k tokens
 New session on handoff: <Supacode tab | cmux tab | /clear by you | by terminal (no setting)>
 `command` before rm/cp/mv: <yes | no>
+Session prefix: <`<prefix>` | none>
+Cowboy mode, tests: <at the merge | night shift>
 Files: ~/.claude/captain/config.json, ~/.claude/captain/notify.sh
 ```
 

@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""Tests for the captain automatic base branch (BR1) in hooks/guard.py.
+"""Tests for the captain start branch as the base branch (KB9) in hooks/guard.py.
 
-A model-made Skill call `captain base <branch>` records the run's base only while AB1–AB6
-hold at that moment: a named branch that is not the default, a working `git fetch origin
-<default>`, HEAD on the fetched tip, no other origin/<branch>, not checked out elsewhere, a
-clean tree. The owner's typed `/captain base <branch>` skips AB2–AB6. Every case runs on a
-temporary repository with a local bare origin; nothing reaches the network.
+At start step 5 main judges the start branch (a work branch, or an integration branch it asks
+about) and makes the Skill call `captain base <branch>`. The guard records it only while the
+hard checks hold at that moment: HEAD is that branch, not main, master, the origin default or
+detached; origin is readable; origin has no <branch>, or origin/<branch> is an ancestor of
+HEAD; it is not checked out in another worktree. Then a start branch behind origin/<default>
+with no commits of its own is fast-forwarded. A protected branch → ask the owner; any other
+failed check → the fallback with no question and no base. The owner's typed `/captain base
+<branch>` is the override. Every case runs on a temporary repository with a local bare
+origin; nothing reaches the network.
 
 Run:  python3 tests/test_captain_auto_base.py
 """
@@ -29,7 +33,7 @@ GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAM
 
 
 class AutoBaseTest(unittest.TestCase):
-    """The table over AB1–AB6, for the Skill path and the typed path."""
+    """The table over the KB9 start-branch checks, for the Skill path and the typed path."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -104,6 +108,7 @@ class AutoBaseTest(unittest.TestCase):
         return linked, "feat2"
 
     def case_with_a_commit(self):
+        # a real base branch may have commits of its own (AB3 dropped)
         (self.repo / "a.txt").write_text("mine\n")
         self.git(self.repo, "commit", "-q", "-am", "mine")
         return self.repo, "feat"
@@ -112,6 +117,15 @@ class AutoBaseTest(unittest.TestCase):
         # local origin/main still equals HEAD; only the fetch shows that origin moved on
         self.seed_commit("main")
         return self.repo, "feat"
+
+    def case_behind_with_a_conflicting_edit(self):
+        self.seed_commit("main")
+        (self.repo / "a.txt").write_text("edited\n")  # the fast-forward would overwrite it
+        return self.repo, "feat"
+
+    def case_diverged_from_the_default(self):
+        self.seed_commit("main")
+        return self.case_with_a_commit()
 
     def case_default_branch(self):
         self.git(self.repo, "switch", "-q", "main")
@@ -133,45 +147,22 @@ class AutoBaseTest(unittest.TestCase):
         self.git(self.seed, "push", "-q", "origin", "main:feat")
         return self.repo, "feat"
 
+    def case_remote_branch_behind_the_local_tip(self):
+        self.git(self.seed, "push", "-q", "origin", "main:feat")
+        return self.case_with_a_commit()
+
     def case_checked_out_elsewhere(self):
         other = self.root / "other"
         self.git(self.repo, "worktree", "add", "-q", "-f", str(other), "feat")
         return self.repo, "feat"
 
     def case_dirty_tree(self):
+        # AB6 dropped: uncommitted files are a question at start, not a guard check
         (self.repo / "a.txt").write_text("edited\n")
         return self.repo, "feat"
 
     def case_untracked_file(self):
         (self.repo / "new.txt").write_text("new\n")
-        return self.repo, "feat"
-
-    def case_run_state_only(self):
-        # main wrote its run state before start step 5, in a repo that does not ignore tmp/
-        run = self.repo / "tmp" / "captain" / "20261013-150626"
-        run.mkdir(parents=True)
-        (run / "run.md").write_text("# captain run\n")
-        return self.repo, "feat"
-
-    def case_local_settings_only(self):
-        # start step 3 wrote the permissions, in a repo that does not ignore the file
-        (self.repo / ".claude").mkdir()
-        (self.repo / ".claude" / "settings.local.json").write_text("{}\n")
-        return self.repo, "feat"
-
-    def case_tracked_local_settings(self):
-        (self.repo / ".claude").mkdir()
-        (self.repo / ".claude" / "settings.local.json").write_text("{}\n")
-        self.git(self.repo, "add", ".claude/settings.local.json")
-        return self.repo, "feat"
-
-    def case_tracked_change_under_run_state(self):
-        run = self.repo / "tmp" / "captain"
-        run.mkdir(parents=True)
-        (run / "kept.md").write_text("one\n")
-        self.git(self.repo, "add", "tmp/captain/kept.md")
-        self.git(self.repo, "commit", "-q", "-m", "kept")
-        self.git(self.repo, "reset", "-q", "--soft", "HEAD~1")  # back on the tip, file staged
         return self.repo, "feat"
 
     def case_other_branch_named(self):
@@ -183,30 +174,30 @@ class AutoBaseTest(unittest.TestCase):
         self.git(self.repo, "switch", "-q", "-c", "captain/x")
         return self.repo, "captain/x"
 
-    # case, Skill path records?, AB named in a refusal, typed path records?
+    # case, Skill path outcome (recorded | protected | fallback), the text in the note, typed
+    # path records?
     TABLE = [
-        ("on_tip", True, None, True),
-        ("linked_worktree_on_tip", True, None, True),
-        ("with_a_commit", False, "AB3", True),
-        ("behind", False, "AB3", True),
-        ("default_branch", False, "AB1", False),
-        ("detached_head", False, "AB1", True),
-        ("fetch_failure", False, "AB2", True),
-        ("remote_branch_ahead", False, "AB4", True),
-        ("remote_branch_on_the_same_sha", True, None, True),
-        ("checked_out_elsewhere", False, "AB5", True),
-        ("dirty_tree", False, "AB6", True),
-        ("untracked_file", False, "AB6", True),
-        ("run_state_only", True, None, True),
-        ("tracked_change_under_run_state", False, "AB6", True),
-        ("local_settings_only", True, None, True),
-        ("tracked_local_settings", False, "AB6", True),
-        ("other_branch_named", False, "AB1", True),
-        ("no_origin_head", False, "AB1", True),
+        ("on_tip", "recorded", "(KB9 checks hold).", True),
+        ("linked_worktree_on_tip", "recorded", "(KB9 checks hold).", True),
+        ("with_a_commit", "recorded", "(KB9 checks hold).", True),
+        ("behind", "recorded", "fast-forwarded to origin/main", True),
+        ("behind_with_a_conflicting_edit", "recorded", "fast-forward to origin/main", True),
+        ("diverged_from_the_default", "recorded", "(KB9 checks hold).", True),
+        ("default_branch", "protected", "AB1", False),
+        ("detached_head", "fallback", "AB1", True),
+        ("fetch_failure", "fallback", "origin:", True),
+        ("remote_branch_ahead", "fallback", "not an ancestor of HEAD", True),
+        ("remote_branch_on_the_same_sha", "recorded", "(KB9 checks hold).", True),
+        ("remote_branch_behind_the_local_tip", "recorded", "(KB9 checks hold).", True),
+        ("checked_out_elsewhere", "fallback", "AB5", True),
+        ("dirty_tree", "recorded", "(KB9 checks hold).", True),
+        ("untracked_file", "recorded", "(KB9 checks hold).", True),
+        ("other_branch_named", "fallback", "AB1", True),
+        ("no_origin_head", "protected", "AB1", True),
     ]
 
     def test_the_table(self):
-        for name, records, rule, typed_records in self.TABLE:
+        for name, outcome, text, typed_records in self.TABLE:
             for form in ("base {}", "base={}"):
                 with self.subTest(case=name, form=form):
                     self.tmp.cleanup()
@@ -214,19 +205,66 @@ class AutoBaseTest(unittest.TestCase):
                     directory, branch = getattr(self, f"case_{name}")()
                     base, stdout = self.skill(form.format(branch), directory)
                     note = self.note(stdout)
-                    if records:
+                    self.assertIn(text, note)
+                    if outcome == "recorded":
                         self.assertEqual(base["branch"], branch, note)
                         self.assertTrue(base["auto"])
-                        self.assertIn("recorded (AB1–AB6 hold)", note)
+                        self.assertIn(f"base `{branch}` recorded (KB9 checks hold)", note)
                     else:
                         self.assertIsNone(base, note)
-                        self.assertIn(f"NOT recorded ({rule}", note)
+                        self.assertIn(f"base `{branch}` NOT recorded (", note)
+                        self.assertIn("Protected start branch" if outcome == "protected"
+                                      else "Fallback, no question", note)
+                    if outcome == "fallback":
+                        self.assertIn(f"the HEAD of `{branch}`", note)
+                        self.assertIn(f"`/captain merge {branch}`", note)
+                    if outcome == "protected":
+                        self.assertNotIn("Fallback", note)
                     typed = self.typed(f"/captain {form.format(branch)}", directory)
                     if typed_records:
                         self.assertEqual(typed["branch"], branch)
                         self.assertFalse(typed["auto"])
                     else:
                         self.assertIsNone(typed)
+
+    def test_a_start_branch_behind_the_default_is_fast_forwarded(self):
+        self.seed_commit("main")
+        tip = self.git(self.seed, "rev-parse", "main")
+        base, stdout = self.skill("base feat")
+        self.assertEqual(base["branch"], "feat")
+        self.assertIn(f"fast-forwarded to origin/main ({tip[:12]})", self.note(stdout))
+        self.assertEqual(self.git(self.repo, "rev-parse", "HEAD"), tip)
+        self.assertEqual(self.git(self.repo, "symbolic-ref", "--short", "HEAD"), "feat")
+
+    def test_a_branch_with_commits_of_its_own_is_never_moved(self):
+        self.case_diverged_from_the_default()
+        head = self.git(self.repo, "rev-parse", "HEAD")
+        base, stdout = self.skill("base feat")
+        self.assertEqual(base["branch"], "feat")
+        self.assertNotIn("fast-forward", self.note(stdout))
+        self.assertEqual(self.git(self.repo, "rev-parse", "HEAD"), head)
+
+    def test_a_failed_fast_forward_keeps_the_base_and_says_stop(self):
+        self.case_behind_with_a_conflicting_edit()
+        head = self.git(self.repo, "rev-parse", "HEAD")
+        base, stdout = self.skill("base feat")
+        note = self.note(stdout)
+        self.assertEqual(base["branch"], "feat")
+        self.assertIn("fast-forward to origin/main", note)
+        self.assertIn("FAILED", note)
+        self.assertIn("Stop and tell the owner", note)
+        self.assertEqual(self.git(self.repo, "rev-parse", "HEAD"), head)
+        self.assertEqual((self.repo / "a.txt").read_text(), "edited\n")
+
+    def test_a_start_alone_records_no_base(self):
+        # the integration-branch judgment (develop, staging, release/*) is main's at start
+        # step 5: no Skill call `captain base <branch>`, no base; the owner's typed yes records
+        for name in ("develop", "release/2026.10"):
+            with self.subTest(branch=name):
+                self.git(self.repo, "switch", "-q", "-C", name, "origin/main")
+                self.assertIsNone(self.typed("/captain 1h"))
+                self.assertIsNone(self.skill("1h")[0])
+                self.assertEqual(self.typed(f"/captain base {name}")["branch"], name)
 
     def test_a_model_call_never_records_a_protected_branch(self):
         for branch in ("main", "master"):
@@ -235,6 +273,7 @@ class AutoBaseTest(unittest.TestCase):
                 base, stdout = self.skill(f"base {branch}")
                 self.assertIsNone(base)
                 self.assertIn("NOT recorded (AB1", self.note(stdout))
+                self.assertIn("Protected start branch", self.note(stdout))
         # the origin default under another name
         self.git(self.seed, "push", "-q", "origin", "main:trunk")
         self.git(self.repo, "fetch", "-q", "origin")
@@ -261,6 +300,51 @@ class AutoBaseTest(unittest.TestCase):
              "tool_input": {"skill": "captain", "args": "base feat"}})
         self.assertEqual(run(merge).strip(), "")
 
+    def shared_state(self):
+        """A guard runner over one state directory for the whole test: (run, the .base path)."""
+        state = self.root / "state-shared"
+        env = {**os.environ, "CAPTAIN_STATE_DIR": str(state)}
+
+        def run(event: dict) -> str:
+            event = {"session_id": SESSION, "cwd": str(self.repo), **event}
+            result = subprocess.run([sys.executable, str(GUARD)], input=json.dumps(event),
+                                    capture_output=True, text=True, timeout=60, env=env)
+            self.assertEqual(result.stderr, "")
+            return result.stdout
+
+        return run, state / f"{SESSION}.base"
+
+    def test_a_base_of_an_earlier_run_does_not_count(self):  # KB9 review r1 F1
+        run, _ = self.shared_state()
+        self.git(self.repo, "branch", "topic")
+        merge = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                 "tool_input": {"command": "git merge --no-ff --no-edit topic"}}
+        base = {"hook_event_name": "PostToolUse", "tool_name": "Skill",
+                "tool_input": {"skill": "captain", "args": "base feat"}}
+        run({"hook_event_name": "UserPromptSubmit", "prompt": "/captain 1h"})
+        self.assertIn("recorded (KB9 checks hold)", self.note(run(base)))
+        self.assertEqual(run(merge).strip(), "")
+        # a new start in the same session; this time the check fails → the fallback, no base
+        run({"hook_event_name": "UserPromptSubmit", "prompt": "/captain 1h"})
+        self.git(self.repo, "remote", "set-url", "origin", str(self.root / "missing.git"))
+        self.assertIn("Fallback, no question", self.note(run(base)))
+        self.assertIn('"deny"', run(merge))
+
+    def test_a_typed_base_of_this_run_stays(self):  # KB9 review r1 F2
+        run, path = self.shared_state()
+        self.git(self.repo, "branch", "other")
+        base = {"hook_event_name": "PostToolUse", "tool_name": "Skill",
+                "tool_input": {"skill": "captain", "args": "base feat"}}
+        run({"hook_event_name": "UserPromptSubmit", "prompt": "/captain 1h base=other"})
+        note = self.note(run(base))
+        self.assertIn("typed base `other` of this run stays", note)
+        record = json.loads(path.read_text())
+        self.assertEqual((record["branch"], record["auto"]), ("other", False))
+        # a new start: the typed base of the earlier run is no override any more
+        run({"hook_event_name": "UserPromptSubmit", "prompt": "/captain 1h"})
+        self.assertIn("recorded (KB9 checks hold)", self.note(run(base)))
+        self.assertEqual(json.loads(path.read_text())["branch"], "feat")
+
     # ---- review round 1 regressions
 
     def load_guard(self):
@@ -271,22 +355,22 @@ class AutoBaseTest(unittest.TestCase):
 
     def test_a_head_that_moves_during_the_network_calls_is_refused(self):  # r1 F1
         guard = self.load_guard()
-        real = guard.fetched_tip
+        real = guard.fetched_tips
         for move in (["switch", "-q", "main"], ["switch", "-q", "-c", "other"],
                      ["switch", "-q", "--detach"]):
             with self.subTest(move=move):
                 self.git(self.repo, "switch", "-q", "feat")
 
-                def fetched(directory, default, move=move):
-                    tip = real(directory, default)
+                def fetched(directory, branches, move=move):
+                    tips = real(directory, branches)
                     self.git(self.repo, *move)
-                    return tip
+                    return tips
 
-                guard.fetched_tip = fetched
-                self.assertIn("AB1", guard.auto_base_problem(str(self.repo), "feat") or "")
-        guard.fetched_tip = real
+                guard.fetched_tips = fetched
+                self.assertIn("AB1", guard.start_base_check(str(self.repo), "feat").problem or "")
+        guard.fetched_tips = real
         self.git(self.repo, "switch", "-q", "feat")
-        self.assertIsNone(guard.auto_base_problem(str(self.repo), "feat"))
+        self.assertIsNone(guard.start_base_check(str(self.repo), "feat").problem)
 
     def test_the_live_origin_default_is_never_a_base(self):  # r1 F2
         # origin switched its default to trunk after the clone; the local origin/HEAD says main
@@ -298,24 +382,28 @@ class AutoBaseTest(unittest.TestCase):
         self.assertIn("NOT recorded (AB1", self.note(stdout))
 
     def test_another_fetch_cannot_change_the_compared_sha(self):  # r1 F3
-        (self.repo / "a.txt").write_text("mine\n")
-        self.git(self.repo, "commit", "-q", "-am", "mine")
+        # a parallel fetch rewrites FETCH_HEAD with the old SHA; the check and the
+        # fast-forward use the guard's own refs, so HEAD still reaches the real origin tip
+        self.seed_commit("main")
+        tip = self.git(self.seed, "rev-parse", "main")
         head = self.git(self.repo, "rev-parse", "HEAD")
         guard = self.load_guard()
         real = guard.subprocess.run
 
         def run(argv, *args, **kwargs):
             result = real(argv, *args, **kwargs)
-            if "fetch" in argv:  # a parallel fetch rewrites FETCH_HEAD with the branch's SHA
+            if "fetch" in argv:
                 fetch_head = self.git(self.repo, "rev-parse", "--git-path", "FETCH_HEAD")
-                (self.repo / fetch_head).write_text(f"{head}\t\tbranch 'feat'\n")
+                (self.repo / fetch_head).write_text(f"{head}\t\tbranch 'main'\n")
             return result
 
         guard.subprocess.run = run
         try:
-            self.assertIn("AB3", guard.auto_base_problem(str(self.repo), "feat") or "")
+            check = guard.start_base_check(str(self.repo), "feat")
         finally:
             guard.subprocess.run = real
+        self.assertIsNone(check.problem)
+        self.assertEqual(check.tip, tip)
         self.assertEqual(self.git(self.repo, "for-each-ref", "refs/captain-guard"), "")
 
     def test_a_checkout_path_with_a_newline_is_its_own_worktree(self):  # r1 F5

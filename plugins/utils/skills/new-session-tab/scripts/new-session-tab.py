@@ -3,7 +3,7 @@
 
     python3 new-session-tab.py --dir=<abs dir> --prompt-file=<abs file> --name=<session name>
         [--reply-to=<this session's name>] [--terminal=auto|supacode|cmux|none] [--permission-mode=<mode>]
-        [--wait=20] [--fresh-worktree]
+        [--wait=20] [--name-prefix=<p>] [--fresh-worktree]
     python3 new-session-tab.py --version          prints the utils plugin version
 
 1. The terminal: `--terminal=supacode` or `cmux` as given, `none` → no tab. `auto` (the default):
@@ -90,6 +90,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+PREFIX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 TAB_ID = re.compile(r"^[0-9A-Fa-f][0-9A-Fa-f-]{7,63}$")
 SURFACE_REF = re.compile(r"surface:\d+|[0-9A-Fa-f]{8}-[0-9A-Fa-f-]{27,}")
@@ -528,12 +529,20 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--terminal", choices=TERMINALS, default="auto")
     parser.add_argument("--permission-mode", default=None)
     parser.add_argument("--wait", type=int, default=ALIVE_WAIT, help="seconds to wait for the marker")
+    parser.add_argument("--name-prefix", default=None,
+                        help="the caller's session name prefix: put in front "
+                             "of --name when the name does not start with it")
     parser.add_argument("--fresh-worktree", action="store_true",
                         help="Supacode, only right after `supacode repo worktree-new`: close that worktree's "
                              "bootstrap tab after TAB-OK (in a handover it would close the caller)")
     args = parser.parse_args(argv)
     if args.wait < 1:
         parser.error("--wait must be at least 1")
+    if args.name_prefix is not None:
+        if not PREFIX.match(args.name_prefix):
+            parser.error(f"--name-prefix must match {PREFIX.pattern}")
+        if not args.name.startswith(args.name_prefix):
+            args.name = args.name_prefix + args.name
     return args
 
 

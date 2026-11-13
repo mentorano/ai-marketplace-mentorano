@@ -27,6 +27,8 @@ SKILL_DIR = ROOT / "plugins" / "captain" / "skills" / "captain"
 SKILL_MD = SKILL_DIR / "SKILL.md"
 TOOLS_MD = SKILL_DIR / "reference" / "tools.md"
 PROMPTS_MD = SKILL_DIR / "reference" / "prompts.md"
+UI_CHECK_MD = SKILL_DIR / "reference" / "ui-check.md"
+HEALTH_MD = SKILL_DIR / "reference" / "health.md"
 AUDIT = SKILL_DIR / "scripts" / "audit-main.py"
 FIXTURES = ROOT / "tests" / "fixtures" / "captain"
 PLUGIN_DIR = ROOT / "plugins" / "captain"
@@ -34,9 +36,9 @@ SETUP_DIR = PLUGIN_DIR / "skills" / "captain-setup"
 SETUP_MD = SETUP_DIR / "SKILL.md"
 NOTIFY_TMPL = SETUP_DIR / "notify.sh.tmpl"
 # Approximate budget after the official guidance (SKILL.md under 500 lines, under ~5k tokens);
-# 21,000 characters stands in for ~5k tokens.
+# 22,500 characters stands in for ~5k tokens (raised for R22, 2026-10-30).
 SKILL_MAX_LINES = 500
-SKILL_MAX_CHARS = 21_000
+SKILL_MAX_CHARS = 22_500
 AGENTS_DIR = ROOT / "plugins" / "captain" / "agents"
 CACHE_SKILL = "/Users/x/.claude/plugins/cache/m/captain/0.1.0/skills/captain"
 FIXTURE_ARGS = ("--repo", "/repo", "--skill-root", CACHE_SKILL)
@@ -66,7 +68,7 @@ def code_lines(text: str) -> list[str]:
 
 def tools_md_problems(text: str) -> list[str]:
     problems = []
-    for needle in ("gpt-6-astra", "--print-timeout"):
+    for needle in ("gpt-6.1-terra", "gpt-6-astra", "--print-timeout"):
         if needle not in text:
             problems.append(f"missing {needle}")
     code = code_lines(text)
@@ -77,6 +79,8 @@ def tools_md_problems(text: str) -> list[str]:
     for line in text.splitlines():
         if re.search(r"--model[ =]astra\b", line):
             problems.append(f"--model astra: {line!r}")
+        if re.search(r"(--model[ =]|-m )terra\b", line):
+            problems.append(f"bare terra id: {line!r}")
         if "--dangerously-skip-permissions" in line and "never" not in line.lower():
             problems.append(f"flag outside a never line: {line!r}")
     return problems
@@ -132,7 +136,7 @@ class SkillMdTest(unittest.TestCase):
         self.assertIn("never start a run on your own", description)
         self.assertLess(len(description), 1024)
 
-    def test_rules_r1_to_r21_each_end_with_why(self):
+    def test_rules_r1_to_r22_each_end_with_why(self):
         text = read_text(SKILL_MD)
         found = {}
         for head, body in sections(text, "###"):
@@ -141,7 +145,7 @@ class SkillMdTest(unittest.TestCase):
                 # a rule section ends at the next heading of any level
                 body = re.split(r"(?m)^#{1,3} ", body[len(head):], maxsplit=1)[0]
                 found[int(match.group(1))] = body
-        self.assertEqual(sorted(found), list(range(1, 22)), "SKILL.md must have ### R1 .. ### R21")
+        self.assertEqual(sorted(found), list(range(1, 23)), "SKILL.md must have ### R1 .. ### R22")
         for number, body in found.items():
             # the section ends with a line starting **Why:** (it may wrap, but no new paragraph)
             lines = [line.strip() for line in body.strip().splitlines()]
@@ -526,7 +530,7 @@ class AuditInputTest(unittest.TestCase):
         self.assertEqual(result.returncode, EXIT_CLEAN, result.stdout + result.stderr)
 
     def test_long_command_prints_the_whole_offending_segment(self):
-        command = "git log -n 1 && " + "echo " + "x" * 300 + "\ngit push origin feature"
+        command = "git log -n 1 && " + "touch " + "x" * 300 + "\ngit push origin feature"
         path = self.write("long.jsonl", [json.dumps(assistant(1, "Bash", {"command": command}))])
         result = run_audit(str(path))
         self.assertEqual(result.returncode, EXIT_VIOLATIONS)
@@ -608,8 +612,8 @@ class ToolRulesTest(unittest.TestCase):
             self.assertEqual(self.kind("Skill", {"skill": skill}), "VIOLATION", skill)
 
     def test_other_tools_are_violations(self):
-        for name in ("NotebookEdit", "Artifact", "WebFetch", "mcp__serena__find_symbol",
-                     "ExitWorktree"):
+        for name in ("NotebookEdit", "Artifact", "WebFetch", "mcp__serena__replace_symbol_body",
+                     "mcp__serena__rename_symbol", "mcp__other__find_symbol", "ExitWorktree"):
             self.assertEqual(self.kind(name, {"x": 1}), "VIOLATION", name)
         self.assertEqual(self.kind("EnterWorktree", {"name": "w1"}), "ok")
         self.assertEqual(self.kind("Grep", {"pattern": "x", "path": "/anywhere/src"}), "ok")
@@ -1078,7 +1082,7 @@ class BashClassificationTest(unittest.TestCase):
                         "date -d @0 +%s", "date -f list +%s",
                         "ps | grep --regexp=x /repo/src/secret", "date | wc --files0-from=/repo/l",
                         "date | head -n 1 /etc/passwd", "date | grep -r x .", "ps | grep x file",
-                        "ps | grep -e a b", "date | wc -l x", "date | head -c 5",
+                        "ps | grep -e a b", "date | wc -l x", "date | head -c x",
                         "command -p date"):
             with self.subTest(command=command):
                 self.assertEqual(self.kind(command), "UNVERIFIABLE")
@@ -1169,8 +1173,11 @@ class NotifyWrapperCase(unittest.TestCase):
         wrapper.write_text(render_notify(**fill), encoding="utf-8")
         env = {"HOME": str(self.home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
                "CAPTAIN_NOW": now, **(extra_env or {})}
+        # 60 s, like the other subprocess calls here: a loaded machine (parallel agents) once
+        # pushed one call past 10 s. A caller that waits for the away window is caught by the
+        # explicit elapsed-time assertion in NotifyAwayTest, not by this timeout.
         return subprocess.run(["sh", str(wrapper), *args], capture_output=True, text=True,
-                              timeout=10, cwd=str(self.home), env=env)
+                              timeout=60, cwd=str(self.home), env=env)
 
     def calls(self) -> list[list[str]]:
         if not self.log.exists():
@@ -2447,6 +2454,21 @@ class RunLessonsTextTest(unittest.TestCase):
     def test_astra_review_effort_has_a_why_line(self):
         self.assertIn("confirmed `medium` for astra reviews (EF3)", read_text(TOOLS_MD))
 
+    def test_terra_is_the_default_codex_model(self):  # KB7
+        text = read_text(TOOLS_MD)
+        self.assertTrue(any("codex exec -m gpt-6.1-terra -c model_reasoning_effort=high" in line
+                            for line in code_lines(text)), "review command is not terra high")
+        for needle in ("**Model choice:**", "`Model: <full id> <effort> — <reason>`",
+                       "`--model gpt-6.1-terra --effort high`", "terra `medium`",
+                       "Add one line: Model: <full id> <effort>",
+                       "`Choose the Codex model yourself: gpt-6.1-terra (effort high"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+        r7 = read_text(SKILL_MD).split("### R7", 1)[1].split("\n### ", 1)[0]
+        self.assertIn("`gpt-6.1-terra`", r7)
+        self.assertIn("the launcher picks the model", r7)
+        self.assertIn("`gpt-6.1-terra`", read_text(SKILL_DIR.parents[1] / "agents" / "runner.md"))
+
 
 
 class FewerStopsTextTest(unittest.TestCase):
@@ -2533,7 +2555,7 @@ class FewerStopsTextTest(unittest.TestCase):
         self.assertIn("7 of 12 tasks done (58%)", read_text(SKILL_MD))
         queue = self.flat(self.REFERENCE / "queue.md")
         for needle in ("## Status, park and end reports - `Remaining:` (R12)",
-                       "`Nothing remains.` only when all six are empty",
+                       "`Nothing remains.` only when all seven are empty",
                        "groups of `## Groups` with merged tasks whose test run",
                        "`Continuing with <ID>.`", "`Waiting for you on <ID>.`",
                        "`Stopping; captain mode stays on.`",
@@ -2556,7 +2578,7 @@ class FewerStopsTextTest(unittest.TestCase):
                        "'<abs run dir>/reviews/<task ID>-r<k>-triage.md'",
                        "an Opus reviewer writes only its output file",
                        "Review findings <F-list> for your work",
-                       "the path of the review findings, their F-IDs and round <k>/3"):
+                       "the path of the review findings, their F-IDs and round <k>/<n>"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, prompts)
         self.assertNotIn("findings verbatim", prompts)
@@ -2963,6 +2985,311 @@ class MemoryFrameTextTest(unittest.TestCase):
         self.assertNotIn("Memory:", queue)  # MP2: no memory section in the end report
         self.assertIn("Memory on → the memory step first", read_text(SKILL_MD))
         self.assertIn("## Memory candidates", read_text(SKILL_DIR / "reference" / "handoff.md"))
+
+
+class ShortReadsAllowedTest(unittest.TestCase):
+    """PR1-PR12: short, read-only forms the guard denied in real runs (2026-10-25..30)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.audit = load_audit()
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(os.path.realpath(self.tmp.name)) / "repo"
+        (self.repo / "tmp" / "captain" / "r1").mkdir(parents=True)
+        (self.repo / "docs").mkdir()
+        self.run = self.repo / ".claude" / "worktrees" / "captain-run-20261030-1"
+        (self.run / "docs" / "plans").mkdir(parents=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def kind(self, name: str, tool_input: dict, skill_root: str = CACHE_SKILL) -> str:
+        return self.audit.classify(name, tool_input, self.repo, Path(skill_root), self.repo)[0]
+
+    def bash(self, command: str, skill_root: str = CACHE_SKILL) -> str:
+        return self.kind("Bash", {"command": command}, skill_root)
+
+    def test_allowed_bash_forms(self):
+        utils = "/Users/x/.claude/plugins/cache/m/utils/0.9.1/skills/new-session-tab/scripts"
+        for command in (
+                # PR3: the ZP0 clean check of queue.md
+                "git -C /r status --porcelain --ignored --untracked-files=all -- .agent-memory",
+                # PR1 / PR7: grep as a read, and richer filters
+                "grep -n '^## ' docs/plans/TODO.md", "grep -rn x docs", "grep -n -i -A30 'merge flow' x.md",
+                "grep -n -e a -e b run.md", "grep -c -E 'a|b' x.md",
+                "cat run.md | grep -n -E 'a|b'", "cat x | grep -n -A 4 y", "cat x.json | head -c 3000",
+                # PR2 / PR12
+                "echo ---", "cat a; echo; cat b", "printf '%s\\n' a", "printf '%-10s|%5d|%%' a 1", "pwd", "diff -u a.md b.md",
+                "lsof -nP -iTCP:8765 -sTCP:LISTEN",
+                # PR4
+                "sed -n 1,120p x.md", "sed -n '/^## Run state/,/^## Queue/p' q.md", "cat x | sed -n 28,42p",
+                # PR5
+                "git log --oneline main..feature-zoom", "git -C /r log --oneline origin/main..HEAD",
+                "git branch --list", "git -C /r branch -vv --list main", "git branch -a --contains 5360d15e",
+                "git branch --merged trailer7", "git merge-base --is-ancestor 06b2cec8 b27247a5",
+                "git rev-list --count a..origin/b", "git grep -n -e 'x' -- docs",
+                "git ls-remote origin refs/heads/main", "git check-ignore -v .claude/settings.local.json",
+                "git stash list",
+                # PR6
+                "ls TODO* docs/plans", "wc -l reference/*.md",
+                # PR8: the context script of another captain version
+                "python3 /Users/x/.claude/plugins/cache/m/captain/0.0.9/skills/captain/scripts/"
+                "agent-context.py a47d81d5851db7305",
+                # PR9: the handover tab
+                f"python3 {utils}/new-session-tab.py --dir=/r --prompt-file=/r/tmp/handover-x-1030.md --name=u-r-x",
+                f"python3 {utils}/new-session-tab.py --dir=/r --prompt-file=/r/tmp/handover-x.md --name=r-x "
+                "--name-prefix=u-",
+                "grep -r --include '*.py' x docs",
+                f"python3 {utils}/new-session-tab.py --version",
+                f"python3 {utils}/new-session-tab.py --dir=/r --name=x --permission-mode=auto "
+                "--prompt-file=/r/tmp/handover-y.md"):
+            with self.subTest(command=command):
+                self.assertEqual(self.bash(command), "ok")
+
+    def test_still_denied_bash_forms(self):
+        utils = "/Users/x/.claude/plugins/cache/m/utils/0.9.1/skills/new-session-tab/scripts"
+        for command in (
+                "sed -i -e s/a/b/ run.md", "sed s/a/b/ x", "sed -n '1,5w out' x", "sed -n 1p a.output",
+                "sed -n '1e date' x", "grep x a.output", "grep -n x /tmp/u/tasks/a.output",
+                "git branch new-one", "git branch -m a b", "git branch -d a", "git branch -D a",
+                "git log --oneline", "git stash", "git stash pop", "git grep -O vim x",
+                "git grep -f patterns", "git rev-list a..b", "git status -- a.output",
+                "git log --all a..b", "git ls-remote https://example.com/x.git",
+                f"python3 {utils}/new-session-tab.py --dir=/r --permission-mode=bypassPermissions",
+                # Codex r1: F1 printf assigns, F2 any prompt file, F3 the other layout, F4 -R
+                "printf -vPATH %s /tmp/bin", "printf 'a%n' x",
+                # Codex r2: F1 %n with a width, F2 a prompt outside <dir>/tmp, F4 zsh's ** glob
+                "printf '%10n' PATH", "printf '%-n' x", "printf '%ln' 'a[1]'", "printf '%hhn' x",
+                "printf '%q' x",
+                f"python3 {utils}/new-session-tab.py --dir=/r --prompt-file=/else/tmp/handover-x.md --name=x",
+                f"python3 {utils}/new-session-tab.py --dir=/r --prompt-file=/tmp/tasks/a.output --name=x",
+                f"python3 {utils}/new-session-tab.py --dir=/r --prompt-file=/r/src/a.md --name=x",
+                f"python3 {utils}/new-session-tab.py --dir=/r --name=x",
+                "python3 /Users/x/.claude/plugins/cache/m/captain/utils/skills/new-session-tab/scripts/"
+                "new-session-tab.py --version",
+                "printf -v X a", "diff a.output b", "lsof -i", "lsof +D /",
+                f"python3 {utils}/new-session-tab.py --dir=/r --fresh-worktree",
+                "python3 /tmp/new-session-tab.py --dir=/r --name=x",
+                "python3 /Users/x/.claude/plugins/cache/m/captain/x/skills/captain/scripts/"
+                "agent-context.py a1",
+                "python3 -c 'print(1)'", "cp a b", "open http://127.0.0.1:8765/", "*.sh"):
+            with self.subTest(command=command):
+                self.assertEqual(self.bash(command), "VIOLATION")
+        for command in ("cat docs/*.md", "grep -n x reference/*.md", "stat src/*", "cat x | grep -r y",
+                        "echo {a,b}", "W=/r; git -C $W status -s", "grep -Rn x .", "grep -rRn x ."):
+            with self.subTest(command=command):
+                self.assertEqual(self.bash(command), "UNVERIFIABLE")
+
+    def test_recursive_grep_never_reaches_an_output_file(self):
+        session = Path(self.tmp.name) / "session"
+        (session / "tasks").mkdir(parents=True)
+        (session / "tasks" / "a.output").write_text("x\n")
+        self.assertEqual(self.bash(f"grep -rn x {session}"), "VIOLATION")
+        self.assertEqual(self.bash(f"grep -n x {session / 'tasks'}"), "VIOLATION")
+        self.assertEqual(self.bash(f"cd {session}; grep -rn x"), "VIOLATION")
+        # Codex r1: F5 diff of directories, F6 a glob that expands to an output file
+        (session / "other").mkdir()
+        self.assertEqual(self.bash(f"diff {session / 'tasks'} {session / 'other'}"), "VIOLATION")
+        self.assertEqual(self.bash(f"wc -l {session}/tasks/*"), "VIOLATION")
+        self.assertEqual(self.bash(f"ls {session}/tasks/*"), "VIOLATION")
+        self.assertEqual(self.bash(f"wc -l {session}/other/*"), "ok")
+        self.assertEqual(self.bash(f"wc -c {session}/**/tasks/*"), "UNVERIFIABLE")
+        # r2 F3: a relative symlink to an output file after cd
+        (session / "other" / "alias").symlink_to(session / "tasks" / "a.output")
+        for command in (f"cd {session / 'other'}; grep x alias", f"cd {session / 'other'}; sed -n 1p alias",
+                        f"cd {session / 'other'}; diff alias alias"):
+            with self.subTest(command=command):
+                self.assertEqual(self.bash(command), "VIOLATION")
+        # KP8: the same symlink for cat/head/tail/wc; a plain file after cd stays a read
+        other = session / "other"
+        (other / "plain.md").write_text("x\n")
+        for command in (f"cd {other}; cat alias", f"cd {other}; head -n 5 alias", f"cd {other}; tail alias",
+                        f"cd {other}; wc -l alias", f"cd {other}; cat plain.md alias"):
+            with self.subTest(command=command):
+                self.assertEqual(self.bash(command), "VIOLATION")
+        for command in (f"cd {other}; cat plain.md", f"cd {other}; head -n 5 plain.md",
+                        f"cd {other}; tail -n 3 plain.md", f"cd {other}; wc -l plain.md"):
+            with self.subTest(command=command):
+                self.assertEqual(self.bash(command), "ok")
+        # after a cd it cannot follow: the count after -n is not a file, a relative operand is unclear
+        self.assertEqual(self.bash(f"cd -; head -n 5 {other / 'plain.md'}"), "ok")
+        self.assertEqual(self.bash("cd -; cat alias"), "UNVERIFIABLE")
+        # Codex r1 F1: after `--` a word with a leading `-` is a file; a lone `-` is stdin
+        (other / "-alias").symlink_to(session / "tasks" / "a.output")
+        for command in (f"cd {other}; cat -- -alias", f"cd {other}; head -n 5 -- -alias",
+                        "cat -- -x.output", f"cd {other}; wc -l -- plain.md -alias"):
+            with self.subTest(command=command):
+                self.assertEqual(self.bash(command), "VIOLATION")
+        self.assertEqual(self.bash(f"cd {other}; cat -- plain.md -"), "ok")
+        # r1 F2: the count of --lines/--bytes, a -qn cluster or an attached -n5 is not a file
+        plain = other / "plain.md"
+        for command in (f"cd -; head --lines 5 {plain}", f"cd -; tail --bytes 9 {plain}",
+                        f"cd -; head --lines=5 {plain}", f"cd -; head -qn 5 {plain}",
+                        f"cd -; head -n5 {plain}"):
+            with self.subTest(command=command):
+                self.assertEqual(self.bash(command), "ok")
+
+    def test_skills_tools_and_run_checkout_docs(self):
+        for skill in ("utils:one-by-one", "utils:new-session-tab"):
+            self.assertEqual(self.kind("Skill", {"skill": skill}), "ok", skill)
+        self.assertEqual(self.kind("Skill", {"skill": "clean-code:clean-code"}), "VIOLATION")
+        for name in ("mcp__serena__find_symbol", "mcp__serena__get_symbols_overview",
+                     "mcp__plugin_serena_serena__find_referencing_symbols"):
+            self.assertEqual(self.kind(name, {"name_path_pattern": "x"}), "ok", name)
+        self.assertEqual(self.kind("Artifact", {"action": "read", "url": "https://claude.ai/artifact/x"}), "ok")
+        self.assertEqual(self.kind("Artifact", {"action": "publish", "file_path": "x.html"}), "VIOLATION")
+        self.assertEqual(self.kind("Artifact", {"action": "read", "url": "https://claude.ai/artifact/x",
+                                                "path": "a.css", "out_dir": "/repo/src"}), "VIOLATION")
+        self.assertEqual(self.kind("mcp__notserena__find_symbol", {"x": 1}), "VIOLATION")
+        sheet = str(self.repo / "tmp" / "captain" / "r1" / "sheet.jpg")
+        self.assertEqual(self.kind("SendUserFile", {"files": [sheet]}), "ok")
+        for files in ([str(self.repo / "src" / "a.py")], [sheet, "/etc/passwd"]):
+            self.assertEqual(self.kind("SendUserFile", {"files": files}), "VIOLATION", files)
+        self.assertEqual(self.kind("SendUserFile", {"files": []}), "UNVERIFIABLE")
+        for path in (self.run / "TODO.md", self.run / "docs" / "plans" / "TODO.md",
+                     self.repo / "tmp" / "handover-guard-20261030.md"):
+            self.assertEqual(self.kind("Write", {"file_path": str(path), "content": "x"}), "ok", path)
+        agent = self.repo / ".claude" / "worktrees" / "w-spec"
+        for path in (agent / "docs" / "x.md", self.run / "src" / "a.py", self.run / "docs" / "SKILL.md",
+                     self.run / "tmp" / "captain" / "x.md", self.repo / ".claude" / "worktrees" / "TODO.md",
+                     self.repo / "tmp" / "handover-x.py", self.repo / "tmp" / "x" / "handover-a.md"):
+            self.assertEqual(self.kind("Write", {"file_path": str(path), "content": "x"}), "VIOLATION", path)
+
+
+def r14_ps_pattern(text: str) -> str:
+    """The single-quoted `grep -E` argument of the R14 `ps` check in health.md."""
+    match = re.search(r"command ps -axo pid,lstart,command \| command grep -E \\\s*\n\s*'([^']+)'",
+                      text)
+    if not match:
+        raise AssertionError("health.md has no R14 `ps ... | grep -E '<pattern>'` check")
+    return match.group(1)
+
+
+class UiCheckTextTest(unittest.TestCase):
+    """UI check (the UI check spec, Test plan UP13, UP14, UP16).
+
+    The SKILL.md size budget of UP13 is covered by SkillMdTest.test_skill_md_exists_and_is_lean.
+    """
+
+    def test_index_names_ui_check_md_and_the_file_exists(self):  # UP13
+        index = [body for head, body in sections(read_text(SKILL_MD), "##")
+                 if head.startswith("## Index")]
+        self.assertEqual(len(index), 1, "SKILL.md must have one ## Index section")
+        self.assertIn("reference/ui-check.md", index[0])
+        self.assertTrue(UI_CHECK_MD.is_file(), f"missing {UI_CHECK_MD.relative_to(ROOT)}")
+
+    def test_r14_ps_pattern_matches_servers_and_browsers(self):  # UP14
+        pattern = re.compile(r14_ps_pattern(read_text(HEALTH_MD)))
+        for line in ("node /x/node_modules/.bin/vite", "uvicorn app:app --port 8000",
+                     "python manage.py runserver 8001", "python3 backend/server.py --port 18800",
+                     "agent-browser --session captain-1-w open http://localhost:5173",
+                     "codex exec -m gpt-6-astra", "tail -f /tmp/x.log",
+                     "python3 -u -m http.server 8000", "python -m http.server",
+                     "/usr/x/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/"
+                     "Python -u app.py"):
+            self.assertRegex(line, pattern, f"R14 pattern misses {line!r}")
+        for line in ("python3 tests/server.py",):
+            self.assertNotRegex(line, pattern, f"R14 pattern lists the test file {line!r}")
+
+    def test_ui_check_md_has_the_results_table_header(self):  # UP16
+        self.assertIn("| STS | Screen | Steps | Expected | Task | SHA | Result | Evidence |",
+                      read_text(UI_CHECK_MD).splitlines())
+
+    def section(self, path: Path, prefix: str) -> str:
+        found = [body for head, body in sections(read_text(path), "##") if head.startswith(prefix)]
+        self.assertEqual(len(found), 1, f"{path.name} must have one section {prefix!r}")
+        return found[0]
+
+    def test_start_command_sources_in_order_without_config_json(self):  # UP16
+        body = self.section(UI_CHECK_MD, "## Step 2")
+        rows = {m.group(1): m.group(2) for m in re.finditer(r"(?m)^\| (\d) \|(.*)$", body)}
+        self.assertEqual(sorted(rows), ["1", "2", "3"], "the start-command source table has rows 1-3")
+        self.assertIn("`CLAUDE.md`", rows["1"])
+        self.assertIn("`ui_check`", rows["1"])
+        self.assertRegex(rows["2"], r"`run`\s+skill")
+        self.assertIn("`package.json`", rows["3"])
+        table = [line for line in body.splitlines() if line.startswith("|")]
+        self.assertFalse([line for line in table if "config.json" in line],
+                         "config.json is not a start-command source")
+
+    def test_ui_fix_counter_of_3_and_push_gate(self):  # UP16
+        counter = [line for line in self.section(UI_CHECK_MD, "## Step 4").splitlines()
+                   if "UI fix counter" in line]
+        self.assertTrue(counter, "the Step 4 section has no `UI fix counter`")
+        self.assertRegex(counter[0], r"at most 3 UI fix rounds")
+        gate = self.section(UI_CHECK_MD, "## Order and the push gate")
+        self.assertTrue(any("Push gate" in line for line in gate.splitlines()),
+                        "the order section has no `Push gate` line")
+        self.assertRegex(gate.replace("\n", " "), r"pushed only when\s+that\s+group's check passed"
+                         r"\s+at the\s+range's last SHA")
+
+    def test_prompts_md_has_the_server_runner_and_session_close(self):  # UP16
+        server = self.section(PROMPTS_MD, "## Server runner prompt")
+        self.assertRegex(server, r"(?m)^READY <url> <ports> <PIDs> <SHA> <log paths>$")
+        self.assertRegex(server, r"(?m)^- keep:")
+        self.assertRegex(server, r"(?m)^- stop:")
+        checking = self.section(PROMPTS_MD, "## Checking runner prompt")
+        self.assertIn("agent-browser --session <name> close", checking)
+
+
+class OwnerDecisionsHandoffTextTest(unittest.TestCase):
+    """Captain 0.27.0: owner decisions survive handoffs, scope and source of decisions.md
+    lines, owner gates only in the owner's words, the owner feedback file."""
+
+    REFERENCE = SKILL_DIR / "reference"
+
+    @staticmethod
+    def flat(path: Path) -> str:
+        return " ".join(read_text(path).split())
+
+    def test_handoff_carries_owner_decisions_and_run_lines(self):
+        handoff = self.flat(self.REFERENCE / "handoff.md")
+        for needle in ("## 2. Owner decisions", "`done <sha>` / `deferred to <phase/task>: <reason>` / `open`",
+                       "every `decisions.md` line that still stands is carried, with its `scope` and `source`",
+                       "a `source: denial` line names the one denied call, never a rule (R16)",
+                       "a new run inherits only `source: owner` or `scope: permanent`",
+                       "Main never narrows the owner's agreed scope on its own (R18)",
+                       "Held back: <sha> - <reason>", "except the §2 status column",
+                       "only as the owner's own words, quoted",
+                       "Owner gates, quoted:", "away → a panel (R9)",
+                       "R10 outward actions and R16 denials still go to the owner",
+                       "owner-review-<YYYYMMDD>.md", "never \"do exactly as <X>\""):
+            self.assertIn(needle, handoff)
+        self.assertIn("see handoff §4", handoff)
+        self.assertIn("owner decisions: handoff §2", handoff)
+
+    def test_handoff_section_references_match_the_template(self):
+        text = read_text(self.REFERENCE / "handoff.md")
+        template = text.split("## Handoff template", 1)[1].split("## Kickoff template", 1)[0]
+        headings = set(re.findall(r"^## (\d+)\. ", template, re.MULTILINE))
+        self.assertEqual(headings, {"1", "2", "3", "4", "5", "6"})
+        for number in re.findall(r"§(\d+)", text):
+            self.assertIn(number, headings, f"§{number} has no heading in the handoff template")
+
+    def test_decision_lines_carry_scope_and_source(self):
+        queue = self.flat(self.REFERENCE / "queue.md")
+        for needle in ("`scope: run|permanent` and `source: owner|agent|denial`",
+                       "A line without the fields counts as `scope: run | source: agent`",
+                       "only the owner's words make a line `permanent`",
+                       "- AR1 | tier: mini | scope: run | source: agent |",
+                       "- NS2 | scope: run | source: denial | <the denied call, one line>",
+                       "every `source: owner` line of `decisions.md` with a `status:` that is not `done <sha>`",
+                       "a standing owner rule has no `status:` and is skipped",
+                       "## Owner feedback file", "(main runs no `cp`)"):
+            self.assertIn(needle, queue)
+        consensus = self.flat(self.REFERENCE / "consensus.md")
+        self.assertIn("Only `source: owner` or `scope: permanent` lines outlive the run", consensus)
+        prompts = self.flat(self.REFERENCE / "prompts.md")
+        self.assertIn("'<abs run dir>/owner-review-<YYYYMMDD>.md'", prompts)
+
+    def test_skill_settles_decisions_and_limits_the_classifier_denial(self):
+        skill = " ".join(read_text(SKILL_MD).split())
+        self.assertIn("a recorded decision is settled (reopened only on new evidence or by the owner); "
+                      "only owner or permanent ones outlive the run", skill)
+        self.assertIn("denial is final; a classifier one only for that action in this run", skill)
+
 
 if __name__ == "__main__":
     unittest.main()

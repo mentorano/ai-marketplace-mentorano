@@ -17,6 +17,8 @@ which opens the tab, waits for the alive marker and closes a tab that ran nothin
    overrides the cache root) the highest version that has
    `skills/new-session-tab/scripts/new-session-tab.py`; it must answer `--version` with at least
    0.3.0. Not found or too old → `FAILED NO-UTILS`, with the command that installs or updates it.
+   The config's `session_prefix` (captain-setup question 7) goes in front of --name when the name
+   does not start with it yet, so every successor carries the owner's prefix.
 3. Writes the successor's prompt next to the handoff, `successor-prompt-<name>.md`, one line:
    `/captain resume handoff=<abs handoff> from=<old name> name=<new name>`.
 4. Runs the utils script with --terminal set to the chosen one; its alive marker is `<name>.alive`
@@ -44,6 +46,7 @@ import sys
 from pathlib import Path
 
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+PREFIX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 MIN_UTILS = (0, 3, 0)
 UTILS_SCRIPT = Path("skills") / "new-session-tab" / "scripts" / "new-session-tab.py"
@@ -168,10 +171,20 @@ def run_utils(script: Path, args, terminal: str, prompt: Path) -> tuple[str, int
     return line, result.returncode
 
 
+def session_prefix(config: dict | None) -> str:
+    """The owner's `session_prefix`, or "" when it is missing or not a valid name start."""
+    value = (config or {}).get("session_prefix")
+    return value if isinstance(value, str) and PREFIX.match(value) else ""
+
+
 def open_tab(args, env, home: Path) -> tuple[str, int]:
-    terminal, reason = choose_terminal(read_config(home), env)
+    config = read_config(home)
+    terminal, reason = choose_terminal(config, env)
     if terminal == "none":
         return f"TERMINAL-NONE {reason}", 3
+    prefix = session_prefix(config)
+    if prefix and not args.name.startswith(prefix):
+        args.name = prefix + args.name
     check_args(args)
     cache = Path(env.get("CAPTAIN_PLUGIN_CACHE") or home / ".claude" / "plugins" / "cache")
     script = find_utils(cache)

@@ -28,6 +28,8 @@ KICKOFF_HOOK = SCRIPTS / "hooks" / "kickoff-on-clear.py"
 HANDOFF_HOOK = SCRIPTS / "hooks" / "handoff-at-boundary.py"
 MEASURE_CONTEXT = SCRIPTS / "measure-context.py"
 COST_REPORT = SCRIPTS / "cost-report.py"
+SUCCESSOR_TAB = SCRIPTS / "successor-tab.py"
+UTILS_PLUGIN = ROOT / "plugins" / "utils"
 
 GIT_ENV = {
     "GIT_AUTHOR_NAME": "Tester", "GIT_AUTHOR_EMAIL": "t@t.t",
@@ -374,6 +376,216 @@ class HandoffAtBoundaryTest(unittest.TestCase):
             self.assertIn("tell coord one line", self.mod.handover_line(300, str(repo)))
 
 
+STUB_UTILS = """import json, os, sys
+if "--version" in sys.argv:
+    print(os.environ.get("STUB_VERSION", "0.7.0"))
+    sys.exit(0)
+with open(os.environ["STUB_LOG"], "a") as fh:
+    fh.write(json.dumps(sys.argv[1:]) + "\\n")
+print(os.environ.get("STUB_OUT", "TAB-OK T1 W1 x mode=default prompt=p"))
+sys.exit(int(os.environ.get("STUB_RC", "0")))
+"""
+
+
+class SuccessorTabTest(unittest.TestCase):
+    """scripts/successor-tab.py: coord's thin wrapper around utils' new-session-tab.py. The tab itself
+    (-w, ASCII command, alive marker, TAB-DEAD close, handshake copy) is tested in test_new_session_tab.py."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.home = root / "home"
+        (self.home / ".claude" / "kickoffs" / "successor").mkdir(parents=True)
+        self.kickoff = self.home / ".claude" / "kickoffs" / "successor" / "proj-coord.md"
+        self.kickoff.write_text("You ARE proj-coord-r2, the successor of proj-coord.\n", encoding="utf-8")
+        self.cache = root / "cache"
+        self.dir = root / "repo"
+        self.dir.mkdir()
+        self.log = root / "utils.log"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def install_utils(self, version: str, marketplace: str = "mkt") -> None:
+        script = self.cache / marketplace / "utils" / version / "skills" / "new-session-tab" / "scripts" / "new-session-tab.py"
+        script.parent.mkdir(parents=True)
+        script.write_text(STUB_UTILS, encoding="utf-8")
+
+    def run_tab(self, config=None, env=None, kickoff=None, name="proj-coord-r2"):
+        if config is not None:
+            path = self.home / ".claude" / "captain" / "config.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(config), encoding="utf-8")
+        base = {k: v for k, v in os.environ.items()
+                if k not in ("TERM_PROGRAM", "SUPACODE_WORKTREE_ID", "CMUX_SOCKET_PATH", "CMUX_BUNDLED_CLI_PATH")}
+        full = {**base, "HOME": str(self.home), "COORD_PLUGIN_CACHE": str(self.cache),
+                "STUB_LOG": str(self.log), **(env or {})}
+        return subprocess.run([sys.executable, str(SUCCESSOR_TAB), f"--dir={self.dir}",
+                               f"--kickoff={kickoff or self.kickoff}", "--from=proj-coord", f"--name={name}",
+                               "--wait=1"], capture_output=True, text=True, timeout=60, env=full)
+
+    def calls(self):
+        if not self.log.exists():
+            return []
+        return [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
+
+    def test_tab_ok_runs_utils_with_the_kickoff_and_the_reply_to(self):
+        self.install_utils("0.5.0")
+        self.install_utils("0.7.0")
+        out = "HANDSHAKE proj-coord-r2 reply-to=proj-coord\nTAB-OK T1 W1 proj-coord-r2 mode=auto prompt=p"
+        result = self.run_tab(config={"successor_terminal": "supacode"}, env={"STUB_OUT": out})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines(), out.splitlines())
+        calls = self.calls()
+        self.assertEqual(len(calls), 1, calls)
+        self.assertEqual(calls[0], [f"--dir={self.dir}", f"--prompt-file={self.kickoff}", "--name=proj-coord-r2",
+                                    "--reply-to=proj-coord", "--terminal=supacode", "--wait=1"])
+
+    def test_the_session_prefix_goes_in_front_once(self):
+        self.install_utils("0.7.0")
+        self.run_tab(config={"successor_terminal": "cmux", "session_prefix": "dev1-"})
+        self.run_tab(config={"successor_terminal": "cmux", "session_prefix": "proj-"})
+        names = [next(a for a in c if a.startswith("--name=")) for c in self.calls()]
+        self.assertEqual(names, ["--name=dev1-proj-coord-r2", "--name=proj-coord-r2"])
+        self.assertIn("--terminal=cmux", self.calls()[0])
+
+    def test_a_kickoff_where_clear_looks_is_refused(self):
+        # kickoff-on-clear.py reads ~/.claude/kickoffs/<name>.md: a successor's kickoff there would be
+        # injected again into the old session by a later /clear.
+        self.install_utils("0.7.0")
+        flat = self.home / ".claude" / "kickoffs" / "proj-coord.md"
+        flat.write_text("kickoff\n", encoding="utf-8")
+        result = self.run_tab(config={"successor_terminal": "supacode"}, kickoff=flat)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertTrue(result.stdout.startswith("FAILED BAD-KICKOFF"), result.stdout)
+        self.assertEqual(self.calls(), [])
+
+    def test_missing_or_old_utils_names_the_owner_command(self):
+        result = self.run_tab(config={"successor_terminal": "supacode"})
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertTrue(result.stdout.startswith("FAILED NO-UTILS no utils plugin"), result.stdout)
+        self.assertIn("owner: claude plugin install utils@", result.stdout)
+        self.install_utils("0.4.0")
+        result = self.run_tab(config={"successor_terminal": "supacode"}, env={"STUB_VERSION": "0.4.0"})
+        self.assertEqual(result.stdout.strip(), "FAILED NO-UTILS utils 0.4.0 answers --version with 0.4.0, "
+                                                "needs 0.5.0; owner: claude plugin update utils@mkt")
+        self.assertEqual(self.calls(), [])
+
+    def test_no_terminal_means_the_clear_path(self):
+        result = self.run_tab(config={"successor_terminal": "none"})
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertTrue(result.stdout.startswith("TERMINAL-NONE config successor_terminal='none'"), result.stdout)
+        (self.home / ".claude" / "captain" / "config.json").unlink()
+        result = self.run_tab()  # no config, not in Supacode or cmux
+        self.assertIn("not running in Supacode or cmux", result.stdout)
+        self.assertEqual(result.returncode, 3, result.stdout)
+        self.assertEqual(self.calls(), [])
+
+    def test_tab_none_and_failed_lines_are_passed_on(self):
+        self.install_utils("0.7.0")
+        result = self.run_tab(config={"successor_terminal": "supacode"},
+                              env={"STUB_OUT": "HANDSHAKE x reply-to=y\nTAB-NONE why prompt=p", "STUB_RC": "3"})
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(result.stdout.strip().splitlines(), ["HANDSHAKE x reply-to=y", "TERMINAL-NONE why prompt=p"])
+        result = self.run_tab(config={"successor_terminal": "supacode"},
+                              env={"STUB_OUT": "FAILED TAB-DEAD T1 in=W1 after=1s closed=yes", "STUB_RC": "1"})
+        self.assertEqual((result.returncode, result.stdout.strip()), (1, "FAILED TAB-DEAD T1 in=W1 after=1s closed=yes"))
+
+    def test_names_are_checked_before_utils_runs(self):
+        self.install_utils("0.7.0")
+        result = self.run_tab(config={"successor_terminal": "supacode"}, name="proj-coord")
+        self.assertTrue(result.stdout.startswith("FAILED BAD-NAME --name must differ"), result.stdout)
+        self.assertEqual(self.calls(), [])
+
+    def test_detection_without_config(self):
+        mod = load_module("coord_successor_tab", SUCCESSOR_TAB)
+        found = lambda name: f"/bin/{name}"
+        none = lambda name: None
+        self.assertEqual(mod.choose_terminal(None, {"TERM_PROGRAM": "supacode", "SUPACODE_WORKTREE_ID": "w"}, found)[0],
+                         "supacode")
+        self.assertEqual(mod.choose_terminal(None, {"TERM_PROGRAM": "supacode", "SUPACODE_WORKTREE_ID": "w"}, none)[0],
+                         "none")
+        self.assertEqual(mod.choose_terminal(None, {"CMUX_SOCKET_PATH": "/s"}, found)[0], "cmux")
+        self.assertEqual(mod.choose_terminal({"successor_terminal": "tmux"}, {"CMUX_SOCKET_PATH": "/s"}, found)[0],
+                         "none")
+
+    def test_the_repo_utils_is_new_enough(self):
+        mod = load_module("coord_successor_tab_v", SUCCESSOR_TAB)
+        script = UTILS_PLUGIN / mod.UTILS_SCRIPT
+        self.assertGreaterEqual(mod.answered_version(script), mod.MIN_UTILS)
+
+
+    def test_real_utils_opens_a_supacode_tab_with_the_handshake_and_the_prefixed_name(self):
+        # Integration: the real utils new-session-tab.py with the stub `supacode` and `claude` of its own tests.
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from test_new_session_tab import HOST_ENV, SUPACODE_STUB, worktree_row
+        target = self.cache / "mkt" / "utils" / "0.7.0"
+        target.parent.mkdir(parents=True)
+        target.symlink_to(UTILS_PLUGIN)
+        bin_dir = Path(self.tmp.name) / "bin"
+        bin_dir.mkdir()
+        for name, body in (("supacode", SUPACODE_STUB), ("claude", "#!/bin/sh\nexit 0\n")):
+            (bin_dir / name).write_text(body, encoding="utf-8")
+            (bin_dir / name).chmod(0o755)
+        config = self.home / ".claude" / "captain" / "config.json"
+        config.parent.mkdir(parents=True)
+        config.write_text(json.dumps({"successor_terminal": "supacode", "session_prefix": "dev1-"}), encoding="utf-8")
+        row, tab, supa_log = worktree_row(self.dir), "0D1E2F30-AAAA-BBBB-CCCC-000000000001", Path(self.tmp.name) / "supa.log"
+        env = {k: v for k, v in os.environ.items() if k not in HOST_ENV}
+        env.update({"HOME": str(self.home), "PATH": f"{bin_dir}:/usr/bin:/bin", "COORD_PLUGIN_CACHE": str(self.cache),
+                    "SUPA_LOG": str(supa_log), "SUPA_ROWS": row, "SUPA_TAB": tab, "SUPA_TAB_IN": row, "SUPA_RUN": "1"})
+        result = subprocess.run([sys.executable, str(SUCCESSOR_TAB), f"--dir={self.dir}", f"--kickoff={self.kickoff}",
+                                 "--from=proj-coord", "--name=proj-coord-r2", "--wait=2"],
+                                capture_output=True, text=True, timeout=60, env=env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        lines = result.stdout.strip().splitlines()
+        self.assertEqual(lines[0], "HANDSHAKE dev1-proj-coord-r2 reply-to=proj-coord")
+        self.assertTrue(lines[-1].startswith(f"TAB-OK {tab} {row} dev1-proj-coord-r2 "), lines)
+        folder = self.kickoff.parent
+        self.assertTrue((folder / "dev1-proj-coord-r2.alive").exists())
+        wrapped = (folder / "dev1-proj-coord-r2.handshake.md").read_text(encoding="utf-8")
+        self.assertIn("STARTED dev1-proj-coord-r2 pwd=", wrapped)
+        self.assertTrue(wrapped.endswith(self.kickoff.read_text(encoding="utf-8")), wrapped)
+        new = [json.loads(line) for line in supa_log.read_text(encoding="utf-8").splitlines()
+               if json.loads(line)[:2] == ["tab", "new"]]
+        self.assertEqual(len(new), 1)
+        self.assertEqual(new[0][new[0].index("-w") + 1], row)
+        self.assertTrue(new[0][new[0].index("-i") + 1].isascii())
+
+class HandoffHookSuccessorTerminalTest(unittest.TestCase):
+    def setUp(self):
+        self.mod = load_module("handoff_at_boundary_st", HANDOFF_HOOK)
+
+    def test_terminal_rule_matches_the_script(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            self.assertIsNone(self.mod.successor_terminal({}, str(home)))
+            (home / ".claude" / "captain").mkdir(parents=True)
+            cfg = home / ".claude" / "captain" / "config.json"
+            cfg.write_text(json.dumps({"successor_terminal": "cmux"}))
+            self.assertEqual(self.mod.successor_terminal({}, str(home)), "cmux")
+            cfg.write_text(json.dumps({"successor_terminal": "none"}))
+            self.assertIsNone(self.mod.successor_terminal({"CMUX_SOCKET_PATH": "/s"}, str(home)))
+
+    def test_kickoff_line_branches_by_terminal(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = init_repo(Path(td) / "repo")
+            (repo / ".coord").mkdir()
+            (repo / ".coord" / "project.md").write_text("automation: manual\n")
+            plain = self.mod.kickoff_line(str(repo), None)
+            self.assertIn("`~/.claude/kickoffs/<your session name>.md`", plain)
+            self.assertNotIn("successor-tab.py", plain)
+            tab = self.mod.kickoff_line(str(repo), "supacode")
+            for part in ("§Successor terminal", "kickoffs/successor/", "successor-tab.py", "fall back to /clear",
+                         "rewrite that kickoff", "WITHOUT the successor-tab paragraph"):
+                self.assertIn(part, tab)
+            self.assertNotIn("restarted in place", tab)
+            (repo / ".coord" / "project.md").write_text("automation: cmux\n")
+            cmux_line = self.mod.kickoff_line(str(repo), "cmux")
+            self.assertIn("restarted in place by coord", cmux_line)
+            self.assertIn("design/prototype session", cmux_line)
+
+
 class MeasureContextTest(unittest.TestCase):
     def setUp(self):
         self.mod = load_module("measure_context", MEASURE_CONTEXT)
@@ -484,7 +696,7 @@ class CostReportTest(unittest.TestCase):
 
 class PyCompileTest(unittest.TestCase):
     def test_hooks_and_measure_context_compile(self):
-        for path in (KICKOFF_HOOK, HANDOFF_HOOK, MEASURE_CONTEXT):
+        for path in (KICKOFF_HOOK, HANDOFF_HOOK, MEASURE_CONTEXT, SUCCESSOR_TAB):
             with self.subTest(path=str(path)):
                 p = subprocess.run([sys.executable, "-m", "py_compile", str(path)],
                                    capture_output=True, text=True)

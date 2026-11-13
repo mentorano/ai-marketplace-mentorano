@@ -39,8 +39,8 @@ $C send --surface "$S" "<first message>"; $C send-key --surface "$S" Enter   # /
 
 ## Hard limits
 - **Only coord** drives other tabs, and **only** `/clear`, the first message above (`/coord lane`, `/coord design`, or "go" for a session without the skill whose fresh kickoff exists) and the start command above. Never task content, never answers to a session's questions, never `/exit` on a live lane. Why: typing into another session's terminal acts with the owner's authority.
-- **A session never drives its own tab.** The auto-mode classifier blocks self-driving (tested: a session scheduling its own `/clear` was refused as "self drive"). Coord's own handoff stays manual: coord writes its kickoff and asks the owner for `/clear` + `/coord`.
-- **Never two live sessions with one name.** Opening a successor in a NEW tab while the old one lives is forbidden; restart in place (same tab) instead.
+- **A session never drives its own tab.** The auto-mode classifier blocks self-driving (tested: a session scheduling its own `/clear` was refused as "self drive"). Coord's own handoff opens a successor in a new tab under a new name (`handoff-and-sessions.md` §Successor terminal); the manual `/clear` + `/coord` is its fallback.
+- **Never two live sessions with one name.** Opening a same-named successor in a NEW tab while the old one lives is forbidden; restart in place (same tab) instead. A successor under a new name with a STARTED → ACK handshake is `handoff-and-sessions.md` §Successor terminal.
 - A lane never uses these commands - not on coord, not on another lane.
 
 ## Traps

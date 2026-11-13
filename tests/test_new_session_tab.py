@@ -462,6 +462,17 @@ class NewSessionTabTest(unittest.TestCase):
                 self.assertTrue(result.stdout.startswith("FAILED BAD-NAME"), result.stdout)
         self.assertEqual(self.calls(), [])
 
+    def test_the_name_prefix_goes_in_front_once(self):
+        result = self.run_tab(terminal="supacode", extra=("--name-prefix=dev1-",))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(" dev1-proj-c5-r2 ", result.stdout)
+        self.assertIn("-n dev1-proj-c5-r2 ", self.tab_command())
+        result = self.run_tab(terminal="supacode", extra=("--name-prefix=proj-",))
+        self.assertIn(" proj-c5-r2 ", result.stdout)
+        result = self.run_tab(terminal="supacode", extra=("--name-prefix=bad prefix",))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--name-prefix must match", result.stderr)
+
     def test_an_explicit_permission_mode_is_passed_through_and_beats_the_mirrored_one(self):
         result = self.run_tab(terminal="supacode", extra=("--permission-mode=plan",))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

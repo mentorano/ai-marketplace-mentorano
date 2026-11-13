@@ -48,12 +48,22 @@ not as state.
 ## How
 
 1. [ ] An agent commits and pushes the finished work through the R5 gate; running agents have
-   reported; no merge is staged.
+   reported; no merge is staged. A UI group's commits the push gate holds back (no passed UI
+   check, `reference/ui-check.md`) are committed, not pushed, and listed in the handoff with
+   their SHAs and reason.
 2. [ ] Main writes the handoff with `Write` to `./tmp/captain/<run>/handoff-<YYYYMMDD-HHMM>.md`
    from the template below. SELF-CONTAINED: every decision, ruling and lesson from the run's
    earlier handoff that still stands is carried forward, shortened, so the successor reads only
-   this file. Never branch positions, "X is merged", "agent Y is running": put the command that
-   shows it.
+   this file. The run goes on, so every `decisions.md` line that still stands is carried, with
+   its `scope` and `source`; a `source: denial` line names the one denied call, never a rule
+   (R16). Only at run end (R17) do `scope: run` lines expire; a new run inherits only
+   `source: owner` or `scope: permanent` (`reference/queue.md`, decisions.md).
+   Never branch positions, "X is merged" or "agent Y is running", anywhere. No "done", "green"
+   or sha in §4 and §6: the only SHAs are the §2 `done <sha>` and the held-back commits of
+   step 1 (`Held back:` under the header). Put the command that shows the rest.
+   An approval gate or a stop appears in the handoff, the kickoff or the `ACK` message only as
+   the owner's own words, quoted; routine steps (commit, push of reviewed work to the feature
+   branch, the checks) need none.
    Steps 3-5 below are the `/clear` path. When the successor gets a Supacode or cmux tab, they are
    replaced by [Successor terminal](#successor-terminal), and used again as its fallback.
 3. [ ] A `captain:runner` writes the kickoff (template below) to `~/.claude/kickoffs/<session
@@ -66,6 +76,11 @@ not as state.
 
 A session cannot `/clear` itself. Auto-compaction is rejected: an extra full-context summary
 call, and a lingering summary that nobody who knows the next task wrote.
+
+**Why (step 2, 09–11.11.2026):** owner decisions not yet tasks (RSH3, RSH6) vanished from a night
+handoff; a run rule born from one denial (NS2) outlived its run; an owner's plain
+wording reached writers only as a rule code. Gates: the Why under
+the kickoff template.
 
 ## Successor terminal
 
@@ -84,7 +99,9 @@ With a Supacode or cmux tab, after steps 1-2 and instead of steps 3-5:
    step 5 or a fallback. Two sessions must never coordinate one run.
 2. [ ] `ListAgents` (load it with `ToolSearch` when deferred): the header line „This session is
    <name>“ gives this session's name, FROM. The successor's name, NEW: FROM without a trailing
-   `-r<N>`, plus `-r<N+1>` (`-r2` the first time), not already in the listing. Both names must
+   `-r<N>`, plus `-r<N+1>` (`-r2` the first time), not already in the listing. With a
+   `session_prefix` in the config, NEW starts with it: the script puts it in front when it is
+   missing, and the name on its TAB-OK line is the one to use. Both names must
    match `[A-Za-z0-9][A-Za-z0-9._-]*`; a name with spaces → the `/clear` steps.
 3. [ ] A `captain:runner` runs ONE command (DIR: the absolute working directory of this main
    session, not an agent worktree; HANDOFF: the absolute handoff path):
@@ -193,12 +210,16 @@ the owner "Name the session: `/rename <name>`" before step 3. There is no repo-f
 ```markdown
 # <project> - captain handoff, <date> <part of day>
 
-Self-contained: everything from earlier handoffs that still stands is carried into §1-§4,
-shortened. Earlier files are for lookup only. **Nothing here is status.** Re-derive it:
+Self-contained: everything from earlier handoffs that still stands is carried into §1-§5,
+shortened. Earlier files are for lookup only. **Nothing here is status** except the §2 status
+column, whose `done <sha>` a runner checks with `git -C <repo> branch --contains <sha>`.
+Re-derive it:
 
     git -C <repo> status -s && git -C <repo> log -n 10 --oneline   (a runner runs it)
     python3 <skill root>/scripts/measure-context.py <repo> 24      (a runner runs it)
     CronList, then compare with run.md `## Timers`
+
+Held back: <sha> - <reason> per commit the push gate holds (How step 1), or none.
 
 Run dir: ./tmp/captain/<run>/ (run.md, decisions.md, queue.md). Mode, box and deadline (if any): see run.md.
 Project memory: the `Project memory` line and `## Memory candidates` stay in run.md; drafts in <run dir>/memory-drafts/.
@@ -206,17 +227,33 @@ Project memory: the `Project memory` line and `## Memory candidates` stay in run
 ## 1. Decisions taken (also in decisions.md)
 - **<id> - <title>.** <one or two lines: what it binds>.
 
-## 2. Rulings and owner answers
+## 2. Owner decisions
+Every owner decision of the run that asks for work (`source: owner` with a `status:` in
+decisions.md; this table is its copy; a standing owner rule goes to §3, no status). A
+`done <sha>` row appears in the first handoff written after it was done and is left out of
+later ones. Main never narrows the owner's agreed scope on its own (R18); a narrowing by the
+owner or by R6/TP6 is a `deferred` row here, its reason one of the R18 list.
+
+| ID | the owner's words, verbatim | status |
+|----|-----------------------------|--------|
+| <id> | "<…>" | `done <sha>` / `deferred to <phase/task>: <reason>` / `open` |
+
+## 3. Rulings and owner answers
 - **<id> - <the owner's words, verbatim>.** <what it settled>.
+The owner's feedback (text verbatim, their screenshots copied into the run dir, never a temp or clipboard
+path): `<run dir>/owner-review-<YYYYMMDD>.md`. Link it; never rewrite those words into rule codes
+or summaries.
 
-## 3. Open questions for the owner
-1. **<id>:** <question - recommendation - what waits on it>.
+## 4. Open questions for the owner
+1. **<id>:** <question - recommendation - what waits on it>. No "done", "green" or sha: the
+   command that shows it.
 
-## 4. Lessons
-- **<lesson>.** <the incident in one line, the rule>.
+## 5. Lessons
+- **<lesson>.** <the incident in one line, the rule>. An incident, never "do exactly as <X>"
+  (a copied pattern spreads a rejected mechanic).
 
-## 5. First action
-<the one concrete next step, e.g. "launch the writer for ZD4 with the R3 frame">
+## 6. First action
+<the one concrete next step, e.g. "launch the writer for ZD4 with the R3 frame">; no status.
 ```
 
 ## Kickoff template
@@ -225,11 +262,20 @@ Project memory: the `Project memory` line and `## Memory candidates` stay in run
 You ARE the <project> captain, the successor of the previous captain session in this run, not a
 helper writing for a later one. Invoke `/captain resume` (skill `captain`).
 
-1. Read <abs path of the newest handoff> - it is self-contained; nothing in it is status.
+1. Read <abs path of the newest handoff> - it is self-contained; nothing in it is status
+   except its §2 status column.
 2. Re-derive state before acting: a `captain:runner` runs the commands in its header; `CronList`.
 3. Start with: <the first concrete action>.
-4. Open owner questions to carry: <ids or "see handoff §3">.
+4. Open owner questions to carry: <ids or "see handoff §4">; owner decisions: handoff §2.
+5. Owner gates, quoted: <"…" per gate, or "none">. Routine steps that need no approval: <e.g.
+   commit, push reviewed work to the feature branch, run the checks>. A product choice this
+   kickoff does not settle: present → ask the owner; away → a panel (R9). R10 outward actions
+   and R16 denials still go to the owner.
 ```
+
+Gates in the handoff, the kickoff and the `ACK` are the owner's, never main's (How step 2).
+**Why:** 11.11.2026: kickoff gates the owner never said ("Stop and wait for my choice", "an agent
+does X only after my 'yes'") stalled a successor that takes every absolute rule literally.
 
 ## `/captain resume`
 
