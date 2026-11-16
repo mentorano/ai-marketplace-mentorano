@@ -1,0 +1,4 @@
+#!/bin/sh
+# stub: npm is installed but the install fails (no network)
+echo "npm error code ENOTFOUND registry.npmjs.org" >&2
+exit 1

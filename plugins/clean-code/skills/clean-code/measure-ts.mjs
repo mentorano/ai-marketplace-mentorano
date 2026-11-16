@@ -1,19 +1,33 @@
 #!/usr/bin/env node
-// measure-ts.mjs — function shape for TypeScript sources.
+// measure-ts.mjs — function shape for TypeScript and JavaScript sources.
 //
-// Called by measure.py; run by hand only when debugging:
-//   node measure-ts.mjs <path-to-node_modules/typescript> <file>...
-// Prints one JSON array of {file, name, line, lines, cc, params, depth}.
+// Called by typescript.py for measure.py; run by hand only when debugging:
+//   node measure-ts.mjs <path-to-node_modules/typescript> [--inline] <file>...
+// Prints one JSON object {functions, unparsed}: `functions` holds
+// {file, name, line, lines, cc, params, depth} rows.
 //
-// The typescript package is the measured project's own, so the parser matches
-// the syntax the project compiles. Nothing is type-checked; imports need not
-// resolve.
+// A .ts or .tsx file is parsed as TypeScript, every other file as JavaScript.
+// With --inline, stdin is a JSON array of {file, text}: the inline scripts of
+// HTML files, each padded so its lines are the lines of the HTML file.
+//
+// A file that does not parse, TypeScript or JavaScript, is a broken run: a
+// script that checks only the exit code must see a real syntax error. The
+// sloppy-mode octal forms are not errors (see SLOPPY_MODE_CODES). An inline
+// script of an HTML file that does not parse goes to `unparsed` as
+// {file, line, message} and the run goes on: a page template is not
+// JavaScript until it is rendered.
+//
+// The typescript package is the measured project's own when it has one, so
+// the parser matches the syntax the project compiles. Nothing is type-checked;
+// imports need not resolve.
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 
-const [tsPackageDir, ...files] = process.argv.slice(2);
-if (!tsPackageDir || files.length === 0) {
-  console.error("usage: measure-ts.mjs <typescript-package-dir> <file>...");
+const [tsPackageDir, ...rest] = process.argv.slice(2);
+const readsInline = rest.includes("--inline");
+const files = rest.filter((arg) => arg !== "--inline");
+if (!tsPackageDir || (files.length === 0 && !readsInline)) {
+  console.error("usage: measure-ts.mjs <typescript-package-dir> [--inline] <file>...");
   process.exit(2);
 }
 const ts = createRequire(import.meta.url)(tsPackageDir);
@@ -183,50 +197,117 @@ function depth(fn) {
   return rec(fn, 0);
 }
 
-// A file the parser could not read is a broken run, not a file with no
-// functions: measuring what the recovery parser invented would be a lie.
-function failOnParseErrors(sf, file) {
-  const diagnostics = sf.parseDiagnostics ?? [];
-  if (diagnostics.length === 0) return;
-  const diag = diagnostics[0];
-  const line = sf.getLineAndCharacterOfPosition(diag.start ?? 0).line + 1;
-  console.error(`${file}:${line}: ${ts.flattenDiagnosticMessageText(diag.messageText, " ")}`);
-  process.exit(2);
+// What the parser reports for JavaScript that runs in sloppy mode: a legacy
+// octal literal (0755), an octal escape ("\033[0m"), a decimal with a leading
+// zero, "\8". The scanner complains and the tree is whole, so the functions
+// of such a file are measured.
+const SLOPPY_MODE_CODES = new Set([1121, 1487, 1488, 1489]);
+
+function isJavaScript(file) {
+  return scriptKind(file) === ts.ScriptKind.JS;
 }
 
-function measureFile(file) {
-  const text = readFileSync(file, "utf8");
-  const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind);
-  failOnParseErrors(sf, file);
+// The parser accepts TypeScript syntax in a JavaScript file (`x: number`,
+// `private`) and leaves the rejection to a later check; a one-file program
+// runs that check. Nothing is resolved and no library is loaded.
+function javaScriptDiagnostics(sf) {
+  const host = {
+    getSourceFile: (name) => (name === sf.fileName ? sf : undefined),
+    getDefaultLibFileName: () => "lib.d.ts",
+    writeFile: () => {},
+    getCurrentDirectory: () => "/",
+    getCanonicalFileName: (name) => name,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => "\n",
+    fileExists: (name) => name === sf.fileName,
+    readFile: () => undefined,
+  };
+  const options = { allowJs: true, noResolve: true, noLib: true, noEmit: true };
+  const program = ts.createProgram({ rootNames: [sf.fileName], options, host });
+  return program.getSyntacticDiagnostics(sf).filter((diag) => !SLOPPY_MODE_CODES.has(diag.code));
+}
+
+// The first parse error of a source, or null. A source the parser could not
+// read has no functions to report: measuring what the recovery parser
+// invented would be a lie.
+function parseError(sf, file) {
+  const diagnostics = isJavaScript(file) ? javaScriptDiagnostics(sf) : (sf.parseDiagnostics ?? []);
+  if (diagnostics.length === 0) return null;
+  const diag = diagnostics[0];
+  const line = sf.getLineAndCharacterOfPosition(diag.start ?? 0).line + 1;
+  return { line, message: ts.flattenDiagnosticMessageText(diag.messageText, " ") };
+}
+
+// JavaScript covers .js, .mjs, .cjs, .jsx and the inline scripts of HTML files.
+function scriptKind(file) {
+  const name = file.toLowerCase();
+  if (name.endsWith(".tsx")) return ts.ScriptKind.TSX;
+  if (name.endsWith(".ts")) return ts.ScriptKind.TS;
+  return ts.ScriptKind.JS;
+}
+
+function parse(file, text) {
+  return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKind(file));
+}
+
+function rowOf(node, sf) {
+  const start = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line;
+  const end = sf.getLineAndCharacterOfPosition(node.getEnd()).line;
+  return {
+    name: nameOf(node),
+    line: start + 1,
+    lines: end - start + 1,
+    cc: complexity(node),
+    params: node.parameters.length,
+    depth: depth(node),
+  };
+}
+
+function measureSource(sf, file) {
   const out = [];
   const visit = (node) => {
-    if (isMeasured(node)) {
-      const start = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line;
-      const end = sf.getLineAndCharacterOfPosition(node.getEnd()).line;
-      out.push({
-        file,
-        name: nameOf(node),
-        line: start + 1,
-        lines: end - start + 1,
-        cc: complexity(node),
-        params: node.parameters.length,
-        depth: depth(node),
-      });
-    }
+    if (isMeasured(node)) out.push({ file, ...rowOf(node, sf) });
     ts.forEachChild(node, visit);
   };
   visit(sf);
   return out;
 }
 
-const results = [];
-for (const file of files) {
+function fail(message) {
+  console.error(message);
+  process.exit(2);
+}
+
+// A file that is not UTF-8 is read one character per byte, as languages.py
+// reads it: no line and no brace moves, and a letter of a single-byte encoding
+// stays a letter. Replacement characters would make the parser call it binary.
+function decode(bytes) {
   try {
-    results.push(...measureFile(file));
-  } catch (error) {
-    console.error(`${file}: ${error.message}`);
-    process.exit(2);
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return bytes.toString("latin1");
   }
 }
-process.stdout.write(JSON.stringify(results));
+
+function readSource(file) {
+  try {
+    return decode(readFileSync(file));
+  } catch (error) {
+    return fail(`${file}: ${error.message}`);
+  }
+}
+
+const functions = [];
+const unparsed = [];
+
+function measure(file, text, inline) {
+  const sf = parse(file, text);
+  const error = parseError(sf, file);
+  if (!error) functions.push(...measureSource(sf, file));
+  else if (inline) unparsed.push({ file, ...error });
+  else fail(`${file}:${error.line}: ${error.message}`);
+}
+
+for (const file of files) measure(file, readSource(file), false);
+for (const { file, text } of readsInline ? JSON.parse(readFileSync(0, "utf8")) : []) measure(file, text, true);
+process.stdout.write(JSON.stringify({ functions, unparsed }));

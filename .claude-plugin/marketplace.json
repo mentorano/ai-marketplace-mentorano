@@ -91,8 +91,8 @@
     {
       "name": "clean-code",
       "source": "./plugins/clean-code",
-      "description": "Clean Code and Clean Architecture rules, source measurement, and logging for Python and TypeScript. Includes architecture-fundamentals for system decisions and reviews: business drivers, data ownership, runtime coupling, contextual style trade-offs, risks, ADRs and fitness functions.",
-      "version": "0.6.1",
+      "description": "Clean Code and Clean Architecture rules, source measurement, and logging for Python and TypeScript; the measurement also covers JavaScript and inline HTML scripts. Includes architecture-fundamentals for system decisions and reviews: business drivers, data ownership, runtime coupling, contextual style trade-offs, risks, ADRs and fitness functions.",
+      "version": "0.7.0",
       "license": "MIT",
       "author": {
         "name": "Ivan Dachev",

@@ -232,11 +232,13 @@ def _package_for(path: Path, layout: Layout, known: dict[Path, Package]) -> Pack
 
 
 def parse_sources(files: list[Path], layout: Layout) -> list[Source]:
-    foreign = [path for path in files if language_of(path) != "py"]
+    foreign = [path for path in files if language_of(path) == "ts"]
     if foreign:
         raise MeasureError(
             f"{foreign[0]}: boundaries.py measures Python only in this version.\n"
             "For a TypeScript tree run dependency-cruiser (npx depcruise --validate src) instead."
         )
+    # A Python package often carries templates and static scripts; they hold no Python import.
+    python = [path for path in files if language_of(path) == "py"]
     known: dict[Path, Package] = {}
-    return [parse_source(path, _package_for(path, layout, known)) for path in files]
+    return [parse_source(path, _package_for(path, layout, known)) for path in python]

@@ -112,12 +112,15 @@ is not in `eslint:recommended`, so turn it on.
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/clean-code/measure.py" frontend/src --changed
 ```
 
-TypeScript is parsed with the project's own `typescript` package, found in
-the nearest `node_modules` above each file, so the parser matches what the
-project compiles. If it is missing the script prints the `npm ci` command
-and stops; it never skips the language. TypeScript 7 has no JavaScript
-compiler API, so on a 7.x project the script stops and asks for a 5.x
-package (`npm install --no-save typescript@5`).
+The script measures `.ts` and `.tsx`, and with the same rules `.js`, `.mjs`,
+`.cjs`, `.jsx` and the inline `<script>` blocks of `.html` files. They are
+parsed with the project's own `typescript` package, found in the nearest
+`node_modules` above each file, so the parser matches what the project
+compiles. When the project has none, or has TypeScript 7, which has no
+JavaScript compiler API, the script installs a 5.x package once into its
+own cache (`~/.cache/clean-code`) and parses with that; nothing is written
+into the project. It never skips the language: if that install fails, the
+run stops and names the command to run by hand.
 
 What counts as a function: declarations, methods, constructors, accessors,
 and an arrow or function expression that is the initializer of a `const`,

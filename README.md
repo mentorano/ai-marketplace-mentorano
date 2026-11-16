@@ -255,7 +255,8 @@ commit that no branch holds.
 Five skills and two scripts. The skills carry Clean Code and Clean
 Architecture rules shaped for Python / FastAPI and TypeScript / React;
 `measure.py` measures function length, complexity, parameters, nesting and
-file size, `boundaries.py` measures the import graph — dependency direction,
+file size, also for plain JavaScript files and the inline scripts of HTML
+pages, `boundaries.py` measures the import graph — dependency direction,
 cycles between modules, framework types in the domain, SQL in handlers — and
 the agent runs them before and after every change so the verdict comes from
 a command. With `--compare` both scripts measure the same files a second

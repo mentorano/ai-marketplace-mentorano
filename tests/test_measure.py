@@ -100,7 +100,7 @@ class PythonMeasurementTest(unittest.TestCase):
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ts_package import SKIP_REASON, TS_PACKAGE, TS_READY  # noqa: E402
+from ts_package import SKIP_REASON, TS_PACKAGE, TS_READY, cache_env  # noqa: E402  (the tests directory goes on sys.path first)
 
 if not TS_READY:
     print(f"test_measure: TypeScript tests skipped \u2014 {SKIP_REASON}", file=sys.stderr)
@@ -121,7 +121,7 @@ class TypeScriptMeasurementTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.project = make_ts_project(Path(self._tmp.name))
-        functions = measure.measure_ts_files([self.project / "sample.ts", self.project / "Sample.tsx"])
+        functions = measure.parse_files([self.project / "sample.ts", self.project / "Sample.tsx"]).functions
         self.ts = by_name([f for f in functions if f.file.endswith("sample.ts")])
         self.tsx = by_name([f for f in functions if f.file.endswith("Sample.tsx")])
 
@@ -170,7 +170,7 @@ class TypeScriptMeasurementTest(unittest.TestCase):
         broken = self.project / "broken.ts"
         broken.write_text("export function broken( {\n")
         with self.assertRaises(measure.MeasureError) as ctx:
-            measure.measure_ts_files([broken])
+            measure.parse_files([broken]).functions
         self.assertIn("broken.ts", str(ctx.exception))
 
     def test_find_typescript_package_walks_up(self):
@@ -186,7 +186,7 @@ class TypeScriptTestFileTest(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.project = make_ts_project(Path(self._tmp.name))
         shutil.copy(FIXTURES / "sample.test.ts", self.project / "sample.test.ts")
-        self.by = by_name(measure.measure_ts_files([self.project / "sample.test.ts"]))
+        self.by = by_name(measure.parse_files([self.project / "sample.test.ts"]).functions)
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -216,38 +216,13 @@ class TypeScriptTestFileTest(unittest.TestCase):
         (self.project / "e2e.spec.ts").write_text(
             'test.describe("login", () => {\n  test("works", async () => {\n    await go();\n  });\n});\n'
         )
-        names = [row.name for row in measure.measure_ts_files([self.project / "e2e.spec.ts"])]
+        names = [row.name for row in measure.parse_files([self.project / "e2e.spec.ts"]).functions]
         self.assertEqual(names, ['test("works")'])
 
     def test_a_long_title_is_cut_so_the_row_stays_readable(self):
         (self.project / "long.test.ts").write_text(f'it("{"x" * 100}", () => {{}});\n')
-        [row] = measure.measure_ts_files([self.project / "long.test.ts"])
+        [row] = measure.parse_files([self.project / "long.test.ts"]).functions
         self.assertEqual(row.name, f'it("{"x" * 60}…")')
-
-
-class TypeScriptWithoutToolingTest(unittest.TestCase):
-    def test_missing_typescript_package_names_the_fix(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            lonely = Path(tmp) / "lonely.ts"
-            lonely.write_text("export const x = 1;\n")
-            with self.assertRaises(measure.MeasureError) as ctx:
-                measure.measure_ts_files([lonely])
-        self.assertIn("typescript package not found", str(ctx.exception))
-        self.assertIn("npm ci", str(ctx.exception))
-
-    def test_a_typescript_package_without_the_compiler_api_names_the_version(self):
-        # TypeScript 7 is the native compiler: its package has no `main`, so
-        # measure-ts.mjs used to fail with a bare "Cannot find module".
-        with tempfile.TemporaryDirectory() as tmp:
-            package = Path(tmp) / "node_modules" / "typescript"
-            package.mkdir(parents=True)
-            (package / "package.json").write_text('{"name": "typescript", "version": "7.0.2"}')
-            source = Path(tmp) / "a.ts"
-            source.write_text("export const x = 1;\n")
-            with self.assertRaises(measure.MeasureError) as ctx:
-                measure.measure_ts_files([source])
-        self.assertIn("7.0.2", str(ctx.exception))
-        self.assertIn("typescript@5", str(ctx.exception))
 
 
 def git(*args, cwd):
@@ -322,6 +297,7 @@ class ReportTest(unittest.TestCase):
                 "files": 1,
                 "over_file_lines": 0,
                 "suppressions": 2,
+                "unparsed_scripts": 0,
             },
         )
 
@@ -366,8 +342,8 @@ class OutOfTreeDisplayTest(unittest.TestCase):
 
 
 class CliTest(unittest.TestCase):
-    def run_cli(self, *args):
-        return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True)
+    def run_cli(self, *args, env=None):
+        return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True, env=env)
 
     def test_measures_a_path_and_exits_zero_even_when_red(self):
         proc = self.run_cli(str(FIXTURES / "sample.py"))
@@ -383,7 +359,8 @@ class CliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             lonely = Path(tmp) / "lonely.ts"
             lonely.write_text("export const x = 1;\n")
-            proc = self.run_cli(str(lonely))
+            # No npm on this PATH: the run cannot install a parser, and must not try the real one.
+            proc = self.run_cli(str(lonely), env=cache_env(Path(tmp)))
         self.assertEqual(proc.returncode, 2)
         self.assertIn("typescript package not found", proc.stderr)
 
@@ -399,7 +376,7 @@ class CliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             proc = self.run_cli(tmp)
         self.assertEqual(proc.returncode, 0)
-        self.assertIn("no Python or TypeScript files", proc.stdout)
+        self.assertIn("no Python, TypeScript, JavaScript or HTML files to measure", proc.stdout)
 
     def test_zero_threshold_is_a_usage_error(self):
         proc = self.run_cli(str(FIXTURES / "sample.py"), "--max-cc", "0")

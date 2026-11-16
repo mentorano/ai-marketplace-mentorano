@@ -32,7 +32,11 @@ runtime isolation, independent deployment, or system fitness.
   "Uncle Bob", "SOLID", or "Clean Architecture".
 
 Load the language skill for the file being edited: `clean-code-python` for
-`.py`, `clean-code-typescript` for `.ts` and `.tsx`. Read `architecture.md`
+`.py`, `clean-code-typescript` for `.ts` and `.tsx`. Plain JavaScript
+(`.js`, `.mjs`, `.cjs`, `.jsx`, an inline `<script>` in an `.html` file) has
+no language skill of its own: the rules below apply as they are, and
+`clean-code-typescript` is worth loading when the code is a React app. Read
+`architecture.md`
 — it holds the four architecture review phases — when the change touches a
 module boundary, adds an import between layers, or adds a module. The
 language skills cite its phases by number. Read `rationalizations.md` when
@@ -56,6 +60,29 @@ it; a hard-coded path does not exist for a plugin install. If
 `$CLAUDE_PLUGIN_ROOT` is empty the command looks for `/skills/...` and
 fails. Check it first with `echo "$CLAUDE_PLUGIN_ROOT"`; if empty, use the
 absolute path of the directory this `SKILL.md` sits in.
+
+`measure.py` measures `.py`, `.ts`, `.tsx`, `.js`, `.mjs`, `.cjs`, `.jsx`
+and `.html` files. Any other file under the paths is left out, and so is a
+minified `.min.js`, which is build output; a directory walk also skips
+generated trees such as `node_modules`, `dist`, `build`, `htmlcov` and
+`_build`. Of an `.html` file it measures
+the inline `<script>` blocks the browser runs as JavaScript (no `type`,
+`text/javascript`, `module`): each function prints with the `.html` file
+name and its line in that file. A `src` script and a data block
+(`application/json`, `application/ld+json`, a template) are not code of the
+file. The file row of an `.html` file counts only the lines and
+suppressions of those inline scripts, not the whole file: the 500-line cap
+is about source code, and a long page or a large data block is content.
+
+Everything except Python is parsed with a `typescript` package: the
+project's own, from the nearest `node_modules` above the file, or, when the
+project has none with a compiler API (a plain JavaScript site, a Python
+repository with some JavaScript, a TypeScript 7 project), one that the
+script installs once into its own cache, `~/.cache/clean-code`
+(`CLEAN_CODE_CACHE_DIR` moves it). That first run needs `npm` and network
+access and says on stderr what it installs. Nothing is written into the
+measured repository. If the install fails, the error names the command to
+run by hand.
 
 Run this before the first edit and keep the whole table, not only the
 SUMMARY: the default output lists only offenders, and a clean function you
@@ -103,8 +130,16 @@ counts unchanged. Put the paths before `--compare`, or the first path is
 read as its ref. The last line is the verdict:
 
 ```text
-VERDICT new_over=0 crossed=0 grew=1 fixed=0 file_new_over=0 file_crossed=0 file_grew=1 suppressions_up=0
+VERDICT new_over=0 crossed=0 grew=1 fixed=0 file_new_over=0 file_crossed=0 file_grew=1 suppressions_up=0 unparsed_scripts=0
 ```
+
+`unparsed_scripts`, in SUMMARY and in VERDICT, counts the inline scripts of
+`.html` files the parser could not read. The report lists each one under
+`UNPARSED` with its line. The run goes on, because a page template
+(`{{ value }}` inside a script) is not JavaScript until it is rendered; but
+the functions of that script are in no row. A verdict of zeros next to
+`unparsed_scripts` above 0 judged only part of the code. A `.ts` or `.js`
+file that does not parse is a broken run, exit 2.
 
 When another session or agent may have uncommitted work in the same tree,
 add `--at HEAD`: the after side is then the committed files, and
@@ -140,6 +175,7 @@ The verdicts map to the rules below:
 | `fixed` | was over, now under every threshold | report it |
 | `still-over` | over before and after, not worse (shown with `--all`) | context, not a finding |
 | `new` | a new function under every threshold (shown with `--all`) | nothing to do |
+| `unparsed_scripts` | an inline script of an `.html` file did not parse, so its functions were not measured | name each one in the report and say why; a syntax error is fixed and measured again, a page template is reported as not measurable |
 
 - No function the task touched crosses a threshold it did not cross before.
 - A function the task created is under every threshold.
@@ -148,9 +184,14 @@ The verdicts map to the rules below:
 - A file the task touched that was already over 500 lines does not grow,
   or the report says why in one sentence.
 - Suppressions did not go up, unless each new one carries its reason.
+- Every unparsed script is named in the report; none is passed over as a
+  clean result.
 
 A function is matched by file and name. A renamed function shows as a new
-row, so judge a `new-over` row against the diff before calling it new.
+row, so judge a `new-over` row against the diff before calling it new. The
+same holds when the `BEFORE` line has `unparsed_scripts` above 0: a script
+that did not parse before had no rows, so its old functions print as new
+once it parses.
 
 If the code-shape verdict violates the rules above, the task is not done. Split the function,
 extract the helper, flatten the nesting, then measure again. Not worse is
@@ -269,6 +310,7 @@ by the project, not a rule added to this skill.
 | depth | 2 | nested blocks hide the normal flow; extract each block into a one-line call, or return early with a guard clause |
 | file lines | 500 | more than one job in one file; split by responsibility, not by line count |
 | suppressions | counted | each is a safety the code overrode on purpose; each needs a reason on the line |
+| unparsed_scripts | 0 | an inline script of an `.html` file is not JavaScript the parser can read: a page template or a syntax error; its functions are in no row |
 | upward | 0 | a service, model or domain file imports `api`; the inner layer knows the handler, so the rule cannot be tested without HTTP; invert with a function the inner layer owns |
 | cycles | 0 | two modules import each other; the printed closing edges are the rarer direction, the fix list; move the shared thing to a module both may import, or pass it in |
 | cyclic_modules | 0 | modules inside any cycle, pairs or longer; a cycle through three modules has no pair and shows only here |

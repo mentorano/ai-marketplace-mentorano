@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture for tests/test_measure_js.py</title>
+<script id="rows" type="application/json">[{"title": "function inData() {} as any </div>"}]</script>
+<script src="vendor.js">function behindSrc() { return 1; }</script>
+<script type="text/template"><p>function inTemplate() { if (a) { b } }</p></script>
+<script>
+  function first(a, b) {
+    if (a < b) { return "</div>"; }
+    return a;
+  }
+</script>
+</head>
+<body>
+<p>Prose that says eslint-disable and as any is not code.</p>
+<!-- <script>function commentedOut() {}</script> -->
+<script
+    type="module"
+    data-note="a tag on three lines">
+import { helper } from "./helper.js";
+
+// eslint-disable-next-line no-undef
+export const second = (a, b, c, d) => helper(a, b, c, d);
+
+function third(items) {
+  for (let item of items) {
+    if (item) {
+      while (item.next) { item = item.next; }
+    }
+  }
+}
+</script>
+</body>
+</html>

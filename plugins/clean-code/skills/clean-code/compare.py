@@ -17,6 +17,10 @@ File verdicts use the file-lines cap the same way (new-over, crossed, grew,
 fixed), plus suppressions-up: more suppressions than before, each new one
 allowed only with its reason on the line.
 
+The VERDICT line ends with unparsed_scripts: the inline HTML scripts of the
+after side that did not parse. Their functions have no row, so a verdict of zeros next to a count above zero judged only part of
+the code.
+
 A function is matched by file, name and its position among the functions of
 that name in the file. A renamed function is therefore one removed row and
 one new row.
@@ -64,10 +68,13 @@ class FileChange:
 class Comparison:
     functions: list[FunctionChange]
     files: list[FileChange]
+    # Inline scripts of the after side that did not parse: code no row above judged.
+    unparsed_scripts: int = 0
 
     def verdict(self) -> dict[str, int]:
         counts = Counter([("function", c.verdict) for c in self.functions] + [("file", c.verdict) for c in self.files])
-        return {key: counts[(kind, verdict)] for key, kind, verdict in VERDICT_KEYS}
+        judged = {key: counts[(kind, verdict)] for key, kind, verdict in VERDICT_KEYS}
+        return {**judged, "unparsed_scripts": self.unparsed_scripts}
 
 
 def _keyed(functions: list[FunctionMeasure]) -> dict[Key, FunctionMeasure]:
@@ -134,7 +141,7 @@ def compare(before, after, t: Thresholds) -> Comparison:
     functions = sorted((c for c in judged if c), key=lambda c: (_rank(c.verdict), c.after.file, c.after.line))
     old_files = {fs.file: fs for fs in before.files}
     files = [change for fs in after.files for change in file_changes(old_files.get(fs.file), fs, t)]
-    return Comparison(functions, sorted(files, key=lambda c: (_rank(c.verdict), c.after.file)))
+    return Comparison(functions, sorted(files, key=lambda c: (_rank(c.verdict), c.after.file)), len(after.unparsed))
 
 
 # --- Rendering ----------------------------------------------------------------

@@ -23,7 +23,7 @@ MEASURE = SKILL / "measure.py"
 BOUNDARIES = SKILL / "boundaries.py"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ts_package import SKIP_REASON, TS_PACKAGE, TS_READY  # noqa: E402
+from ts_package import SKIP_REASON, TS_PACKAGE, TS_READY, cache_env  # noqa: E402  (the tests directory goes on sys.path first)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -113,7 +113,7 @@ class AtRefTest(unittest.TestCase):
         git(self.repo, "checkout", "-q", "-b", "work")
         proc = run(MEASURE, "pkg", "--changed", "--base", "main", "--compare", cwd=self.repo)
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("no Python or TypeScript files to measure", proc.stdout)
+        self.assertIn("no Python, TypeScript, JavaScript or HTML files to measure", proc.stdout)
 
     def test_an_unknown_ref_is_a_broken_run_that_names_the_flag(self):
         proc = run(MEASURE, "pkg", "--at", "nowhere", cwd=self.repo)
@@ -203,7 +203,8 @@ class CompareTest(unittest.TestCase):
 
     def test_the_verdict_line_counts_every_kind(self):
         self.assertIn(
-            "VERDICT new_over=1 crossed=1 grew=1 fixed=1 file_new_over=0 file_crossed=1 file_grew=1 suppressions_up=1",
+            "VERDICT new_over=1 crossed=1 grew=1 fixed=1 file_new_over=0 file_crossed=1 file_grew=1 suppressions_up=1"
+            " unparsed_scripts=0\n",
             self.text,
         )
 
@@ -294,6 +295,101 @@ class CompareTypeScriptTest(unittest.TestCase):
             proc = run(MEASURE, "web/src/a.ts", "--compare", "HEAD~1", cwd=repo)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("VERDICT ", proc.stdout)
+
+
+def script_function(name: str, lines: int) -> str:
+    """A JavaScript function `lines` lines long."""
+    body = "".join(f"  const v{i} = {i};\n" for i in range(lines - 3))
+    return f"function {name}() {{\n{body}  return 1;\n}}\n"
+
+
+def page(*scripts: str) -> str:
+    blocks = "".join(f"<script>\n{script}</script>\n" for script in scripts)
+    return f'<!doctype html>\n<p>text</p>\n<script type="application/json">{{"rows": []}}</script>\n{blocks}'
+
+
+@unittest.skipUnless(TS_READY, SKIP_REASON)
+class CompareJavaScriptAndHtmlTest(unittest.TestCase):
+    """--changed and --compare treat a .js or .html file as they treat a .ts file."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        base = {
+            ".gitignore": "node_modules\n",
+            "web/app.js": script_function("grows", 5) + script_function("stays", 5),
+            "web/worker.mjs": "export const untouched = () => 1;\n",
+            "web/index.html": page(script_function("inPage", 5)),
+            "web/old.html": page(script_function("moved", 5)),
+        }
+        self.repo = new_repo(self.tmp, base)
+        (self.repo / "web" / "node_modules").mkdir()
+        os.symlink(TS_PACKAGE, self.repo / "web" / "node_modules" / "typescript")
+        git(self.repo, "checkout", "-q", "-b", "work")
+        # An empty cache and no npm: both sides must parse with the project's own package.
+        self.env = cache_env(self.tmp)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def measure(self, *args: str) -> subprocess.CompletedProcess:
+        command = [sys.executable, str(MEASURE), "web", "--changed", "--base", "main", "--compare", *args]
+        return subprocess.run(command, cwd=self.repo, capture_output=True, text=True, env=self.env)
+
+    def compare(self, *args: str) -> dict:
+        proc = self.measure(*args, "--json")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
+    def verdicts(self, data: dict) -> dict[tuple[str, str], str]:
+        return {(r["file"], r["name"]): r["verdict"] for r in data["compare"]["functions"]}
+
+    def test_a_changed_javascript_file_is_compared_row_by_row(self):
+        write(self.repo, {"web/app.js": script_function("grows", 25) + script_function("stays", 5)})
+        data = self.compare()
+        self.assertEqual([f["file"] for f in data["files"]], ["web/app.js"])
+        self.assertEqual(self.verdicts(data), {("web/app.js", "grows"): "crossed"})
+        self.assertEqual(data["compare"]["verdict"]["crossed"], 1)
+
+    def test_a_changed_inline_script_is_compared_at_its_html_line(self):
+        commit(self.repo, {"web/index.html": page(script_function("inPage", 25), script_function("added", 3))}, "longer")
+        data = self.compare("--at", "HEAD")
+        self.assertEqual(
+            self.verdicts(data), {("web/index.html", "inPage"): "crossed", ("web/index.html", "added"): "new"}
+        )
+        [row] = [r for r in data["compare"]["functions"] if r["name"] == "inPage"]
+        self.assertEqual((row["before"]["line"], row["before"]["lines"], row["after"]["lines"]), (5, 5, 25))
+        self.assertEqual(data["before"]["summary"]["functions"], 1)
+
+    def test_a_new_and_a_renamed_html_file_are_new_rows(self):
+        write(self.repo, {"web/fresh.html": page(script_function("fresh", 25))})
+        git(self.repo, "mv", "web/old.html", "web/renamed.html")
+        data = self.compare()
+        self.assertEqual(sorted(f["file"] for f in data["files"]), ["web/fresh.html", "web/renamed.html"])
+        self.assertEqual(
+            self.verdicts(data), {("web/fresh.html", "fresh"): "new-over", ("web/renamed.html", "moved"): "new"}
+        )
+
+    def test_an_inline_script_that_does_not_parse_stays_in_the_verdict(self):
+        # A page template: the functions of that block have no row, so zeros alone would read as clean.
+        template = "const rows = {{ rows|tojson }};\n" + script_function("hidden", 30)
+        write(self.repo, {"web/index.html": page(script_function("inPage", 5), template)})
+        proc = self.measure()
+        self.assertEqual((proc.returncode, proc.stderr), (0, ""))
+        self.assertIn("UNPARSED scripts, their functions are not measured: 1\n  web/index.html:12  ", proc.stdout)
+        self.assertIn("{{ rows|tojson }}", (self.repo / "web" / "index.html").read_text().split("\n")[11])
+        self.assertRegex(proc.stdout, r"\nSUMMARY functions=1 .* unparsed_scripts=1\n")
+        self.assertRegex(proc.stdout, r"\nBEFORE .* unparsed_scripts=0\n")
+        self.assertRegex(proc.stdout, r"\nVERDICT new_over=0 .* suppressions_up=0 unparsed_scripts=1\n$")
+
+    def test_an_html_file_over_the_cap_is_judged_by_its_script_lines(self):
+        write(self.repo, {"web/index.html": page(script_function("inPage", 5), filler_script(600))})
+        data = self.compare()
+        self.assertEqual([(c["verdict"], c["before"]["lines"]) for c in data["compare"]["files"]], [("crossed", 5)])
+
+
+def filler_script(lines: int) -> str:
+    return "".join(f"const c{i} = {i};\n" for i in range(lines))
 
 
 PACKAGE = {

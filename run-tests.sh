@@ -18,6 +18,8 @@ fi
 python3 tests/test_collect.py "$@"
 python3 tests/test_pipeline.py "$@"
 python3 tests/test_measure.py "$@"
+python3 tests/test_measure_js.py "$@"
+python3 tests/test_typescript_cache.py "$@"
 python3 tests/test_boundaries.py "$@"
 python3 tests/test_revisions.py "$@"
 python3 tests/test_skills.py "$@"

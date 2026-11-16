@@ -331,6 +331,26 @@ class CliTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("SUMMARY files=14", proc.stdout)
 
+    def test_templates_and_static_scripts_in_a_python_package_are_left_out(self):
+        # measure.py measures .html and .js; in a Python package they hold no Python import.
+        with tempfile.TemporaryDirectory() as tmp:
+            app = write_package(Path(tmp), CLEAN)
+            (app / "templates").mkdir()
+            (app / "templates" / "page.html").write_text("<script>function f() {}</script>\n")
+            (app / "static").mkdir()
+            (app / "static" / "app.js").write_text("function g() {}\n")
+            proc = self.run_cli(str(app))
+        self.assertEqual((proc.returncode, proc.stderr), (0, ""))
+        self.assertIn("SUMMARY files=14", proc.stdout)
+
+    def test_a_typescript_file_is_still_a_broken_run_that_names_the_other_tool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = write_package(Path(tmp), CLEAN)
+            (app / "view.ts").write_text("export const x = 1;\n")
+            proc = self.run_cli(str(app))
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("dependency-cruiser", proc.stderr)
+
     def test_a_package_without_init_files_is_reported_on_stderr(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = Path(tmp) / "app"

@@ -1,20 +1,37 @@
-"""File collection and per-language function measurement.
+"""File collection, the language of a file, and Python function measurement.
 
-Imported by measure.py and boundaries.py, the two entry points; nothing runs
-this file.
+Imported by measure.py, boundaries.py and typescript.py; nothing runs this
+file. TypeScript, JavaScript and inline HTML scripts are measured by
+typescript.py.
 """
 from __future__ import annotations
 
 import ast
-import json
 import os
-import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SKIP_DIRS = {"node_modules", ".venv", "venv", "dist", "build", "__pycache__", ".git", "coverage", ".next"}
+SKIP_DIRS = {
+    "node_modules", ".venv", "venv", "dist", "build", "__pycache__", ".git", "coverage", ".next",
+    # Generated pages and their scripts: coverage.py, Sphinx, a static site build.
+    "htmlcov", "_build", "_site",
+}
+LANGUAGE_BY_SUFFIX = {
+    ".py": "py",
+    ".ts": "ts",
+    ".tsx": "ts",
+    ".js": "js",
+    ".mjs": "js",
+    ".cjs": "js",
+    ".jsx": "js",
+    ".html": "html",
+}
+# The languages measure-ts.mjs parses; typescript.py runs it.
+PARSER_LANGUAGES = frozenset({"ts", "js", "html"})
+# A minified file is build output: one line holds every function, so its numbers say nothing.
+MINIFIED_SUFFIXES = (".min.js", ".min.mjs", ".min.cjs")
 
 
 class MeasureError(Exception):
@@ -33,12 +50,11 @@ class FunctionMeasure:
 
 
 def language_of(path: Path) -> str | None:
-    suffix = path.suffix.lower()
-    if suffix == ".py":
-        return "py"
-    if suffix in (".ts", ".tsx"):
-        return "ts"
-    return None
+    """The language a file is measured as, or None for a file that is not measured."""
+    name = path.name.lower()
+    if name.endswith(MINIFIED_SUFFIXES):
+        return None
+    return LANGUAGE_BY_SUFFIX.get(path.suffix.lower())
 
 
 def _display(path: Path) -> str:
@@ -56,6 +72,22 @@ def read_text(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError) as exc:
+        raise MeasureError(f"{path}: cannot read: {exc}") from exc
+
+
+def read_script_text(path: Path) -> str:
+    """Read a JavaScript or HTML file; one that is not UTF-8 is read one character per byte.
+
+    Only the structure is measured, and an old page is often cp1251 or
+    latin-1. Read as latin-1 no line and no brace moves, and a letter of a
+    single-byte encoding stays a letter, so an identifier still parses; its
+    name prints in the wrong letters. measure-ts.mjs reads a file the same way.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="latin-1")
+    except OSError as exc:
         raise MeasureError(f"{path}: cannot read: {exc}") from exc
 
 
@@ -232,65 +264,3 @@ def measure_python_file(path: Path) -> list[FunctionMeasure]:
     visitor.visit(tree)
     return visitor.functions
 
-
-# --- TypeScript ---------------------------------------------------------------
-
-def find_typescript_package(file: Path) -> Path | None:
-    for parent in file.resolve().parents:
-        candidate = parent / "node_modules" / "typescript"
-        if (candidate / "package.json").is_file():
-            return candidate
-    return None
-
-
-def _require_compiler_api(package: Path) -> None:
-    # TypeScript 7 is the native compiler and ships no JavaScript API: its
-    # package.json has no `main`, and measure-ts.mjs would die on a bare
-    # "Cannot find module" that names neither the version nor the fix.
-    manifest = json.loads((package / "package.json").read_text(encoding="utf-8"))
-    main = manifest.get("main")
-    if main and (package / main).is_file():
-        return
-    raise MeasureError(
-        f"typescript {manifest.get('version', '?')} at {package} has no JavaScript compiler API,\n"
-        "which measure-ts.mjs needs to parse the files. TypeScript 7 dropped it.\n"
-        "Point the script at a 5.x package: install one next to the sources with\n"
-        "  npm install --no-save typescript@5"
-    )
-
-
-def _group_by_package(files: list[Path]) -> dict[Path, list[Path]]:
-    groups: dict[Path, list[Path]] = {}
-    for file in files:
-        package = find_typescript_package(file)
-        if package is None:
-            raise MeasureError(
-                f"typescript package not found above {file}.\n"
-                "Install the project's dependencies once per working copy:\n"
-                "  cd <frontend dir> && npm ci\n"
-                "or add the compiler alone:\n"
-                "  npm install --save-dev typescript@5"
-            )
-        groups.setdefault(package, []).append(file)
-    return groups
-
-
-def measure_ts_files(files: list[Path]) -> list[FunctionMeasure]:
-    if not files:
-        return []
-    groups = _group_by_package(files)
-    for package in groups:
-        _require_compiler_api(package)
-    node = shutil.which("node")
-    if node is None:
-        raise MeasureError("node is not on PATH. Install Node 20+ (https://nodejs.org) or run `nvm use` first.")
-    out: list[FunctionMeasure] = []
-    for package, group in groups.items():
-        command = [node, str(SCRIPT_DIR / "measure-ts.mjs"), str(package), *[str(f) for f in group]]
-        proc = subprocess.run(command, capture_output=True, text=True)
-        if proc.returncode != 0:
-            raise MeasureError(f"measure-ts.mjs failed:\n{proc.stderr.strip()}")
-        for row in json.loads(proc.stdout):
-            row["file"] = _display(Path(row["file"]))
-            out.append(FunctionMeasure(**row))
-    return out

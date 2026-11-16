@@ -2,7 +2,8 @@
 
 Rules and measurement for clean code in Python and TypeScript, packaged as
 five Claude Code skills and two scripts: one for the shape of functions and
-files, one for the import boundaries between modules.
+files, one for the import boundaries between modules. The shape script also
+measures plain JavaScript files and the inline scripts of HTML pages.
 
 Robert C. Martin's answer for agents is rules plus tool gates. The
 constitution in `unclebob/swarm-forge` makes every pack install his CRAP,
@@ -115,13 +116,85 @@ repository layout, and every path prints from the repository root, so the
 two sides pair up wherever the command runs from. `revisions.py` does the
 mirroring and `compare.py` the verdicts.
 
-Python goes through the stdlib `ast`. TypeScript goes through the target
-project's own `typescript` package, found in the nearest `node_modules`
-above each file; if it is missing the script prints the `npm ci` command
-and exits 2. TypeScript 7 is the native compiler and has no JavaScript API
-to parse with, so a 7.x package is a broken run too, with a message that
-names the version and asks for `typescript@5`. It never skips a language
-silently.
+Measured files: `.py`, `.ts`, `.tsx`, `.js`, `.mjs`, `.cjs`, `.jsx` and
+`.html`. A minified `.min.js` is build output and is left out, and a
+directory walk skips generated trees: `node_modules`, `dist`, `build`,
+`coverage`, `htmlcov`, `_build`, `_site` and the like. JavaScript
+follows the TypeScript rules for what a function is and how it is counted.
+
+Of an `.html` file the script measures each inline `<script>` the browser
+runs as JavaScript: no `type`, a JavaScript MIME type such as
+`text/javascript`, or `module`. A `src` script has its code in another
+file, and a block of any other type (`application/json`,
+`application/ld+json`, `importmap`, a template) is data, so neither is
+measured. An inline script inside a `<template>` element is measured: it
+is JavaScript that runs when the template is stamped into the page. An
+event-handler attribute such as `onclick` is not. Each block is parsed on
+its own and its rows print with the
+`.html` file name and the line in that file. The file row of an `.html`
+file counts the lines and suppressions of those inline scripts only, not
+the whole file. The 500-line cap comes from a rule about source files; a
+page is mostly markup and content, and a built page can carry a data block
+of any size, so the whole-file count would flag long pages and say nothing
+about the code in them.
+
+A `.ts` or `.js` file that does not parse is a broken run, exit 2, so a
+script that checks only the exit code sees a real syntax error. An inline
+script of an `.html` file that does not parse does not break the run. A
+page template is the usual case: `{{ value }}` inside a script is not
+JavaScript until the page is rendered, and one such page would otherwise
+stop every `--changed` run that includes it. The script is listed in an `UNPARSED` section with its line and the parser's
+message, and counted as `unparsed_scripts` in `SUMMARY`, in the `VERDICT`
+line and in the JSON, so a report cannot pass it over: its functions are in
+no row. The sloppy-mode octal forms (`0755`, `"\033[0m"`) are not errors
+for JavaScript: the parser complains but builds the whole tree, so those
+files are measured. The TypeScript parser is stricter than a browser or
+Node in a few other places, for example an HTML comment line in a legacy
+script; such a `.js` file is a broken run too. A `.js` or `.html` file that is not UTF-8 is measured
+too, read one character per byte: only the structure counts, an old page
+is often cp1251 or latin-1, and a letter of such an encoding stays a
+letter, so an identifier still parses. A name with those letters prints in
+the wrong letters. With `--compare`, a script
+that did not parse on the before side has no before rows, so once it parses
+its functions print as `new` or `new-over`; a `BEFORE` line with
+`unparsed_scripts` above 0 says that those rows may be old functions.
+
+Python goes through the stdlib `ast`. Everything else goes through
+`measure-ts.mjs` and a `typescript` package. The target project's own
+package is used when there is one, found in the nearest `node_modules`
+above each file, so the parser matches what the project compiles. A plain
+JavaScript site or a Python repository with some JavaScript has none, and
+TypeScript 7 is the native compiler with no JavaScript API to parse with.
+In both cases the script installs `typescript` 5.9.3 once into its own
+cache directory and parses with that:
+
+```text
+~/.cache/clean-code/typescript-5.9.3/node_modules/typescript
+```
+
+`XDG_CACHE_HOME` is honoured, and `CLEAN_CODE_CACHE_DIR` moves the
+directory; a relative path is read from the directory the command starts
+in. The first run needs `npm` and network access; it prints one line
+on stderr that names the package and the directory, installs with
+`--ignore-scripts` into a staging directory and renames it into place, so
+two sessions that start together do not see a half-written package. An
+install that does not finish in 120 seconds is given up. Nothing is written
+into the measured repository. The cache is not under the plugin
+directory, because a plugin update replaces that directory. If the install
+fails the script exits 2 and names the command to run by hand:
+
+```bash
+npm install --prefix ~/.cache/clean-code/typescript-5.9.3 --no-save typescript@5.9.3
+```
+
+A TypeScript project without its `node_modules` (a fresh worktree) is
+parsed with the cached package as well. If a `.ts` file then fails to
+parse, the error says that the cached parser read it and names `npm ci`,
+because the project's own compiler may accept newer syntax. The files
+that go through this parser need `node` on `PATH`; without it the run
+stops, as it always did for TypeScript.
+
+It never skips a language silently.
 
 | Measure | Default | Flag | Source |
 |---|---|---|---|
@@ -157,7 +230,9 @@ helpers that take booleans the caller already knew.
 Suppressions counted: `# noqa` and `# type: ignore` in Python, in comments
 only; `eslint-disable`, `@ts-ignore`, `@ts-expect-error` and `as any` in
 TypeScript, by text match, so a string that mentions `eslint-disable`
-counts. Three other definitions differ slightly between the languages: a
+counts. JavaScript and inline HTML scripts count the same three comments
+but not `as any`, which is TypeScript syntax and in JavaScript only occurs
+in prose. Three other definitions differ slightly between the languages: a
 Python `case _` counts as a case while a TypeScript `default:` does not;
 each `if` filter inside a Python comprehension adds one; `with` blocks add
 nesting depth in Python and have no TypeScript counterpart.
@@ -287,8 +362,16 @@ named after its call and title, such as `it("adds numbers")`.
 ```
 
 `tests/test_measure.py` measures fixtures with known numbers on both
-languages, exercises `--changed` against a scratch git repository, and
-checks the failure message when the `typescript` package is missing.
+languages and exercises `--changed` against a scratch git repository.
+`tests/test_measure_js.py` does the same for a JavaScript fixture under
+every JavaScript extension and for an HTML fixture with two inline scripts,
+a JSON data block, a template block and a `src` script, and checks which
+blocks count as code, the line each row prints, the `UNPARSED` listing, and
+a legacy script and a cp1251 page.
+`tests/test_typescript_cache.py` runs the first-use install with a stub
+`npm` and an empty cache directory: one install, none on the second run,
+nothing written into the measured directory, and the message when `npm` is
+missing or the install fails. No test reaches the real `npm`.
 `tests/test_boundaries.py` writes scratch packages that break one boundary
 each — an upward import, a two-module cycle, a cycle through three modules,
 `select(` in a handler, `fastapi` in a service, `sqlalchemy` under

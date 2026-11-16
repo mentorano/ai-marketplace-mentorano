@@ -1,0 +1,11 @@
+#!/bin/sh
+# stub: `npm install --prefix <dir> ...` that links the test typescript package
+# ($NPM_STUB_TYPESCRIPT) instead of downloading one, and logs its arguments to
+# $NPM_STUB_LOG. Tools are called by full path: the tests run it on a bare PATH.
+echo "$*" >> "$NPM_STUB_LOG"
+prefix=""
+while [ $# -gt 0 ]; do
+  if [ "$1" = "--prefix" ]; then prefix="$2"; fi
+  shift
+done
+/bin/mkdir -p "$prefix/node_modules" && /bin/ln -s "$NPM_STUB_TYPESCRIPT" "$prefix/node_modules/typescript"

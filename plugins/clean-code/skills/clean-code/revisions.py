@@ -18,7 +18,8 @@ from contextlib import chdir, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from languages import MeasureError, _git, find_typescript_package, language_of
+from languages import PARSER_LANGUAGES, MeasureError, _git, language_of
+from typescript import find_typescript_package
 
 
 def repository_of(path: Path) -> Path:
@@ -132,7 +133,7 @@ def _link_typescript(taken: Snapshot, relatives: list[str]) -> None:
     """Point the mirror at the working tree's node_modules; git does not carry them."""
     repo = taken.revision.repo
     for relative in relatives:
-        package = find_typescript_package(repo / relative) if language_of(Path(relative)) == "ts" else None
+        package = find_typescript_package(repo / relative) if language_of(Path(relative)) in PARSER_LANGUAGES else None
         if package is None:
             continue
         modules = package.parent

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure function and file shape for Python and TypeScript sources.
+"""Measure function and file shape for Python, TypeScript, JavaScript and HTML sources.
 
 Usage:
     measure.py <path>... [--changed] [--base origin/main] [--json] [--all]
@@ -9,13 +9,31 @@ Usage:
 
 Per function: lines, cyclomatic complexity, parameters, nesting depth.
 Per file: lines and suppressed findings (# noqa, # type: ignore,
-eslint-disable, @ts-ignore, @ts-expect-error, as any). Python suppressions
-are counted in comments only; TypeScript ones by text match.
+eslint-disable, @ts-ignore, @ts-expect-error, and `as any` in TypeScript).
+Python suppressions are counted in comments only; the others by text match.
 
-Python files go through the stdlib ast. TypeScript files go through
-measure-ts.mjs next to this script, using the typescript package found in
-the nearest node_modules above each file. File collection and the language
-analysis live in languages.py next to this script, shared with boundaries.py.
+Measured files: .py, .ts, .tsx, .js, .mjs, .cjs, .jsx and .html. A minified
+.min.js is build output and is not measured. Of an .html file only the
+inline <script> blocks the browser runs as JavaScript are code: their
+functions print with the line in the .html file, and the file row counts
+their lines and suppressions only. Markup, a `src` script and a data block
+(application/json, a template) count for nothing, so a long page or a large
+data block is not a long file.
+
+A .ts or .js file that does not parse is a broken run, exit 2. An inline
+script of an .html file that does not parse does not break the run: a page
+template is not JavaScript until it is rendered. It is listed under
+UNPARSED and counted as unparsed_scripts in SUMMARY and VERDICT, because
+its functions are in no row. Legacy octal forms (0755, an octal escape in a string) are read as the
+engines read them.
+
+Python files go through the stdlib ast. The others go through measure-ts.mjs
+next to this script, using the typescript package found in the nearest
+node_modules above each file, or the one typescript.py installs once into
+the plugin's cache directory (~/.cache/clean-code, moved with
+CLEAN_CODE_CACHE_DIR) when the project has none. File collection and the
+language of a file live in languages.py next to this script, shared with
+boundaries.py.
 
 --at <ref> measures the files as committed at ref instead of the working
 tree, so uncommitted edits and untracked files stay out; with --changed the
@@ -44,30 +62,32 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 # measure.py is run by its full path from any working directory.
 sys.path.insert(0, str(SCRIPT_DIR))
 
+from html_scripts import script_blocks, script_lines, script_text
 from languages import (
     FunctionMeasure,
     MeasureError,
     _display,
     collect_files,
-    find_typescript_package,
     language_of,
     measure_python_file,
-    measure_ts_files,
+    read_script_text,
     read_text,
 )
+from typescript import UnparsedScript, find_typescript_package, parse_files
 from shape import FileMeasure, Thresholds, exceeded
 import compare as comparing
 from revisions import Revision, add_revision_flags, before_ref, relative_to_repo, repository_of, snapshot, verify_ref
 
+_JS_SUPPRESSIONS = [re.compile(r"eslint-disable"), re.compile(r"@ts-ignore"), re.compile(r"@ts-expect-error")]
 SUPPRESSION_PATTERNS = {
     "py": [re.compile(r"#\s*noqa"), re.compile(r"#\s*type:\s*ignore")],
-    "ts": [
-        re.compile(r"eslint-disable"),
-        re.compile(r"@ts-ignore"),
-        re.compile(r"@ts-expect-error"),
-        re.compile(r"\bas any\b"),
-    ],
+    # `as any` is TypeScript syntax; in JavaScript the words only occur in prose.
+    "ts": [*_JS_SUPPRESSIONS, re.compile(r"\bas any\b")],
+    "js": _JS_SUPPRESSIONS,
+    "html": _JS_SUPPRESSIONS,
 }
+MEASURED = "Python, TypeScript, JavaScript or HTML"
+NO_FILES = f"no {MEASURED} files to measure"
 
 
 # --- Files --------------------------------------------------------------------
@@ -86,20 +106,30 @@ def _py_suppressions(path: Path, text: str) -> int:
 def _suppressions(path: Path, text: str, language: str) -> int:
     if language == "py":
         return _py_suppressions(path, text)
-    return sum(len(pattern.findall(text)) for pattern in SUPPRESSION_PATTERNS["ts"])
+    return sum(len(pattern.findall(text)) for pattern in SUPPRESSION_PATTERNS[language])
+
+
+def _code(text: str, language: str) -> tuple[int, str]:
+    """The line count of a file and the text its suppressions are counted in."""
+    if language != "html":
+        return text.count("\n") + (0 if text.endswith("\n") or not text else 1), text
+    # Of an HTML file only the inline scripts are code. Markup and data blocks
+    # are content: counted, a long page would read as a long source file.
+    blocks = script_blocks(text)
+    return script_lines(text, blocks), script_text(text, blocks)
 
 
 def measure_file_shape(path: Path) -> FileMeasure:
     language = language_of(path)
     if language is None:
-        raise MeasureError(f"{path}: not a Python or TypeScript file")
-    text = read_text(path)
-    lines = text.count("\n") + (0 if text.endswith("\n") or not text else 1)
+        raise MeasureError(f"{path}: not a {MEASURED} file")
+    text = read_script_text(path) if language in ("js", "html") else read_text(path)
+    lines, code = _code(text, language)
     return FileMeasure(
         file=_display(path),
         language=language,
         lines=lines,
-        suppressions=_suppressions(path, text, language),
+        suppressions=_suppressions(path, code, language),
     )
 
 
@@ -110,6 +140,7 @@ class Report:
     thresholds: Thresholds
     functions: list[FunctionMeasure]
     files: list[FileMeasure]
+    unparsed: list[UnparsedScript]
     summary: dict[str, int]
 
 
@@ -142,11 +173,14 @@ def build_report(files: list[Path], thresholds: Thresholds) -> Report:
             functions.extend(measure_python_file(path))
         else:
             ts_files.append(path)
-    functions.extend(measure_ts_files(ts_files))
+    parsed = parse_files(ts_files)
+    functions.extend(parsed.functions)
     functions.sort(key=lambda fm: (-_severity(fm, thresholds), fm.file, fm.line))
     shapes.sort(key=lambda fs: (-fs.lines, fs.file))
-    summary = _summarize(functions, shapes, thresholds)
-    return Report(thresholds=thresholds, functions=functions, files=shapes, summary=summary)
+    unparsed = sorted(parsed.unparsed, key=lambda script: (script.file, script.line))
+    # A script the parser could not read is in no function row; the count keeps it in the verdict.
+    summary = {**_summarize(functions, shapes, thresholds), "unparsed_scripts": len(unparsed)}
+    return Report(thresholds=thresholds, functions=functions, files=shapes, unparsed=unparsed, summary=summary)
 
 
 # --- Rendering ----------------------------------------------------------------
@@ -201,6 +235,15 @@ def _render_files(report: Report, show_all: bool) -> list[str]:
     return out
 
 
+def _render_unparsed(report: Report) -> list[str]:
+    """The JavaScript no function row covers; nothing when every script parsed."""
+    if not report.unparsed:
+        return []
+    out = [f"UNPARSED scripts, their functions are not measured: {len(report.unparsed)}"]
+    out.extend(f"  {script.file}:{script.line}  {script.message}" for script in report.unparsed)
+    return out
+
+
 def _summary_text(summary: dict[str, int]) -> str:
     return " ".join(f"{key}={value}" for key, value in summary.items())
 
@@ -208,9 +251,10 @@ def _summary_text(summary: dict[str, int]) -> str:
 def render_text(report: Report, show_all: bool) -> str:
     lines: list[str] = []
     if not report.files:
-        lines.append("no Python or TypeScript files to measure")
+        lines.append(NO_FILES)
     lines.extend(_render_functions(report, show_all))
     lines.extend(_render_files(report, show_all))
+    lines.extend(_render_unparsed(report))
     lines.append("SUMMARY " + _summary_text(report.summary))
     return "\n".join(lines) + "\n"
 
@@ -220,6 +264,7 @@ def _payload(report: Report) -> dict[str, object]:
         "thresholds": asdict(report.thresholds),
         "functions": [asdict(fm) for fm in report.functions],
         "files": [asdict(fs) for fs in report.files],
+        "unparsed": [asdict(script) for script in report.unparsed],
         "summary": report.summary,
     }
 
@@ -239,8 +284,9 @@ class Compared:
 
 def render_compare_text(compared: Compared, show_all: bool) -> str:
     comparison = comparing.compare(compared.before, compared.after, compared.after.thresholds)
-    lines = [] if compared.after.files else ["no Python or TypeScript files to measure"]
+    lines = [] if compared.after.files else [NO_FILES]
     lines += comparing.render_text(comparison, compared.ref, show_all)
+    lines += _render_unparsed(compared.after)
     lines.append("SUMMARY " + _summary_text(compared.after.summary))
     lines.append(f"BEFORE {compared.ref} " + _summary_text(compared.before.summary))
     lines.append(comparing.verdict_line(comparison))
@@ -297,7 +343,7 @@ def _selected_at(args: argparse.Namespace, revision: Revision) -> list[str]:
 
 def _from_root(report: Report, root: Path) -> Report:
     """Print every path from the repository root, so a mirror and the working tree name a file alike."""
-    for row in [*report.functions, *report.files]:
+    for row in [*report.functions, *report.files, *report.unparsed]:
         row.file = (Path.cwd() / row.file).resolve().relative_to(root).as_posix()
     return report
 
