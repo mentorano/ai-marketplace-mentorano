@@ -28,7 +28,7 @@ AGY_PROMPT_LIMIT = 200_000  # bytes, UTF-8: longer prompts do not fit agy's argu
 AGY_MODELS_CAP = 15
 TOKEN_CAP = 15
 SHARE = 0.6  # of the time left, for a hop that still has a later hop behind it
-AGY_TAIL = "Do not read files. Do not browse the web."
+AGY_TAIL = "Do not read files."
 VERTEX_TOKEN_CMDS = (["auth", "application-default", "print-access-token"],
                      ["auth", "print-access-token"])
 QUOTA_TEXTS = ("resource_exhausted", "exhausted your capacity", "quota", "usage limit", "rate limit")

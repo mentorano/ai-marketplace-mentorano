@@ -396,7 +396,9 @@ Review <the spec at '<path>' | the changes on branch <agent-branch> vs <feature-
 in '<abs checkout>' (R2 worktree) | the commits <base-sha>..<head-sha> in '<abs checkout>',
 only the writer's files: git diff <base-sha>..<head-sha> -- <files> (R2 shared modes)>
 for correctness bugs, missed requirements and risky changes.
-Do not browse the web; review only against the repo code.
+Web search is allowed to check claims about external platforms, libraries and tools
+against their current official docs; cite the source URL in the finding. Review
+everything else against the repo code, and stay within the time budget.
 Scope: <files / commit range>. Requirements: <spec section or task text>.
 <R2 worktree, the work uses files of a sibling branch:> Files from sibling branches, not on
 this branch: <path — branch, reviewed, merged into <feature-branch> in <sha> | reviewed, not
@@ -432,8 +434,6 @@ Round 1: every finding under Findings, no Non-blocking line. Round 2+: only bloc
 under Findings; each non-blocking one only in the Non-blocking line, not in both.
 No findings → "Verdict: approve" and "Findings: none".
 ```
-
-On a timeout retry, repeat the no-web line at the top as well.
 
 The no-run line holds in every mode, not only away: in auto mode the command is flagged and
 the reviewer waits, which only a transcript tail shows (`reference/health.md`, correction ladder
@@ -587,7 +587,8 @@ the model and reports its `Model:` line (`reference/tools.md`, KB7).
 
 ```text
 Second opinion on technical decisions made in <repo>, task <one line>.
-Do not browse the web.
+Web search is allowed to check a fact about an external platform, library or tool
+against its official docs; stay within your time budget.
 For each decision: the decision, the reason, the rejected alternatives.
 D1. <decision> - reason: <...> - rejected: <A: why>, <B: why>
 D2. ...
@@ -609,8 +610,9 @@ and `<N>` equals the number of decisions.
 
 ```text
 You are one of three independent experts voting on technical decisions in <repo>,
-task <one line>. Do not browse the web. Read only task.md and data.md in <dir>; never list
-or read any other file there.
+task <one line>. Read only task.md and data.md in <dir>; never list or read any other file
+there. Web search is allowed to check a fact about an external platform, library or tool
+against its official docs; stay within your time budget.
 DATA lists <N> decisions, each with its context, constraints (time box, scope,
 reversibility) and lettered options.
 For EACH decision pick exactly one option letter. Prefer the safer, more reversible option
@@ -626,7 +628,8 @@ Fallback without 3amigos (`reference/consensus.md`), same text to every voter:
 
 ```text
 Decision needed in <repo>: <question, one paragraph with context>.
-Do not browse the web.
+Web search is allowed to check a fact about an external platform, library or tool
+against its official docs; stay within your time budget.
 Constraints: <time box, scope, reversibility>.
 Options:
 A. <option>
@@ -856,7 +859,7 @@ frame's writer `worktree add` step: the runner writes only in the review folder.
 Build review page <round> of run <run-id> and serve it for the owner. Do not edit, commit,
 merge or push anything in the repo; write only under '<abs run dir>/review/<round>/' (the
 review folder), plus, in '<abs run dir>/run.md', the `## Processes` rows and the
-`Review page (R23)` line named in steps 1, 6 and 7. Start no app server. Do not browse the web.
+`Review page (R23)` line named in steps 1, 6 and 7. Start no app server.
 Sections, in this order (text from main, in the owner's language; keep it as given):
 <ID | title | task ZDn | what changed, 1-3 sentences | Look at: what to look at | the screen or
 state of each shot, or "no shot" | live link or "none" | notes or "none">
@@ -916,7 +919,7 @@ Read only; drop the frame's `worktree add` step.
 
 ```text
 Triage the owner's comments on review page <round>, '<review folder>'. Read only: edit,
-commit, start or stop nothing. Do not browse the web.
+commit, start or stop nothing.
 Invoke the Skill `utils:review-page`. Not in your Skill list → stop, the first line of your
 done report is NOT READ NO SKILL. Its base directory is `<review-page dir>` (the load message
 prints it after "Base directory for this skill:"): write that path in its place below. Use only

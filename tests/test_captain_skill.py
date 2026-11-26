@@ -43,7 +43,7 @@ SKILL_MAX_CHARS = 23_500
 AGENTS_DIR = ROOT / "plugins" / "captain" / "agents"
 CACHE_SKILL = "/Users/x/.claude/plugins/cache/m/captain/0.1.0/skills/captain"
 FIXTURE_ARGS = ("--repo", "/repo", "--skill-root", CACHE_SKILL)
-CODEX_CALL = "command timeout 1200 codex exec"
+CODEX_CALL = "command timeout 1200 codex --search exec"
 EXIT_CLEAN, EXIT_VIOLATIONS, EXIT_BAD_INPUT, EXIT_INCOMPLETE = 0, 1, 2, 3
 
 
@@ -164,13 +164,21 @@ class ReferenceTextTest(unittest.TestCase):
         text = read_text(TOOLS_MD).replace(CODEX_CALL, "command codex exec")
         self.assertTrue(tools_md_problems(text))
 
-    def test_every_review_template_forbids_the_web(self):
+    def test_every_review_template_allows_web_for_external_docs(self):  # the owner, 26.11.2026
         templates = [(head, body) for head, body in sections(read_text(PROMPTS_MD), "##")
                      if re.search(r"(?i)review prompt|consensus prompt", head)
                      and not re.search(r"(?i)runner", head)]
         self.assertTrue(templates, "prompts.md has no review template")
         for head, body in templates:
-            self.assertRegex(body.lower(), r"do not browse the web", f"no no-web line in {head!r}")
+            self.assertRegex(" ".join(body.lower().split()), r"web search is allowed to check",
+                             f"no web line in {head!r}")
+
+    def test_no_prompt_or_rule_forbids_the_web(self):
+        for path in (PROMPTS_MD, TOOLS_MD, SKILL_MD):
+            text = " ".join(read_text(path).lower().split())
+            for phrase in ("do not browse the web", "no-web line", "no web;", "no web,"):
+                with self.subTest(path=path.name, phrase=phrase):
+                    self.assertNotIn(phrase, text)
 
 
 def cli_flags(text: str, marker: str) -> set[str]:
@@ -213,7 +221,13 @@ class CliHelpTest(unittest.TestCase):
             self.assertIn(flag, text, f"{flag} is not in `{' '.join(argv)}`")
 
     def test_codex_exec_flags(self):
-        self.check("codex exec", ["codex", "exec", "--help"])
+        self.check("codex --search exec", ["codex", "exec", "--help"])
+
+    def test_codex_search_is_a_global_flag(self):
+        text = help_text(["codex", "--help"])
+        if text is None:
+            self.skipTest("codex is not installed")
+        self.assertIn("--search", text)
 
     def test_agy_flags(self):
         self.check("agy -p", ["~/.local/bin/agy", "--help"])
@@ -2376,10 +2390,10 @@ class GeminiPanelTextTest(unittest.TestCase):
 
     def test_versions_match(self):
         plugin = json.loads(read_text(PLUGIN_DIR / ".claude-plugin" / "plugin.json"))
-        self.assertEqual("0.32.0", plugin["version"])  # bumped when the coord plugin was removed
+        self.assertEqual("0.33.0", plugin["version"])  # bumped when web search was allowed
         manifest = json.loads(read_text(ROOT / ".claude-plugin" / "marketplace.json"))
         entry = next(p for p in manifest["plugins"] if p["name"] == "captain")
-        self.assertEqual("0.32.0", entry["version"])
+        self.assertEqual("0.33.0", entry["version"])
 
     def test_consensus_md_follows_the_effective_panel(self):
         text = self.flat(self.CONSENSUS_MD)
@@ -2624,7 +2638,7 @@ class RunLessonsTextTest(unittest.TestCase):
 
     def test_terra_is_the_default_codex_model(self):  # KB7
         text = read_text(TOOLS_MD)
-        self.assertTrue(any("codex exec -m gpt-6.1-terra -c model_reasoning_effort=high" in line
+        self.assertTrue(any("codex --search exec -m gpt-6.1-terra -c model_reasoning_effort=high" in line
                             for line in code_lines(text)), "review command is not terra high")
         for needle in ("**Model choice:**", "`Model: <full id> <effort> — <reason>`",
                        "`--model gpt-6.1-terra --effort high`", "terra `medium`",

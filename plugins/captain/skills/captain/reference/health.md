@@ -212,7 +212,7 @@ response had no visible output"; 43 checks in 15 sessions also filled the contex
 3. No progress by the next check → `TaskStop`, relaunch with narrower scope
    and a note of what stalled; update `run.md` (old agent `stopped`, new row).
 4. A stalled external tool (Codex hang, agy timeout) → relaunch with the
-   specific fix: no-web line repeated, shorter timeout, or the fallback tool
+   specific fix: narrower scope, shorter timeout, or the fallback tool
    (see R7, R8).
 
 ## Leftover processes (R14)
@@ -223,7 +223,7 @@ Before any "nothing is running" claim: every `run.md` agent has
 
 ```bash
 command ps -axo pid,lstart,command | command grep -E \
-  'tail -f|emulator|qemu-system|GradleDaemon|gradle|codex app-server|codex exec|agy|node .*(vite|next|server)|java .*spring|uvicorn|gunicorn|manage.py runserver|flask|[Pp]ython[0-9.]*( -[^ ]+)* /?(([^ /t][^ /]*|t([^ /e][^ /]*)?|te([^ /s][^ /]*)?|tes([^ /t][^ /]*)?|test[^ /s][^ /]*|tests[^ /]+)/)*(server|serve|app)\.py( |$)|[Pp]ython[0-9.]*( -[^ ]+)* -m http\.server|agent-browser' \
+  'tail -f|emulator|qemu-system|GradleDaemon|gradle|codex app-server|codex (--search )?exec|agy|node .*(vite|next|server)|java .*spring|uvicorn|gunicorn|manage.py runserver|flask|[Pp]ython[0-9.]*( -[^ ]+)* /?(([^ /t][^ /]*|t([^ /e][^ /]*)?|te([^ /s][^ /]*)?|tes([^ /t][^ /]*)?|test[^ /s][^ /]*|tests[^ /]+)/)*(server|serve|app)\.py( |$)|[Pp]ython[0-9.]*( -[^ ]+)* -m http\.server|agent-browser' \
   | command grep -v grep
 ```
 

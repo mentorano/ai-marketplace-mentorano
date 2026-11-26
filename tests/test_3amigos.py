@@ -26,7 +26,7 @@ TALLY = SCRIPTS / "tally.py"
 GOOD = {"ideas": ["a", "b", "c"]}
 
 # The codex stub. mode file: ok | short | fail | slowfail | hang | limit | limitok. Counts calls in
-# <name>.calls and records its cwd and its -C argument in <name>.cwd.
+# <name>.calls, records its cwd and its -C argument in <name>.cwd and its arguments in <name>.argv.
 STUB = r'''#!/usr/bin/env python3
 import os, sys, time
 name = os.path.basename(sys.argv[0])
@@ -34,6 +34,7 @@ d = os.environ["STUB_DIR"]
 open(os.path.join(d, name + ".calls"), "a").write("x")
 mode = open(os.path.join(d, name + ".mode")).read().strip()
 open(os.path.join(d, name + ".cwd"), "w").write(os.getcwd() + "\n" + sys.argv[sys.argv.index("-C") + 1])
+open(os.path.join(d, name + ".argv"), "w").write("\n".join(sys.argv[1:]))
 if mode in ("limit", "limitok"):  # codex reports it on stderr; limitok exits 0
     sys.stderr.write("You've hit your usage limit.\n")
     sys.exit(1 if mode == "limit" else 0)
@@ -273,6 +274,12 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(json.loads((out / "codex.json").read_text()), GOOD)
         self.assertEqual(self.calls("codex"), 1)
 
+    def test_codex_starts_with_web_search_before_exec(self):  # the owner allowed web, 26.11.2026
+        self.panel("--require", "ideas=3")
+        argv = (self.tmp / "codex.argv").read_text().splitlines()
+        self.assertEqual(argv[:2], ["--search", "exec"], argv)
+        self.assertEqual(argv[argv.index("-s") + 1], "read-only")
+
     def test_invalid_count_is_missing_with_reason(self):
         self.mode("codex", "short")
         res, _ = self.panel("--require", "ideas=3")
@@ -470,13 +477,13 @@ class SkillTextTest(unittest.TestCase):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 
-    def test_version_is_0_6_2_in_both_manifests(self):
+    def test_version_is_0_7_0_in_both_manifests(self):
         plugin = json.loads((SCRIPTS.parents[2] / ".claude-plugin" / "plugin.json").read_text())
-        self.assertEqual(plugin["version"], "0.6.2")
+        self.assertEqual(plugin["version"], "0.7.0")
         self.assertIn("gemini", plugin["keywords"])
         market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text())
         entry = next(p for p in market["plugins"] if p["name"] == "3amigos")
-        self.assertEqual(entry["version"], "0.6.2")
+        self.assertEqual(entry["version"], "0.7.0")
         self.assertEqual(entry["description"], plugin["description"])
 
     def test_setup_runs_the_project_scan_script_not_a_shell_search(self):

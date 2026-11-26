@@ -62,6 +62,10 @@ Vertex project id that code passes with no env assignment, offers the `gcloud` d
 project, and the setup report says which Gemini model answered and through which backend
 (`Gemini answers: <model> through <backend>`).
 
+Since 0.7.0 the voters may search the web: `panel.py` starts Codex with `--search`, and the
+`agy` prompt no longer forbids it. The Gemini fallback (Vertex or key) sends no search tool,
+and `--deadline` still caps the external voters (Codex and Gemini).
+
 ### branch-board
 
 Builds a live status page for a repository's recent branches: what exists, who
@@ -266,6 +270,11 @@ and answers. Yes/no and permission questions stay in the chat. The page is never
 committed. Since 0.31.0 the page comes from `utils:review-page` (utils 0.9.0); without it the
 owner gets one chat line per item with its screenshot paths.
 
+Since 0.33.0 no prompt forbids the web. Codex reviews, consults and votes run as
+`codex --search exec …` and may check claims about external platforms, libraries and tools
+against their official docs, with the source URL; agy and the Fable and Opus agents get the same
+line. The `timeout` of each call still caps it, and a timeout retry keeps web search on.
+
 Since 0.10.0 the captain runs the merges itself: `git merge --no-ff` of a reviewed agent branch,
 `git merge --abort`, and `git commit --no-edit` after an agent resolved the conflicts. The
 auto-mode classifier denied agents' reviewed merges too often. `hooks/guard.py` checks these
@@ -454,7 +463,7 @@ The new-session-tab suite runs `new-session-tab.py` against stub `supacode`,
 `cmux` and `claude` binaries, so it opens no tab.
 The captain suite checks the skill's text — every rule
 R1–R23 with its `Why:` line, the budget of `SKILL.md`, the required CLI
-strings and forbidden flags in the reference files, the no-web line in every
+strings and forbidden flags in the reference files, the web-search line in every
 review prompt — and runs `audit-main.py` over small synthetic transcripts.
 Those checks prove the text is there, not that the model follows it.
 

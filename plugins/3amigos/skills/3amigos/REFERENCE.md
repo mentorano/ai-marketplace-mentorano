@@ -7,9 +7,13 @@ The Codex traps below were verified on 05.10.2026 with codex-cli 0.153.
 - **Inline all of the data into the prompt.** `panel.py` does this, so the voter never has
   to read files itself.
 - **The model is pinned:** Codex `gpt-6-astra` (`AMIGOS_CODEX_MODEL`). Change it deliberately, never by a CLI default drifting.
-- **Codex `-i` swallows the arguments that follow it.** `codex exec -i img.png "text"` treats
+- **Codex `-i` swallows the arguments that follow it.** `codex --search exec -i img.png "text"` treats
   the text as a second image path. Pass the prompt on stdin with `-` instead:
-  `codex exec ... -i img.png - < prompt.md`.
+  `codex --search exec ... -i img.png - < prompt.md`.
+- **Web search is on.** `panel.py` starts Codex as `codex --search exec …`: the global flag
+  goes before `exec`. `agy` may search too (no flag turns it off); it opens a page only with
+  the `read_url(*)` rule. The Vertex or key fallback sends no search tool. The `--deadline`
+  still caps both external voters. **Why:** 26.11.2026: the owner allowed web for every voter.
 - **macOS has no `timeout` command.** `panel.py` kills the whole process group itself. In
   shell, use `perl -e 'alarm 900; exec @ARGV' cmd`.
 - **Codex `-o FILE`** writes only the final answer, without the log, so take JSON from there.
@@ -18,7 +22,7 @@ The Codex traps below were verified on 05.10.2026 with codex-cli 0.153.
   or the synthesizer. Otherwise Codex may miss the default `--deadline 600` and be replaced
   by a Fable stand-in.
 - **Images:** Codex has `image_generation`. Use
-  `codex exec --skip-git-repo-check -s workspace-write -C <dir> -i style-ref.png - < prompt`,
+  `codex --search exec --skip-git-repo-check -s workspace-write -C <dir> -i style-ref.png - < prompt`,
   and tell it in the prompt to save the result as `<name>.png` in the current directory.
   Each image takes about 1 minute and about 25k tokens. Running 3 in parallel works.
 
@@ -84,7 +88,7 @@ in most sessions, so it is not a default voter. The table says when to swap a vo
 | Code-related triage (bugs, findings) | `opus` · `codex` · `gemini` | Opus leads FrontierCode 2.0 and Terminal-Bench 4.0 [P, vendor]; Fable 5.2 instead of Gemini only when raw code strength beats diversity [S] |
 | Product, UX, naming, creative | default | Gemini leads human preference on Arena (11.11.2026) [P]; Fable strong at creative work [S] |
 | Writing in Bulgarian | `gemini` · `opus` · `fable` | No current eval of these models in Bulgarian found [A]; a native speaker checks the text |
-| Factual, current events | default | No voter can search in the panel (no web); none knows news after its cutoff [A] |
+| Factual, current events | default | Codex, `agy` and the Claude agents may search the web; the Gemini fallback (Vertex or key) cannot, and Gemini usually answers through it [A] |
 | Long inputs | default | Fable 5.2 and Gemini have 1M token windows [S]; no independent cross-provider eval [A] |
 | Math, estimates | default | Carbon and Fable 5.2 lead MathArena (13.11.2026) [S] |
 

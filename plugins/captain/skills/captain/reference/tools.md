@@ -8,7 +8,7 @@
 - [Verified binaries](#verified-binaries)
 - [Codex - the reviewer (R7) and a voter (R9)](#codex---the-reviewer-r7-and-a-voter-r9)
 - [agy - specs, consultation, votes (R8, R9); never code review](#agy---specs-consultation-votes-r8-r9-never-code-review)
-- [Web research - only when the owner allows web for a research task](#web-research---only-when-the-owner-allows-web-for-a-research-task)
+- [Web search - on for every tool](#web-search---on-for-every-tool)
 - [timeout](#timeout)
 
 ## Main-session allow-list (R1)
@@ -198,10 +198,10 @@ with `command -v` first.
 
 ## Codex - the reviewer (R7) and a voter (R9)
 
-The shell aliases `codex` to `codex --approve-for-me`. `command timeout 1200 codex exec …`
+The shell aliases `codex` to `codex --approve-for-me`. `command timeout 1200 codex --search exec …`
 bypasses the alias, because `codex` is an argument of `timeout`, not a shell word; this is
 also portable to Linux, where `timeout` cannot exec the shell builtin `command`. (Typed
-directly without a timeout, the equivalent is `command codex exec …`.)
+directly without a timeout, the equivalent is `command codex --search exec …`.)
 
 Model id (KB7): `gpt-6.1-terra` by default, for every review, consult and mini-consensus vote;
 `gpt-6-astra` only for complex creative or research work (a creative draft, a research
@@ -236,7 +236,7 @@ The runner (`captain:runner`) chooses the model and effort (above), then works i
 
 ```bash
 LOG='<literal log prefix from step 1>'
-(command timeout 1200 codex exec -m gpt-6.1-terra -c model_reasoning_effort=high \
+(command timeout 1200 codex --search exec -m gpt-6.1-terra -c model_reasoning_effort=high \
    -s read-only -C '<abs repo or worktree>' -o "$LOG.final.md" - < "$LOG.prompt.md" \
    > "$LOG" 2>&1; echo $? > "$LOG.exit")
 ```
@@ -286,7 +286,7 @@ rest; it never polls.
 
 | Outcome | Signature | Handling |
 |---|---|---|
-| Timeout | `.exit` holds `124` | With a box, recompute the time left before park. Retry once only if a timeout of at least 300 s that is shorter than the first one still fits (no box: retry once at 600 s); repeat the no-web line. Else, or on a second timeout → Opus fallback reviewer if it fits (no box: always), otherwise park per R6. |
+| Timeout | `.exit` holds `124` | With a box, recompute the time left before park. Retry once only if a timeout of at least 300 s that is shorter than the first one still fits (no box: retry once at 600 s), with web search on as before. Else, or on a second timeout → Opus fallback reviewer if it fits (no box: always), otherwise park per R6. |
 | Usage limit | `You've hit your usage limit … try again at <time>` in the log | Fallback at once; no wait, no retry timer. Record the reset time in `run.md`; the first review started after it goes to Codex again. |
 | Missing binary | `.exit` holds `127`, or `command not found` | Fallback at once; one line to the owner naming the error. |
 | Login or model error | `401`, `not logged in`, `HTTP 400`, `model … not supported` | Fallback at once; one line to the owner naming the error. |
@@ -345,19 +345,27 @@ The permission rules below were verified on 2026-09-28 with agy 1.2.12.
   `read_file` or `command` → rerun once with the file contents inline in the prompt;
   `read_url` → agy is unavailable for web research in this run. Either way, tell the owner
   which rule is missing.
-- agy has no flag that turns web off: after the setup above, the prompt's "Do not browse the
-  web." line is the only guard.
+- agy has no flag that turns web on or off: it may search; with the `read_url(*)` rule it can
+  also open the pages it finds.
 - Never pass `--dangerously-skip-permissions`.
 
-## Web research - only when the owner allows web for a research task
+## Web search - on for every tool
 
-The default for every tool is no web (R7, R8). When the owner allows it for a research task,
-`run.md` records that, and each tool is started like this:
+Every tool may search the web to check claims about external platforms, libraries and tools
+against their current official docs: in a review, a consult, a vote and a research task. The
+prompt says so and keeps the time budget; a review or research prompt also asks for the source
+URL of each claim checked. The `timeout` of each call still applies.
 
-- Codex: add `-c tools.web_search=true` to the `codex exec` command; the prompt says web
-  search is allowed and asks for source URLs.
+- Codex: the global flag `--search` goes before `exec` (`codex --search exec …`, as in the
+  review command above); `codex exec --help` does not list it, `codex --help` does. It works
+  with `-s read-only`.
 - agy: the command above, unchanged; needs the `read_url(*)` rule, or it can search but not
-  open a page. The prompt says web is allowed and asks for source URLs.
+  open a page.
+- Fable and Opus agents: their own web tools; the prompt carries the same line.
+
+**Why:** 26.11.2026: the owner allowed web: four review rounds without it took every claim
+about the external platforms on trust. The earlier 27-min hang on web docs stays capped by the
+`timeout` and the failure table above.
 
 ## timeout
 

@@ -169,18 +169,18 @@ if important things are still left, but only after a 3amigos assessment".
 
 ### R7 — Codex is the default reviewer; Opus is the fallback
 
-Codex (`gpt-6.1-terra`, read-only, no web; the launcher picks the model) reviews specs and code
-freely; do not ration it. Codex off in the config `tools` → `captain:deep` (very complex) or
+Codex (`gpt-6.1-terra`, read-only, web search on; the launcher picks the model) reviews specs and
+code freely; do not ration it. Codex off in the config `tools` → `captain:deep` (very complex) or
 `captain:worker`, never the writer. A `captain:runner` waits for it; main never polls. A usage
 limit or an unrecoverable failure → a fresh Opus reviewer. Details: `reference/tools.md`.
-**Why:** a review hung 27 min on web docs; one session idled 3h17m after the limit reset.
-30.10.2026: terra is faster.
+**Why:** a review hung 27 min on web docs (the timeout caps it); one session idled 3h17m after
+the limit reset. 30.10.2026: terra is faster. 26.11.2026: web on, platform claims were unchecked.
 
 ### R8 — Fable and agy draft and vote, never review code
 
 They draft specs, consult and vote (R9). agy only when the config `tools` has it; it reads the
-named files itself, never skips permissions. Fable is an agent, always available, no web,
-told its time budget. Web only in a research task the owner allowed. Traps: `reference/tools.md`.
+named files itself, never skips permissions. Fable is an agent, always available,
+told its time budget. Every tool may search the web for external docs (R7). Traps: `reference/tools.md`.
 **Why:** Grok was dropped 12.10.2026: its answers degraded.
 
 ### R9 — Decisions and consensus

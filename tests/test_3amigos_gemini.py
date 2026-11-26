@@ -37,7 +37,7 @@ GOOD = {"ideas": ["a", "b", "c"]}
 CARBON, ARGON = "gemini-4-carbon", "gemini-4-argon"
 TOKEN, KEY, OTHER_SECRET = "FAKE-TOKEN-abc", "FAKE-KEY-123", "FAKE-OTHER-999"
 MARGIN = 3.0  # seconds a run may take past its --deadline (process start, kill, exit)
-PROMPT_TAIL = "Do not read files. Do not browse the web."
+PROMPT_TAIL = "Do not read files."
 
 # Shared head of both stubs: the state dir is baked in, every call is recorded before it acts.
 STUB_HEAD = r'''#!__PY__
@@ -346,6 +346,7 @@ class GeminiChainTest(unittest.TestCase):
         prompt = argv[argv.index("-p") + 1]
         self.assertIn("Propose ideas.", prompt)
         self.assertTrue(prompt.rstrip().endswith(PROMPT_TAIL), prompt[-200:])
+        self.assertNotIn("browse the web", prompt)
 
     def test_preferred_model_not_in_agy_models_goes_to_hop2_without_an_agy_call(self):
         line = self.run_panel()

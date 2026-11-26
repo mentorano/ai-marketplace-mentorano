@@ -57,7 +57,7 @@ def find_bin(name):
 
 def command(voter, out_dir, work, effort):
     """The voter's command line; the prompt goes on stdin and the answer to <out>/<voter>.final.txt."""
-    return [find_bin("codex"), "exec", "-m", CODEX_MODEL, "-c", f"model_reasoning_effort={effort}",
+    return [find_bin("codex"), "--search", "exec", "-m", CODEX_MODEL, "-c", f"model_reasoning_effort={effort}",
             "-s", "read-only", "--skip-git-repo-check", "-C", work,
             "-o", os.path.join(out_dir, f"{voter}.final.txt"), "-"]
 
