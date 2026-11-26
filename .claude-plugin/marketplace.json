@@ -4,7 +4,7 @@
     "name": "Ivan Dachev",
     "email": "ivan@mentorano.com"
   },
-  "description": "Claude Code plugins for reading the state of a repository and keeping its code clean, for running parallel multi-session sprints, a time-boxed team coordinator, and small helpers such as starting a background Remote Control session.",
+  "description": "Claude Code plugins for reading the state of a repository and keeping its code clean, a time-boxed team coordinator, and small helpers such as starting a background Remote Control session.",
   "metadata": {
     "version": "0.1.0"
   },
@@ -12,8 +12,8 @@
     {
       "name": "3amigos",
       "source": "./plugins/3amigos",
-      "description": "A one-round panel of three independent experts (Codex, a Claude Opus agent and a Claude Fable agent) that answer the same brainstorm or triage task as JSON, merged by one non-voting Opus synthesizer by majority and agreement. A voter that fails or misses its deadline is replaced by a second Fable voter with its own framing.",
-      "version": "0.5.0",
+      "description": "A one-round panel of three independent experts from a pool of four (Codex, Gemini, a Claude Opus agent and a Claude Fable agent; the default panel is Codex, Gemini and Fable) that answer the same brainstorm or triage task as JSON, merged by one non-voting Opus synthesizer by majority and agreement. A voter that fails or misses its deadline is replaced by a Fable stand-in with its own framing.",
+      "version": "0.6.2",
       "license": "MIT",
       "author": {
         "name": "Joanna Seymenarova",
@@ -25,6 +25,7 @@
         "triage",
         "second-opinion",
         "codex",
+        "gemini",
         "fable"
       ]
     },
@@ -32,7 +33,7 @@
       "name": "branch-board",
       "source": "./plugins/branch-board",
       "description": "Build a live status page for a repository's recent branches — what exists, who moved it, how far it got, what it touches, and what its own plan documents say the goal is. Every number is derived from git and gh, never remembered.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "license": "MIT",
       "author": {
         "name": "Joanna Seymenarova",
@@ -51,7 +52,7 @@
       "name": "captain",
       "source": "./plugins/captain",
       "description": "A coordinator for coding runs, with a time box only when the owner names one, shared as a team plugin — one main session that coordinates background subagents in git worktrees and does the light work (reads, git inspection, notes) itself, with Codex reviews first (Opus when Codex is not installed), a 15-minute health check, and destructive or outward actions queued for the user at the end of the run. Run /captain:captain-setup once first to choose notifications and quiet hours. Code and functionality only; not for production, devops or external writes beyond listed dev targets.",
-      "version": "0.27.0",
+      "version": "0.32.0",
       "license": "MIT",
       "author": {
         "name": "Ivan Dachev",
@@ -92,7 +93,7 @@
       "name": "clean-code",
       "source": "./plugins/clean-code",
       "description": "Clean Code and Clean Architecture rules, source measurement, and logging for Python and TypeScript; the measurement also covers JavaScript and inline HTML scripts. Includes architecture-fundamentals for system decisions and reviews: business drivers, data ownership, runtime coupling, contextual style trade-offs, risks, ADRs and fitness functions.",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "license": "MIT",
       "author": {
         "name": "Ivan Dachev",
@@ -112,29 +113,10 @@
       ]
     },
     {
-      "name": "coord",
-      "source": "./plugins/coord",
-      "description": "Run a software project as a parallel sprint of interactive Claude Code sessions — one coordinator that owns merges, the board and the process, implementer lanes in their own git worktrees that talk only to it, and the human owner. Handoffs at task boundaries, kickoffs loaded on /clear, merges verified once per batch.",
-      "version": "0.6.0",
-      "license": "MIT",
-      "author": {
-        "name": "Joanna Seymenarova",
-        "email": "joanna@mentorano.com"
-      },
-      "keywords": [
-        "coordination",
-        "parallel",
-        "sessions",
-        "worktrees",
-        "handoff",
-        "sprint"
-      ]
-    },
-    {
       "name": "project-memory",
       "source": "./plugins/project-memory",
       "description": "Committed project memory for Claude Code — one topic per markdown file in .agent-memory/ at the repo root, loaded natively as rules through a committed .claude/rules/project-memory symlink (path-scoped files load when a matching file is touched), with a write trigger every session and subagent reads, a file-state health check at session start, and a defragment skill that merges, splits and trims the memory in one reviewable diff. The plugin never commits.",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "license": "MIT",
       "author": {
         "name": "Ivan Dachev",
@@ -152,8 +134,8 @@
     {
       "name": "utils",
       "source": "./plugins/utils",
-      "description": "Small helpers for working with Claude Code — start a new background Claude Code session with Remote Control in the same repository and get its link, to continue from a phone or the web. Also a one-by-one pass over review findings that closes every decision before the final report. Also shares a claude.ai artifact with named people through the user's own Chrome, private, at Commenter by default.",
-      "version": "0.7.1",
+      "description": "Small helpers for working with Claude Code — start a new background Claude Code session with Remote Control in the same repository and get its link, to continue from a phone or the web. Also a one-by-one pass over review findings that closes every decision before the final report. Also shares a claude.ai artifact with named people through the user's own Chrome, private, at Commenter by default. Also a self-review of an output just written (code, spec, plan, handoff), in the same context, before anyone acts on it. Also a local review page where the owner comments on two or more visible items section by section, also from a phone, and the comments come back as next steps.",
+      "version": "0.9.0",
       "license": "MIT",
       "author": {
         "name": "Ivan Dachev",

@@ -8,9 +8,7 @@ customTitle/agentName record wins, so a session renamed later resolves to its la
 injects that file as additional context and moves it to `~/.claude/kickoffs/kickoff-used/`, so a
 later /clear never replays it. Only /clear triggers it. There is no fallback to a repo file.
 
-Copy of coord's kickoff-on-clear.py, named kickoffs only. It stays silent when ~/.claude/settings.json
-already registers coord's global kickoff-on-clear.py (that hook does the same job).
-Fails open: any error means no output.
+Named kickoffs only. Fails open: any error means no output.
 """
 from __future__ import annotations
 
@@ -33,7 +31,7 @@ def kickoff_dir() -> Path:
 
 def main() -> None:
     data = json.load(sys.stdin)
-    if data.get("source") != "clear" or common.coord_hook_installed("kickoff-on-clear.py"):
+    if data.get("source") != "clear":
         return
     name = common.load_measure().session_name(data.get("transcript_path"))
     if not name or "/" in name or name.startswith("."):

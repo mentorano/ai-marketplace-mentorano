@@ -13,10 +13,6 @@ runs in one of them).
 Re-issuing the same dispatch goes through, so the owner can choose to continue in place. Subagents are
 skipped.
 
-Copy of coord's handoff-at-boundary.py in captain wording. Unlike the kickoff hook it does NOT stay
-silent when ~/.claude/settings.json registers coord's global handoff-at-boundary.py: that hook only knows
-`Implement ...` / `PR<n> T<n>` descriptions and the coord project threshold, so it never holds a captain
-writer and a captain run went to 92% of its window with no gate (2026-10-05).
 Fails open: any error means no output.
 """
 from __future__ import annotations
@@ -127,7 +123,9 @@ def main() -> None:
             f"context (threshold {threshold // 1000}k). Every turn re-reads the whole context. Do NOT start it "
             "here. Instead: make sure no agent is running without a recorded hand-back and no merge is staged, "
             "an agent has committed and pushed the finished work (R5), then follow reference/handoff.md: write "
-            "the self-contained handoff to tmp/captain/<run>/ and " + successor_steps(where, k) +
+            "the self-contained handoff to tmp/captain/<run>/, self-review it (How step 2: the skill "
+            "`utils:self-review` against decisions.md, run.md and queue.md, then its `Self-review (SV1):` "
+            "line), and " + successor_steps(where, k) +
             f" The next session starts with exactly this task: '{description}'. If the owner says to continue "
             "in this session, re-issue the same Agent call: it will go through."
         ),

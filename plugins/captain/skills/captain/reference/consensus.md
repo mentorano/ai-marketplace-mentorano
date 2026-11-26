@@ -1,7 +1,7 @@
 # consensus - decision tiers and mechanics (R9)
 
 When the config `tools` has it, Codex reviews specs and code (R7), votes in every 3amigos
-panel and gives the first mini-consensus opinion. Use it freely; the only limit is the R7
+panel that has it and gives the first mini-consensus opinion. Use it freely; the only limit is the R7
 usage-limit fallback. A consensus result never unlocks an R10 action. Output contracts and
 commands: see R7 and R8.
 
@@ -81,14 +81,16 @@ runs a 3amigos panel (below); when the result comes, it goes back to the writer 
 
 ## Full consensus: a 3amigos panel
 
-The voter mechanics are the `3amigos` skill's workflow (Codex, an Opus and a Fable voter, a
-Fable stand-in for a missing voter, `panel.py`, `tally.py`). Main invokes the
+The voter mechanics are the `3amigos` skill's workflow (the three voters of the panel main
+chooses per decision class, **Panel choice** below, a Fable stand-in for a missing voter, `panel.py`,
+`tally.py`). Main invokes the
 `3amigos:3amigos` skill and follows it, with these captain rules on top; the base directory
 the skill shows on load is the `<skill dir>` passed to the runner.
 
 **Mapping.** A captain question becomes a 3amigos triage task:
 
-- each decision ID (`OV1`, `OV2`) is one item; several open decisions go in one panel;
+- each decision ID (`OV1`, `OV2`) is one item; several open decisions of one class go in one
+  panel, decisions of different classes in one panel each;
 - `verdict` is the option letter (`A`, `B`, `C`), the options listed per item in `data.md`;
 - `reason` is one sentence;
 - `tally.py --list items --id id --fields verdict --voters 3`;
@@ -98,34 +100,83 @@ the skill shows on load is the `<skill dir>` passed to the runner.
   option, marked `no consensus`;
 - a consensus never unlocks an R10 action.
 
-**Who runs what.** Main runs the panel: it launches the Opus voter (`captain:deep`) and the
-Fable voter (`captain:worker` with `model: "fable"`), and any Fable stand-in, in the
-background; a subagent cannot nest them. One `captain:runner` runs `panel.py` for the Codex
-voter (`--voters codex --effort high`), the `--check` of each agent answer, and `tally.py`,
-and reports one line per item: ID, winning letter or `no consensus`, kind, one reason. Main
-reads only the status lines and that report, never the raw answers.
+**Panel choice.** For each panel main classifies the decision itself, with no question to the
+owner, and passes the matching panel with `--panel` to every `panel.py` call of that panel
+(the config runner's `--show-config` too):
+
+- technical: design and architecture trade-offs, spec critique, code-related triage (bugs,
+  review findings, the R6 review bound) → `opus,codex,gemini`;
+- product and scope, UX, naming, creative proposals → `codex,gemini,fable`;
+- anything else → the panel of the 3amigos `REFERENCE.md` "Choosing the panel" table for its
+  task class; with no matching row, the default `codex,gemini,fable`.
+
+The run's `--panel` wins over the project and the user config (3amigos precedence: run >
+project > user > default), so a project config panel never overrides captain's choice.
+`decisions.md` gets the class and the panel with the decision ID, one field:
+`panel: technical — opus,codex,gemini`.
+**Why:** 2026-11-18, the owner: captain decides by itself whether a decision is technical and
+picks the panel automatically; the "Choosing the panel" table ranks Opus strongest for design,
+architecture and code triage, which are captain's usual decisions.
+
+**Who runs what.** One panel runner (`captain:runner`) per external voter on the panel,
+launched in parallel, each running `panel.py --panel <the panel> --voters <that one voter>` (`--no-agy` per
+**Tools** below, `--effort high`) and reporting when its voter ends, so a missing voter's
+stand-in starts as soon as that voter ends. Exactly one of them, the one main marks
+`config: yes` and launches first, runs `panel.py --show-config` first (DL2) and sends that line (`panel`,
+`external`) to main at once by `SendMessage`, then goes on without waiting; its voter is
+Gemini when Gemini is on the panel, else Codex when Codex is on it and not dropped, else none.
+Main launches the other external runner and the Opus and Fable voters of the panel when that
+line arrives, so all voters run in parallel: the Opus voter (`captain:deep`) only when `opus`
+is on the panel, the Fable voter (`captain:worker` with `model: "fable"`) when `fable` is,
+and any Fable stand-in, in the background; a subagent cannot nest them. A config error
+(exit 2) is the config runner's final report and it runs nothing; main then takes the safer
+option, as for a panel with no time. A panel without external voters needs no runner for
+voters; the config runner still runs `--show-config` and the tally. The report on a
+runner's own voter is its final report, the config runner's too. Each Opus or Fable voter
+(and stand-in) runs `panel.py --check <its file> --require items=<N>` itself as its last step
+and reports that status line; main starts a stand-in at once on `missing`. After all voters
+end, main resumes the config runner by `SendMessage` to its `agentId` with the answer files
+and their status lines; it runs the `--check` of an agent answer that has none and
+`tally.py --voters 3`, and reports one line per item: ID, winning letter or `no consensus`,
+kind, one reason. Main reads only the status lines and the
+runners' reports, never the raw answers.
 
 **Files.** Each panel gets its own dir `tmp/captain/<run>/amigos-<ID>/` (`<ID>` = the first
 decision ID in it), passed as `--out`; `task.md` and `data.md` live there.
 
 **Time.**
 
-- No box (R11): no park, so every panel may start; the Codex deadline is 300 s, and the Opus
-  and Fable voters are told the same 300 s and stopped with `TaskStop` when it is over. The two
+- No box (R11): no park, so every panel may start; the deadline of the external voters
+  (Codex, Gemini) is 600 s, and the agent voters are told the same 600 s and stopped with `TaskStop` when it is over. The two
   rules below apply with a box.
 - No panel starts when the time to park is shorter than its deadline, or when park − 5 min
   is under 60 s; the decision then takes the safer, more reversible option, marked
   `no consensus (no time)`.
-- The Codex deadline is min(300 s, park − 5 min) (`--deadline`); the Opus and Fable voters
-  are told the same budget and stopped with `TaskStop` when it is over.
+- The deadline of every external voter is min(600 s, park − 5 min) (`--deadline`, the same
+  for each runner's `panel.py` call); the agent voters are told the same budget and stopped with `TaskStop` when it is over.
 - Writers continue with the safer option while a panel runs, and apply the result after it.
 
-**Tools.** Codex marked `false` in the config `tools`, or at its usage limit in this run →
-the second Fable voter (the stand-in) starts at once with the other voters, not after a
-timeout. agy is not a 3amigos voter.
+**Why:** 2026-11-18, the owner: the panel deadline went from 300 s to 600 s to guard against
+temporary network issues. The mini-consensus 240 s and the Codex review `timeout 1200` stay.
+
+**Tools.** Each external voter of the panel gets its runner, minus Codex when it is marked
+`false` in the config `tools` or at its usage limit in this run; captain drops only Codex. A
+dropped Codex → its Fable stand-in starts at once with the other voters, not after a
+timeout. Gemini is a 3amigos voter; it uses agy first when the config `tools` has it:
+`agy: false` adds `--no-agy` to the Gemini runner, and Gemini stays on the panel and runs on
+its fallback. A
+Gemini status line with `note` `agy usage limit` → `run.md` records `agy: usage limit` and
+every later panel of the run gets `--no-agy`. With fallback `none` and agy off, Gemini ends
+at once as `missing` with why `no-backend`, and its stand-in starts then, as for any missing
+voter. No external voter left (a panel without Gemini, Codex dropped) → no voter runner; the
+config runner runs `--show-config` and the tally. A Gemini runner that reports why `auth`,
+`note` `fallback auth failed` or an agy login failure carries the repair advice; main passes
+it to the owner.
+**Why:** 2026-11-18: the panel has three providers now (Codex, Gemini, Fable), and an
+exhausted agy quota must not slow every later panel.
 
 **Result.** `decisions.md` gets per decision ID: the options, the votes (`agree`,
-`majority` or `no consensus`), the reason, the panel dir, and for a judged-complex problem
+`majority` or `no consensus`), the reason, the panel dir, the `panel:` field, and for a judged-complex problem
 why main sent it to a panel.
 
 ## Fallback without 3amigos
@@ -139,6 +190,6 @@ than 2 votes → the safer, more reversible option, `no consensus`.
 
 ## Cost
 
-A panel takes up to the Codex deadline plus the tally, about 6 min. In a 30-min box it is for
+A panel takes up to the external voters' deadline plus the tally, about 11 min. In a 30-min box it is for
 the complex tiers, the review-bound panel and away-mode product questions only; everything
 else is mini-consensus.

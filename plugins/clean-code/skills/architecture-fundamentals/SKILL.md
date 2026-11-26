@@ -111,6 +111,12 @@ format, or provide that information in the response when no file is needed.
 ADR means architecture decision record. Do not call a proposed decision
 accepted unless existing authorization or project evidence supports that.
 
+Before an ADR or a review is handed over, self-review it with the skill
+`utils:self-review` (not in the Skill list: the same steps by hand) against
+the drivers and the evidence: every claim points to code, a measure or a
+source, every alternative the comparison names is answered, and nothing
+proposed reads as accepted. It is not the architecture review itself.
+
 ## Report proportional to the task
 
 For a decision, explain the recommendation, drivers, comparison, accepted

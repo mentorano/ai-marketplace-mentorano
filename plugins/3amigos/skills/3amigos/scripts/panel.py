@@ -1,20 +1,30 @@
 #!/usr/bin/env python3
-"""Run the external voter of a 3amigos panel (Codex) on one task with a JSON contract.
+"""Run the external voters of a 3amigos panel (Codex, Gemini) on one task with a JSON contract.
 
 Usage: panel.py --task TASK.md --input DATA.md --out DIR [--voters codex]
-                [--deadline 300] [--effort medium] [--require KEY=N ...]
+                [--deadline 600] [--effort medium] [--require KEY=N ...]
        panel.py --check ANSWER.json [--require KEY=N ...]
+       panel.py --show-config [--panel a,b,c]
 
 The task and the data are inlined into ONE prompt file, so the voter never has to read files
 itself. Each voter's answer must be one JSON object; --require KEY=N checks that answer[KEY] is a list of exactly N items (N=* any length).
 Prints one JSON line per voter as soon as that voter finishes (completion order):
 {"voter","status":"ok|missing","why","file"}. Failures are data, exit code 0; a bad command line
-exits 2 before any voter runs. One retry per voter, but none after the deadline, a usage limit or
-a missing binary. Each voter runs in its own empty work dir <out>/work-<voter>/, so it never sees
-another voter's answer. --check validates one answer file (an Opus or Fable voter) against the
+exits 2 before any voter runs. Codex gets one retry, but none after the deadline, a usage limit
+or a missing binary. Gemini has no outer retry: its backend chain (gemini.py) is the retry, and
+its status line adds "backend" (agy|vertex|key), "model" and "note"; --no-agy drops its agy hops.
+Each voter runs in its own empty work dir <out>/work-<voter>/, so it never sees another voter's
+answer. --check validates one answer file (an Opus or Fable voter) against the
 same --require rules, runs no voter and prints the same status line. --deadline (alias --timeout) is the voter's total time,
 retry included; a voter still running then is killed and reported missing with why "deadline",
 so the caller can start a Fable voter in its place instead of waiting.
+
+--panel a,b,c names this run's panel (three different voters from codex, gemini, opus, fable); it wins
+over the project config, then the user config, then the default panel codex, gemini, fable (amigos_config).
+--voters defaults to the external voters of that panel and must be a subset of them. --show-config prints
+the effective config as one JSON line (values and where each came from, never a key or a token) and runs
+no voter. A broken config, a bad --panel or a --voters name outside the panel exits 2, for a run and for
+--show-config; --check reads no config.
 """
 import argparse
 import json
@@ -27,7 +37,13 @@ import sys
 import threading
 import time
 
-VOTERS = ("codex",)
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+import amigos_config  # noqa: E402  (sibling module, found through the line above)
+import gemini  # noqa: E402  (sibling module)
+
+VOTERS = ("codex", "gemini")
 CODEX_MODEL = os.environ.get("AMIGOS_CODEX_MODEL", "gpt-6-astra")
 
 
@@ -80,10 +96,30 @@ def require_arg(text):
 
 def voters_arg(text):
     names = text.split(",")
-    bad = [n for n in names if n not in VOTERS]
+    bad = [n for n in names if n not in amigos_config.EXTERNAL]
     if bad or len(set(names)) != len(names):
-        raise argparse.ArgumentTypeError(f"voters are a comma list of {', '.join(VOTERS)} without repeats, got {text!r}")
+        raise argparse.ArgumentTypeError(
+            f"voters are a comma list of {', '.join(amigos_config.EXTERNAL)} without repeats, got {text!r}")
     return names
+
+
+def panel_arg(text):
+    names = text.split(",")
+    why = amigos_config.validate_panel(names)
+    if why:
+        raise argparse.ArgumentTypeError(f"{why}, got {text!r}")
+    return names
+
+
+def effective_voters(cfg, voters):
+    """The external voters to run, or (None, reason) when --voters names one outside the panel."""
+    if voters is None:
+        return cfg["external"], ""
+    outside = [v for v in voters if v not in cfg["external"]]
+    if outside:
+        return None, (f"--voters {','.join(outside)} is not an external voter of the panel "
+                      f"{','.join(cfg['panel'])}")
+    return voters, ""
 
 
 def limit_hit(*paths):
@@ -166,6 +202,17 @@ def run(voter, prompt, out_dir, deadline, effort, require):
     return {"voter": voter, "status": "missing", "why": why, "file": ""}
 
 
+def validator(require):
+    """validate(text) -> (obj, "") for a JSON object that passes --require, else (None, why)."""
+    def validate(text):
+        obj = extract(text)
+        if obj is None:
+            return None, "bad-json"
+        why = check(obj, require)
+        return (None, why) if why else (obj, "")
+    return validate
+
+
 def check_file(path, require):
     """Status line for an answer file written by an Opus or Fable voter; the voter is the file stem."""
     path = os.path.abspath(path)
@@ -187,17 +234,33 @@ def main():
     ap.add_argument("--task")
     ap.add_argument("--input")
     ap.add_argument("--out")
-    ap.add_argument("--voters", type=voters_arg, default=list(VOTERS))
-    ap.add_argument("--deadline", "--timeout", dest="deadline", type=int, default=300)
+    ap.add_argument("--voters", type=voters_arg, default=None,
+                    help="default: the external voters of the effective panel")
+    ap.add_argument("--panel", type=panel_arg, help="this run's panel, three voters a,b,c")
+    ap.add_argument("--show-config", action="store_true", help="print the effective config; run no voter")
+    ap.add_argument("--deadline", "--timeout", dest="deadline", type=int, default=600)
     ap.add_argument("--effort", default="medium")
     ap.add_argument("--require", type=require_arg, action="append", default=[])
     ap.add_argument("--check", metavar="ANSWER.json", help="validate one answer file; run no voter")
+    ap.add_argument("--no-agy", action="store_true", help="drop the agy hops of the Gemini voter")
     a = ap.parse_args()
     if a.check:
         print(json.dumps(check_file(a.check, a.require), ensure_ascii=False))
         return 0
+    cfg = amigos_config.load(panel=a.panel)
+    if cfg["errors"]:
+        for err in cfg["errors"]:
+            print(f"panel.py: config error: {err}", file=sys.stderr)
+        return 2
+    if a.show_config:
+        print(json.dumps(cfg, ensure_ascii=False))
+        return 0
+    voters, why = effective_voters(cfg, a.voters)
+    if why:
+        print(f"panel.py: {why}", file=sys.stderr)
+        return 2
     if not (a.task and a.input and a.out):
-        ap.error("--task, --input and --out are required unless --check is given")
+        ap.error("--task, --input and --out are required unless --check or --show-config is given")
     out_dir = os.path.abspath(a.out)
     os.makedirs(out_dir, exist_ok=True)
     prompt = os.path.join(out_dir, "prompt.full.md")
@@ -211,13 +274,19 @@ def main():
 
     def work(v):
         try:
-            res = run(v, prompt, out_dir, a.deadline, a.effort, require)
+            if v == "gemini":
+                res = gemini.run_gemini(prompt, out_dir, a.deadline, cfg["gemini"], validator(require),
+                                        no_agy=a.no_agy, project_root=cfg["project_root"])
+            else:
+                res = run(v, prompt, out_dir, a.deadline, a.effort, require)
         except Exception as exc:  # a voter must always produce a result line
             res = {"voter": v, "status": "missing", "why": f"error: {type(exc).__name__}", "file": ""}
+            if v == "gemini":
+                res.update(backend="", model="", note="")
         with lock:
             print(json.dumps(res, ensure_ascii=False), flush=True)
 
-    threads = [threading.Thread(target=work, args=(v,)) for v in a.voters]
+    threads = [threading.Thread(target=work, args=(v,)) for v in voters]
     for t in threads:
         t.start()
     for t in threads:

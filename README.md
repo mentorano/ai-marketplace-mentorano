@@ -13,7 +13,6 @@ code clean.
 /plugin install captain@ai-marketplace-mentorano
 /plugin install cc-safety-net@ai-marketplace-mentorano
 /plugin install clean-code@ai-marketplace-mentorano
-/plugin install coord@ai-marketplace-mentorano
 /plugin install project-memory@ai-marketplace-mentorano
 /plugin install utils@ai-marketplace-mentorano
 ```
@@ -28,16 +27,40 @@ To work on the marketplace itself, point Claude Code at a local clone instead:
 
 ### 3amigos
 
-A one-round panel of three independent experts for brainstorming and triage:
-Codex, a Claude Opus agent and a Claude Fable agent each answer the same task as
+A one-round panel of three independent experts for brainstorming and triage,
+chosen from a pool of four: Codex, Gemini, a Claude Opus agent and a Claude Fable
+agent (the default panel is Codex, Gemini and Fable). Each answers the same task as
 JSON, then one non-voting Opus synthesizer merges the answers by majority and
 agreement, with authorship and level of agreement kept. A voter that fails is
-replaced by a second Fable with its own framing. `scripts/panel.py` runs the Codex
-voter (one retry, no retry after a timeout; failures are data), `scripts/tally.py`
+replaced by a Fable stand-in with its own framing. `scripts/panel.py` runs the
+external voters in parallel: Codex (one retry, no retry after a timeout) and Gemini
+(`agy` first, then a Vertex AI or API key fallback; failures are data). The
+`3amigos:3amigos-setup` skill writes the panel and Gemini config. `scripts/tally.py`
 tallies per-item verdicts as agree / majority / split. Everything the panel
 produces is a proposal; it never deletes or overwrites anything. Not for code
 review. Invoke it as `/3amigos:3amigos`. See
 [`plugins/3amigos/skills/3amigos/SKILL.md`](plugins/3amigos/skills/3amigos/SKILL.md).
+
+Since 0.6.0 Gemini is a voter, the default panel is Codex, Gemini and Fable, and the
+caller chooses the panel. The panel comes from, in this order: the run's `--panel`, the
+project config `<main checkout>/.claude/3amigos.local.json`, the user config
+`~/.claude/3amigos/config.json`, the default. `panel.py --show-config` prints the effective
+panel and Gemini settings as one JSON line, never a key or a token, and a config error stops
+the run before any voter starts. REFERENCE.md "Choosing the panel" says which voters fit which
+task. An external voter gets 600 s by default (`--deadline`); Gemini walks `agy` and its
+fallback, with the preferred and then the second model, within that one deadline.
+`/3amigos:3amigos-setup` detects `agy`, a working `gcloud` login and a Gemini key variable,
+asks for the default panel and the Gemini fallback (`vertex`, `key` or `none`), writes one or
+both configs and never a secret, then tests each chosen scope with one tiny panel run, in which
+Gemini may make up to two paid fallback requests.
+
+Since 0.6.2 the setup finds what the project already uses for Gemini with one script,
+`scripts/project_scan.py`: `git grep` over the text files and a search of the `.env*` files,
+binary files skipped, so a repository with many gigabytes of media takes seconds, and no
+`.env` file name appears in a shell command for a safety hook to block. It also finds a
+Vertex project id that code passes with no env assignment, offers the `gcloud` default
+project, and the setup report says which Gemini model answered and through which backend
+(`Gemini answers: <model> through <backend>`).
 
 ### branch-board
 
@@ -73,6 +96,11 @@ a readable record of what moved.
 
 The page and the `BOARD.md` skeleton are in English. The plan reader
 understands goal and task headings in Bulgarian and English.
+
+Since 0.1.1 the prose is self-reviewed with `utils:self-review` against the
+measured values before the board goes out: every state, count and date in a
+sentence equals its field, inference is marked as inference, and every `TODO:`
+is answered or left on purpose.
 
 What the collector guarantees, in one line each:
 
@@ -159,7 +187,7 @@ also works as long as no other command uses that name (see the Claude Code
 docs on plugin skills). Only if it clashes, symlink the skill as a fallback:
 `ln -s <clone>/plugins/captain/skills/captain ~/.claude/skills/captain`.
 
-`SKILL.md` stays within a budget: at most 500 lines and roughly 21,000
+`SKILL.md` stays within a budget: at most 500 lines and roughly 23,500
 characters, after the official guidance for skills (under 500 lines, under
 about 5k tokens). The rules stay short there; their mechanics — CLI flags,
 prompt templates, consensus, timers and the health check, the queue — live in
@@ -188,8 +216,10 @@ boundary once its own context reaches `context_threshold` (default 250k, set in
 window, which Claude Code reports per model): it writes a self-contained handoff and a kickoff, you
 type `/clear`, then `/captain resume` (R21, `reference/handoff.md`). The plugin
 hooks `handoff_at_boundary.py` and `kickoff_on_clear.py` do the measuring and the
-injection; they stay silent when coord's global hooks of the same names are
-installed in `~/.claude/settings.json`.
+injection. Since 0.32.0 the coord plugin is gone and captain no longer defers to its global
+hooks: if you once ran coord's `install-hooks.sh`, delete `kickoff-on-clear.py` and
+`handoff-at-boundary.py` from `~/.claude/hooks/` and their entries from `~/.claude/settings.json`,
+or both kickoff hooks race for the same file after `/clear`.
 
 Since 0.8.0 the successor can start in a new terminal tab instead of `/clear` (cmux since 0.11.0):
 `/captain:captain-setup` asks for `successor_terminal`, `supacode`, `cmux` or `none`. Without the
@@ -203,6 +233,38 @@ starts `claude -n <name>` in the same permission mode, with the prompt in a file
 `-i` garbles non-ASCII text). The new session sends `STARTED` with its directory; the old one
 checks it, answers `ACK` with any owner words since the handoff, and only then stops. Other
 terminals would be new values.
+
+Since 0.28.0 every author self-reviews its output before anyone acts on it (SV1): the skill
+`utils:self-review` (utils 0.8.0 or newer; without it the same steps by hand), in the same
+context, with no subagent and no test run. An agent does it before every commit and before its
+report, whose item 2 carries the `self-review:` result. The main session does it for what it
+writes itself: the handoff first (against `decisions.md`, `run.md` and `queue.md`, with a
+`Self-review (SV1):` line the successor looks for), the plan split, the UI use-case list, a
+panel's task file. It never counts as a review at the push gate; the review by a fresh agent
+stays.
+
+Since 0.29.0 full consensus runs on the effective 3amigos panel, with Gemini as a voter
+(`reference/consensus.md`). The coordinator classes each decision itself and passes the panel
+with `--panel`: technical decisions (design, architecture, spec critique, code triage) go to
+Opus, Codex and Gemini; product, scope, UX, naming and creative ones to Codex, Gemini and
+Fable; anything else to the 3amigos "Choosing the panel" table or the default. The run's choice
+wins over the project and user configs, and `decisions.md` records it as
+`panel: <class> — <panel>`. Each external voter gets its own runner, so a missing voter's Fable
+stand-in starts as soon as that voter ends; the external voters get min(600 s, park − 5 min),
+600 s with no box. Only Codex is ever dropped (off in the config or at its usage limit); an
+`agy` usage limit seen once adds `--no-agy` to every later panel of the run, and Gemini then
+runs on its fallback.
+
+Since 0.30.0 visible work the owner must see — screens, dialogs, texts, several items at once —
+goes to a local review page instead of the chat (R23, `reference/review-page.md`). A runner
+takes the screenshots at the owner's sizes, builds the page from a `sections.json` with
+`build.py` and serves it on 127.0.0.1 with `serve.py` (standard library only;
+`--lan` adds a link with a random key for the owner's phone on the same network);
+the owner comments per section (`ok`, `change`, `question`) into `comments.jsonl` in the run
+directory, and a worker triages those comments for the coordinator, who turns them into fixes
+and answers. Yes/no and permission questions stay in the chat. The page is never published or
+committed. Since 0.31.0 the page comes from `utils:review-page` (utils 0.9.0); without it the
+owner gets one chat line per item with its screenshot paths.
 
 Since 0.10.0 the captain runs the merges itself: `git merge --no-ff` of a reviewed agent branch,
 `git merge --abort`, and `git commit --no-edit` after an agent resolved the conflicts. The
@@ -276,67 +338,11 @@ functions. Run `/clean-code:architecture-fundamentals` with the system or
 decision to review. Ordinary refactoring stays in clean-code; source metrics
 do not prove operational fitness.
 
-### coord
-
-Runs one repository as a parallel sprint of several interactive Claude Code
-sessions: a coordinator (`/coord`) that alone merges into the integration
-branch, keeps one migration head, the contracts between lanes and a live board;
-implementer lanes (`/coord lane`), each in its own git worktree with its own
-test database and ports, that talk only to the coordinator through a small
-keyword protocol (START, LANDED, QUESTION, BLOCKED, ACCEPTED from lanes; MERGED, MERGE-IN, ANSWER, ALL-CLEAR, ACCEPTED, STOP, PARK from coord); an optional
-design session; and the human owner, who gets product questions in batches,
-each with a recommendation.
-
-It exists because parallel sessions on one repo fail in predictable ways: a
-clean textual merge that breaks at runtime, a handoff that carries stale state
-as fact, a green suite that silently skipped a class of tests, CI minutes burnt
-on every lane push. Each rule in the skill names the incident that produced it.
-
-- Phase 0 (spec → plan → one review round → prototype) calls the existing
-  planning, review and prototype skills; the skill adds only what a plan needs
-  to be parallelized (`templates/sprint-plan.md`).
-- Merges are batched: several lanes merged locally, the combined tree verified
-  once, pushed once — one CI run per batch.
-- Sessions hand off at a task boundary once their context passes a threshold;
-  the successor's kickoff is written to `~/.claude/kickoffs/<session>.md` and
-  injected by a hook after `/clear` (`scripts/install-hooks.sh`, once per machine).
-- In cmux (optional, owner-approved per project) the coordinator opens the lane
-  tabs itself and restarts a lane after its handoff by typing `/clear` and
-  `/coord lane` into that lane's idle tab; a session never drives its own tab.
-- State is always re-derived (`scripts/derive-state.sh`, `scripts/measure-context.py`),
-  never carried in a handoff.
-- Tests run in three tiers: a lane runs its touched area, typecheck and build;
-  coord runs build + a ~3-minute smoke set per merge batch; full suites run at
-  the end of a scope and for batches touching high-risk paths.
-- A scope can get a deadline: real one-shot timers fire a forecast at 50 %,
-  PARK (finish the slice, start nothing new) at 85 %, and merge + full suites +
-  report at the deadline.
-- Contested architecture/contract rulings, and product questions while the
-  owner is away, go to a three-model vote (Codex via `scripts/vote.py`,
-  Opus and Fable as subagents); the owner gets a brief on return and
-  ratifies or reverses. Destructive and irreversible actions are never voted.
-- `scripts/cost-report.py` measures what a sprint spent from the session transcripts:
-  main sessions vs subagents by model, cost per call by context size, small tool
-  calls, and cache rewrites after idle gaps.
-
-Setup, once per machine:
-
-```
-/plugin marketplace add mentorano/ai-marketplace-mentorano
-/plugin install coord@ai-marketplace-mentorano
-bash ~/.claude/plugins/cache/ai-marketplace-mentorano/coord/*/skills/coord/scripts/install-hooks.sh
-```
-
-The installer copies the two hooks into `~/.claude/hooks/` and registers them
-in `~/.claude/settings.json` (a backup is written first; running it twice
-changes nothing). The skill also checks for the hooks on every run and offers
-the command if they are missing. Invoke it as `/coord:coord` (coordinator) and
-`/coord:coord lane` (a lane); to type plain `/coord`, symlink the skill instead:
-`ln -s <clone>/plugins/coord/skills/coord ~/.claude/skills/coord`.
-
-Project specifics live in `<repo>/.coord/project.md`
-(`templates/project-config.md`). See
-[`plugins/coord/skills/coord/SKILL.md`](plugins/coord/skills/coord/SKILL.md).
+Since 0.7.1 an ADR or an architecture review is self-reviewed with
+`utils:self-review` before it is handed over, and TypeScript syntax in a
+JavaScript file (a type annotation, `private`) is an error: such a `.js` file
+is a broken run and such an inline HTML script is listed as `UNPARSED`; two
+inline scripts on one HTML line count that line once.
 
 ### project-memory
 
@@ -357,7 +363,9 @@ plugin get them too.
 fully load or the file-state health is `due` / `overdue`.
 `/project-memory:memory-defrag` dispatches one general-purpose subagent that
 merges, splits and trims the files, prunes only the files it emptied, and shows
-the full diff for review. Review `.agent-memory/` like CLAUDE.md and add it to
+the full diff for review. Since 0.1.2 the defragmenter self-reviews before its
+report: every rule a removed line carried is in a file that stays or is named
+under **Removed**. Review `.agent-memory/` like CLAUDE.md and add it to
 CODEOWNERS. The defragment prompt, write trigger and thresholds are ported from
 worca-cc (MIT). See
 [`plugins/project-memory/README.md`](plugins/project-memory/README.md).
@@ -384,7 +392,9 @@ Small helpers for working with Claude Code.
   session to send `STARTED <name> pwd=<dir>` to the session that opened it
   (`--reply-to`, else that session's own name from `claude agents --json`),
   and the skill waits up to three minutes for that message, also after a
-  hand-pasted fallback. A slash-command prompt runs unwrapped.
+  hand-pasted fallback. A slash-command prompt runs unwrapped. Since 0.8.0
+  the handover prompt is self-reviewed with `utils:self-review` before the
+  tab opens.
   See [`plugins/utils/skills/new-session-tab/SKILL.md`](plugins/utils/skills/new-session-tab/SKILL.md).
 - `one-by-one` (since 0.4.0) runs a one-by-one pass over review findings or
   open points: one item at a time, a question for every point that changes
@@ -393,6 +403,27 @@ Small helpers for working with Claude Code.
   user cannot answer or explicitly defers stays in the report, marked as
   deferred.
   See [`plugins/utils/skills/one-by-one/SKILL.md`](plugins/utils/skills/one-by-one/SKILL.md).
+- `review-page` (since 0.9.0) builds a local page for the owner when there
+  are two or more visible items at once (screens, dialogs, user-facing texts,
+  a visual before/after), or when the owner asks for one: one section per item
+  with its screenshots, served on 127.0.0.1 and, with `--lan`, on the local
+  network for the owner's phone. The owner comments per section (`ok`,
+  `change`, `question`) and says "done"; the session reads the comments with
+  `comments.py --since <n>` and turns them into fixes and answers. Yes/no and
+  permission questions stay in the chat, `ok` never grants a merge or a push,
+  the stop command is always given, and the page is never published. A
+  background agent starts one only when its prompt says so.
+  See [`plugins/utils/skills/review-page/SKILL.md`](plugins/utils/skills/review-page/SKILL.md).
+- `self-review` (since 0.8.0) is one pass over an output you just wrote, in the
+  same context, before anyone acts on it: code (a diff), a fix of review
+  findings, a spec, a plan, a doc, a handoff or handover prompt. It reads the
+  whole output back against its sources, collects findings, revalidates each
+  one against the source, fixes only the confirmed ones and reports every
+  finding with its outcome and a `self-review:` result line. It launches no
+  subagent and runs no test or build, and it never counts as a review: the
+  review by a fresh agent still follows. The captain rule SV1 and the
+  `new-session-tab` handover call it.
+  See [`plugins/utils/skills/self-review/SKILL.md`](plugins/utils/skills/self-review/SKILL.md).
 - `share-artifact` (since 0.6.0) shares one or more claude.ai artifacts with
   the people the user names. No tool can do it, so a background subagent opens
   each artifact's Share dialog in the user's own Chrome (Claude in Chrome, in a
@@ -409,7 +440,7 @@ Small helpers for working with Claude Code.
 ./run-tests.sh
 ```
 
-Nine suites. The collector suite builds real throwaway repositories — squash
+One suite per plugin area, all listed in `run-tests.sh`. The collector suite builds real throwaway repositories — squash
 merges, refs deleted behind the clone's back, plans full of fenced blocks — and
 asserts on the JSON. The pipeline suite asserts that the markdown really is the
 source: a value edited in `BOARD.md` reaches the page, and the renderer never
@@ -421,9 +452,8 @@ frontmatter and the two manifests. The bg-claude-rc suite runs
 `start.sh` against a stub `claude` and a temporary `HOME`, so it starts nothing.
 The new-session-tab suite runs `new-session-tab.py` against stub `supacode`,
 `cmux` and `claude` binaries, so it opens no tab.
-The coord suite builds real repositories and a temporary `HOME` for the coord
-scripts and hooks. The captain suite checks the skill's text — every rule
-R1–R21 with its `Why:` line, the budget of `SKILL.md`, the required CLI
+The captain suite checks the skill's text — every rule
+R1–R23 with its `Why:` line, the budget of `SKILL.md`, the required CLI
 strings and forbidden flags in the reference files, the no-web line in every
 review prompt — and runs `audit-main.py` over small synthetic transcripts.
 Those checks prove the text is there, not that the model follows it.

@@ -181,6 +181,10 @@ response had no visible output"; 43 checks in 15 sessions also filled the contex
      its launch: `SendMessage` it for its state; no verdict by the next check → the R7 Opus
      fallback. **Why:** 01.10.2026: a Codex review ran 32 min to a timeout with no verdict, and
      the 15-minute check only pinged the writer.
+   - a `Review page (R23)` line in `run.md`: `Read` its `comments.jsonl` with `offset` =
+     `triaged` + 1 and `limit: 1` (no file or no such line → nothing new); a line → launch the
+     Review comments prompt
+     (`reference/review-page.md`, PS5) and name it in the status line.
 3. Apply the correction ladder (below) to each stalled agent.
 4. With a box only (no box: skip; nothing is cut for time). Compare work left with the time
    to the current `Hard end`. Before a cut, count the work

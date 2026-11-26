@@ -53,13 +53,16 @@ that writer by `SendMessage` (DL3), before the DL1 list. In doubt → delegate (
   counts).
 - `CronCreate`, `CronDelete`, `CronList` for the timers; a lone background `sleep N`
   (`run_in_background: true`) as a fallback timer, the only background call main makes; a shell `&` is denied.
-- `Skill` for `utils:one-by-one` (only main talks to the owner) and `utils:new-session-tab`
+- `Skill` for `utils:self-review` (SV1: main's self-review of an output it wrote,
+  `reference/queue.md`; the exact name, never a bare `self-review`), `utils:one-by-one` (only
+  main talks to the owner) and `utils:new-session-tab`
   (args `prefix=<session_prefix>` when the config has one, so the new session gets it) with its `python3 '<utils>/skills/new-session-tab/scripts/new-session-tab.py' --dir=... ...`
   (never `--fresh-worktree`; the prompt file is the skill's `./tmp/handover-<topic>-<date>.md`).
   `Artifact` `open` and `read`; `SendUserFile` of files under `./tmp/captain/`.
 - `Skill` for `captain`, `captain:captain`, `captain:captain-setup` (the config start step) and
   `3amigos:3amigos` (main runs the panel itself; its voters are `Agent` launches; `panel.py`,
-  `tally.py` and the Codex voter are script runs, so a `captain:runner` runs them: DL2).
+  `tally.py` and the external voters (Codex, Gemini) are script runs, so `captain:runner`s run
+  them, one per external voter: DL2).
 - The merge flow (`reference/queue.md`), each command alone in its Bash call:
   `git [-C '<abs dir>'] merge --no-ff [--no-edit] <local branch>`, the sync forms
   `git -C '<abs dir>' merge --no-ff --no-edit origin/<default>` and
@@ -145,8 +148,8 @@ Launch agents with the `Agent` tool's `subagent_type`:
 
 - `captain:worker` — Opus, effort `medium`: writers, the integration agent, the verifier, the
   Opus fallback reviewer, the Opus mini-consensus opinion.
-- `captain:deep` — Opus, effort `high`: the Opus voter of a 3amigos panel (R9, launched by
-  main), and the fallback reviewer when the review is of a very complex spec or
+- `captain:deep` — Opus, effort `high`: the Opus voter of a 3amigos panel, only when `opus`
+  is on the panel (R9, launched by main), and the fallback reviewer when the review is of a very complex spec or
   implementation or assesses a critical action (EF1).
 
 - `captain:light-coder` — Sonnet, effort `high`: the writer of a task that passes the light
@@ -176,7 +179,10 @@ agent, not a tool, and has no key: it is always available.
 - `codex: false` → the default reviewer is a fresh `captain:deep` (very complex spec or
   implementation, critical action) or `captain:worker` agent that did not write the code;
   `run.md` records `Codex: off in config`.
-- Consensus voters are only the available tools plus the Fable and Opus voters; the
+- Full consensus voters are the 3amigos panel main picks per decision class (`--panel`;
+  technical `opus,codex,gemini`, product `codex,gemini,fable`: `reference/consensus.md`) minus
+  Codex when it is off; `agy: false` only adds `--no-agy`, and Gemini runs on its fallback.
+  Elsewhere consensus voters are only the available tools plus the Fable and Opus voters; the
   mini-consensus chain skips a missing tool (`reference/consensus.md`).
 - A tool set to `true` that fails at run time is handled by its failure rules below.
 
@@ -291,15 +297,17 @@ rest; it never polls.
 implementation) that did not write the code, with the same review prompt. It becomes the
 current reviewer for that loop (R6).
 
-**As a voter (R9):** in a full consensus Codex is the 3amigos panel's Codex voter: a
-`captain:runner` runs `panel.py --voters codex --effort high` with `--deadline` min(300 s, park
-− 5 min), 300 s with no box (`reference/consensus.md`). That voter keeps the 3amigos model
-(`gpt-6-astra`, set in `panel.py`), not captain's choice. For a mini-consensus opinion: the
+**As a voter (R9):** in a full consensus Codex is the 3amigos panel's Codex voter, beside
+the Gemini voter when both are on the panel: one `captain:runner` per external voter, in
+parallel, runs `panel.py --panel <the panel> --voters <that voter>` (Codex only when not off or at its usage
+limit), `--no-agy` for Gemini when it applies, `--effort high` and `--deadline` min(600 s,
+park − 5 min), 600 s with no box, and reports when its voter ends (`reference/consensus.md`). Each voter keeps its 3amigos model (Codex
+`gpt-6-astra`, set in `panel.py`; Gemini from the 3amigos config), not captain's choice. For a mini-consensus opinion: the
 same command as a review with terra `medium` and `command timeout 240` (with a box, never past
 the park deadline) and the mini-consensus template. A usage limit or any failure → that vote counts as
 missing; in a panel the Fable stand-in replaces it.
 
-### Output contracts - checked per use, for every voter (Codex, agy, Fable, Opus)
+### Output contracts - checked per use, for every voter (Codex, Gemini, agy, Fable, Opus)
 
 | Use | Valid output | Invalid → |
 |---|---|---|
@@ -312,6 +320,8 @@ Exit `0` with an invalid output counts as a failure for that use.
 ## agy - specs, consultation, votes (R8, R9); never code review
 
 Run it from the repo or worktree directory; it reads the files the prompt names itself.
+agy is also the first backend of the 3amigos panel's Gemini voter, called by `panel.py`, not by
+captain (`--no-agy` per `reference/consensus.md`); the rules below are captain's own agy calls.
 The permission rules below were verified on 2026-09-28 with agy 1.2.12.
 
 ```bash

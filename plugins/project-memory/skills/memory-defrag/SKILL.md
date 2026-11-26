@@ -111,7 +111,8 @@ violation instead.
 
 Show the user:
 
-- the subagent's report (**Merged**, **Split**, **Removed**, **Still flagged**, the counts);
+- the subagent's report (**Merged**, **Split**, **Removed**, **Still flagged**, the counts, its
+  `self-review:` line; a report without that line: say so, the self-review did not run);
 - the health level and reasons before (from step 1) and after (from step 4);
 - every format violation still open after the run;
 - the full change, new and deleted files included:

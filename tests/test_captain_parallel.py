@@ -337,7 +337,7 @@ class NoBoxByDefaultTest(unittest.TestCase):
         self.assertIn("`box_min` is the owner's box in minutes, `null` with no box;", queue)
         self.assertIn("<no box:> The run has no park time or hard end; only your own time limit "
                       "above applies.", prompts)
-        self.assertIn("--deadline <min(300, park - 5 min) in s; 300 with no box>", prompts)
+        self.assertIn("--deadline <min(600, park - 5 min) in s; 600 with no box>", prompts)
 
 
 class StrictStartsARunTest(unittest.TestCase):

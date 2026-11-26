@@ -20,15 +20,17 @@ EXPECTED = {
     "branch-board",
     "captain",
     "captain-setup",
+    "3amigos-setup",
     "clean-code",
     "clean-code-python",
     "clean-code-typescript",
     "clean-code-logging",
-    "coord",
     "memory-defrag",
     "memory-init",
     "new-session-tab",
     "one-by-one",
+    "review-page",
+    "self-review",
     "share-artifact",
 }
 

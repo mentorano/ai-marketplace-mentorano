@@ -1,6 +1,6 @@
 ---
 name: captain
-description: Use when the owner starts a solo coding run in which this session coordinates background agents, with a time box only when the owner names one, e.g. "/captain", "/captain away", "/captain 1h away". Only when the owner names this skill (captain, or the Captain by name); never start a run on your own. Not for production, devops or external writes beyond listed dev targets, and not for parallel interactive sessions with lanes — that is `coord`.
+description: Use when the owner starts a solo coding run in which this session coordinates background agents, with a time box only when the owner names one, e.g. "/captain", "/captain away", "/captain 1h away". Only when the owner names this skill (captain, or the Captain by name); never start a run on your own. Not for production, devops or external writes beyond listed dev targets, and not for several interactive sessions working in parallel.
 argument-hint: "[<timebox>] [away] [strict] [cowboy] [base=<branch>] | off | merge <branch> | base <branch>"
 ---
 
@@ -110,12 +110,13 @@ Never write on `main`/`master`.
 **Why:** the owner, 20.10.2026: a large subscription and enough CPU, the work must go faster,
 and each writer's own test run made it wait; 26.09: parallel `worktree add` hit a locked `.git/config`.
 22.10.2026: runs with a ready plan still gave it to one writer ("one coupled piece", "files are
-new and few") and serialized tasks on "same file" without checking what each one touched.
+new and few") and serialized tasks on "same file" unchecked.
 
 ### R3 — Every agent prompt carries the same frame
 
 Use the frame in `reference/prompts.md` unchanged. An agent reports once, done or
-blocked, in ≤ 8 lines; review findings reach the writer by path (KT1).
+blocked, in ≤ 8 lines; review findings reach the writer by path (KT1). Every author, main
+too, runs `utils:self-review` on its output first (SV1): no review (R5).
 **Why:** prompts with a hard limit met their boxes (5 fixers, ~5 min); 466 agent messages in 15 runs.
 
 ### R4 — Model choice
@@ -223,8 +224,7 @@ No box: `42 minutes gone; 7 of 12 tasks done (58%); ZD3 running (12/35 min).`
 Mechanics: `reference/parallel.md`; timers: `reference/health.md`.
 **Why:** the owner, 20.10.2026: the time is only informative; finish the work that fits, +30%
 up to three more times; a night outage extends the run; a timed creative task ends exactly.
-The owner, 22.10.2026: self-chosen boxes, timers and hard ends slowed the runs down; a box
-only when the owner asks for one ("for 1 hour").
+The owner, 22.10.2026: self-chosen boxes, timers and hard ends slowed the runs down.
 
 ### R12 — Status on request; one line per event
 
@@ -309,13 +309,13 @@ review and fixes.
 
 At a task or merge boundary with context at or above `context_threshold` (config; default
 250000), or at a phase change, hand off; never mid-operation. An agent commits and pushes (R5);
-main writes the handoff (template; status only in §2), a `captain:runner` the kickoff. A tab
+main writes and self-reviews (SV1) the handoff (template; status only in §2), a
+`captain:runner` the kickoff. A tab
 successor (`successor_terminal`, or detected): a runner runs `scripts/successor-tab.py`
 (TAB-OK: a shell ran); main stops after its STARTED and ACK. `hooks/handoff_at_boundary.py`
 holds the next writer dispatch once at the threshold. Steps, `/captain resume`:
 `reference/handoff.md`.
-**Why:** every turn re-reads the whole window; at 400–650k, long sessions were the largest share
-of spend.
+**Why:** every turn re-reads the whole window; long 400–650k sessions cost the most.
 
 ### R22 — Cowboy mode
 
@@ -328,6 +328,18 @@ carrying an untested cowboy commit) until the cowboy state it records (KB8) is g
 **Why:** the owner, 2026-10-30: see a change, react, see the next one within minutes; pay the
 safety back once, before the merge.
 
+### R23 — The owner reviews visible work on a local page
+
+Visible work the owner must see (screens, dialogs, texts, visual diffs; several items at once)
+→ a `captain:runner` takes shots at the owner's sizes, builds a run-dir page with
+`utils:review-page` and serves it on 127.0.0.1, keyed on the LAN for the phone; main
+gives the link (skill missing: chat lines with the shots). The owner says done, or a health check
+finds new comments → a `captain:worker` triages them; main turns that into fix tasks and
+answers. Yes/no, permission and config questions stay in the chat, one line with an ID; a page
+"ok" is no R10 yes. No artifact, no commit. `reference/review-page.md`.
+**Why:** the owner, 2026-11-18: "it is much more effective and visual for us to see things this
+way; for example this VP1 was not for this visual viewer, but the others are top".
+
 ## Index - read WHEN
 
 - `reference/tools.md` - the R1 allow-list, tools, any codex/agy/Fable call, a failed review,
@@ -337,12 +349,13 @@ safety back once, before the merge.
   extension, an outage, strict time (R2, R11, R18).
 - `reference/health.md` - timers, every health check, a stall, cleanup.
 - `reference/triage.md` - every review round (R6).
-- `reference/queue.md` - run state, queue, decisions, TODO, IDs, reports.
+- `reference/queue.md` - run state, queue, decisions, TODO, IDs, reports, SV1.
 - `reference/consensus.md` - any decision beyond local naming (R9).
 - `reference/light-test.md` - the light test and routing of every coding task (R4).
 - `reference/handoff.md` - a handoff; `/captain resume` (R21).
 - `reference/ui-check.md` - a group with visible UI changes, before its push.
 - `reference/cowboy.md` - a cowboy run: the loop, the test pass, the guard gate (R22).
+- `reference/review-page.md` - visible work for the owner to see, the comments (R23).
 - `scripts/agent-context.py <agentId>...` - when a writer finishes a task (R6).
 - `scripts/check-run-end.py` - R17 gate, exit 0.
-- `scripts/audit-main.py <transcript.jsonl>` - after a run. Accept only exit 0 (clean).
+- `scripts/audit-main.py <transcript.jsonl>` - after a run; accept only exit 0.

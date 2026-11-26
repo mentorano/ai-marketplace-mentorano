@@ -1,8 +1,8 @@
 # handoff - a new session continues the run (R21)
 
-Adapted from coord's `procedures/handoff-and-sessions.md` and its two templates. The captain
-stays one captain: the successor is the same role in a cleared session, and `/captain off` still
-ends captain mode (R1). The end of the run (R17) is a different event; both may happen.
+The captain stays one captain: the successor is the same role in a cleared session, and
+`/captain off` still ends captain mode (R1). The end of the run (R17) is a different event; both
+may happen.
 
 ## Contents
 
@@ -64,6 +64,24 @@ not as state.
    An approval gate or a stop appears in the handoff, the kickoff or the `ACK` message only as
    the owner's own words, quoted; routine steps (commit, push of reviewed work to the feature
    branch, the checks) need none.
+   Then the self-review (SV1), at once and in this session, before step 3 or the successor
+   terminal: the Skill call `utils:self-review` on the written handoff (not in the Skill
+   list → the same checks by hand). Its sources: `Read` the written handoff, `decisions.md`,
+   `run.md` and `queue.md`; never check from memory. Its checks:
+   - files → handoff: every `decisions.md` line that still stands is in §1 or §3, every
+     `source: owner` line with a `status:` is a §2 row as the §2 rule asks (a `done <sha>` row
+     only in the first handoff after it was done), every held-back commit of step 1 is
+     under `Held back:`;
+   - window → files: whatever lives only in this window is now in the handoff or in the run
+     files: an owner instruction, answer or feedback, a question the owner has not answered
+     (§4), a piece of work the owner asked for that is no `## Tasks` row, a lesson (§5), an
+     open operation;
+   - form: no status outside §2, gates only as quoted owner words, §6 is one concrete action.
+   `Edit` in what is missing, then fill the template's `Self-review (SV1):` line with the
+   counts. The kickoff text gets its own `utils:self-review` before the runner writes it, with the
+   handoff as the source: the newest handoff's absolute path, the first action equal to §6,
+   gates quoted. The one-line `ACK` is checked against the same points by eye. It is not a
+   review and replaces none (R5).
    Steps 3-5 below are the `/clear` path. When the successor gets a Supacode or cmux tab, they are
    replaced by [Successor terminal](#successor-terminal), and used again as its fallback.
 3. [ ] A `captain:runner` writes the kickoff (template below) to `~/.claude/kickoffs/<session
@@ -81,6 +99,11 @@ call, and a lingering summary that nobody who knows the next task wrote.
 handoff; a run rule born from one denial (NS2) outlived its run; an owner's plain
 wording reached writers only as a rule code. Gates: the Why under
 the kickoff template.
+**Why (self-review, 18.11.2026):** the owner: a handoff must get a self-review, and every output
+of a session or an agent is checked at once, in the same context, for what it missed; the review
+by a fresh agent stays. A handoff is written when the window is fullest, and what it drops the
+successor never learns. The owner chose a real skill for it (`utils:self-review`) over a
+sentence in the rule. The line in the file shows the successor that the pass ran.
 
 ## Successor terminal
 
@@ -178,7 +201,7 @@ when it is not there) and queues the text until the new surface's PTY is up. The
 terminal text`); that check stopped the first real cmux handoff (2026-10-06, `TAB-NEW-FAILED`). A
 failure after the surface was created carries `surface=<ref>`; as with `TAB-ELSEWHERE`, give the
 owner the close command, which only the owner runs: `! cmux close-surface --surface <ref>`. A backslash in the command is refused, since `send` turns `\n` into
-Enter. coord's cmux note says a session must not drive its OWN tab; here a runner opens a NEW tab
+Enter. A session must not drive its OWN tab; here a runner opens a NEW tab
 for a differently-named successor, which is a different action. The owner closes the old tab.
 
 **Why:** 2026-10-01 a runner ran `supacode tab new` without `-w`; Supacode used the focused
@@ -220,6 +243,7 @@ Re-derive it:
     CronList, then compare with run.md `## Timers`
 
 Held back: <sha> - <reason> per commit the push gate holds (How step 1), or none.
+Self-review (SV1): decisions <n> of <n> carried; owner decisions <n> of <n> in §2; added from this window: <items, or none>.
 
 Run dir: ./tmp/captain/<run>/ (run.md, decisions.md, queue.md). Mode, box and deadline (if any): see run.md.
 Project memory: the `Project memory` line and `## Memory candidates` stay in run.md; drafts in <run dir>/memory-drafts/.
@@ -301,7 +325,10 @@ The run is not new: no bootstrap, no new run directory, no plan.
    re-check `date` against park and deadline. Past the last possible hard end (outages and
    extensions counted, `reference/parallel.md`) → R17.
 4. Re-derive state through a `captain:runner` (never from the handoff's prose), then do the
-   handoff's first action.
+   handoff's first action. A handoff with no `Self-review (SV1):` line was not self-reviewed by
+   its writer: before the first action, `Read` `decisions.md` and `run.md` in the run dir, take
+   from them every standing line and owner decision the handoff lacks, and tell the owner one
+   line with what was missing.
 
 ## The hooks
 
@@ -314,10 +341,4 @@ Both ship with the plugin (`hooks/hooks.json`) and fail open.
   `context_threshold`, tokens or a percentage of the model's window, else 250000).
 - `hooks/kickoff_on_clear.py` (SessionStart `clear`): injects `~/.claude/kickoffs/<session
   name>.md` and moves it to `kickoff-used/`.
-- `kickoff_on_clear.py` does nothing when `~/.claude/settings.json` already registers coord's
-  global `kickoff-on-clear.py`, which does the same job: one injection, not two.
-- `handoff_at_boundary.py` runs even when coord's global `handoff-at-boundary.py` is registered:
-  that hook only holds `Implement ...` / `PR<n> T<n>` dispatches at the coord project threshold, so
-  it never held a captain writer (2026-10-05: a captain run reached 92% of its window with no
-  gate). A writer described as `Implement ...` may then get two denials with the same meaning.
 - Log: `~/.claude/captain/handoff-hooks.log`.

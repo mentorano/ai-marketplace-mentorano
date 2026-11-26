@@ -338,7 +338,7 @@ class PanelTest(unittest.TestCase):
     def test_bad_command_line_exits_2_and_runs_nothing(self):
         base = ["--task", str(self.tmp / "task.md"), "--input", str(self.tmp / "data.md"), "--out", str(self.tmp / "out")]
         for extra in (["--require", "ideas"], ["--require", "ideas=-1"], ["--require", "=3"], ["--require", "ideas=\u00b2"],
-                      ["--voters", "gemini"], ["--voters", "grok"], ["--voters", "codex,grok"],
+                      ["--voters", "opus"], ["--voters", "grok"], ["--voters", "codex,grok"],
                       ["--voters", "codex,codex"]):
             p = self.run_panel(*base, *extra)
             self.assertEqual(p.returncode, 2, (extra, p.stdout, p.stderr))
@@ -402,7 +402,7 @@ class PanelTest(unittest.TestCase):
 
 
 class SkillTextTest(unittest.TestCase):
-    """3amigos 0.5.0: captain runs its full consensus through the panel."""
+    """3amigos 0.5.0: captain runs its full consensus through the panel; 0.6.0: Gemini, chosen panel."""
 
     SKILL_MD = SCRIPTS.parent / "SKILL.md"
 
@@ -421,18 +421,187 @@ class SkillTextTest(unittest.TestCase):
         text = self.SKILL_MD.read_text(encoding="utf-8")
         section = text.split("## Called from captain", 1)[1].split("\n## ", 1)[0]
         for needle in ("`--out`", "tmp/captain/<run>/amigos-<ID>/", "park time caps the deadline",
-                       "min(300 s, park − 5 min)", "park − 5 min is under 60 s",
+                       "min(600 s, park − 5 min)", "park − 5 min is under 60 s",
                        "config `tools` is honoured",
                        "Fable stand-in starts at once", "`no consensus`"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, section)
 
-    def test_version_is_0_5_0_in_both_manifests(self):
+    def test_description_names_the_pool_and_the_default_panel(self):  # GV1, GV9
+        description = self.description()
+        for needle in ("pool of four", "the default panel is Codex, Gemini and Fable",
+                       "Not for code review"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, description)
+        self.assertNotIn("(Codex, a Claude Opus agent and a Claude Fable agent)", description)
+
+    def test_workflow_starts_with_the_panel_and_names_the_setup(self):  # GV1, GV4
+        text = self.SKILL_MD.read_text(encoding="utf-8")
+        workflow = text.split("## Workflow", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("1. **The panel.**", workflow)
+        for needle in ("--show-config", "--panel a,b,c", '"Choosing the panel"',
+                       "`3amigos:3amigos-setup`", "With no config the panel runs with",
+                       "writes `fable.json`", "`backend`", "`note`",
+                       "`<dir>/work-gemini/`", "names no file that exists", "only names from the `external`",
+                       "stderr line verbatim"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, workflow)
+
+    def test_report_rules_for_gemini(self):  # GV3 report rules
+        text = self.SKILL_MD.read_text(encoding="utf-8")
+        for needle in ("`fallback auth failed`", "missing` with why `auth`",
+                       "effective `gemini.fallback`", "gcloud auth login",
+                       "gcloud auth application-default login", "named by `key_env`",
+                       "Never print the key's value", "`agy usage limit`", "Why `no-backend`",
+                       "Gemini has no outer retry", "never the `agy` id",
+                       "agy is not logged in: open agy once and log in"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_reference_has_choosing_the_panel_and_config(self):  # GV6, GV9
+        text = (SCRIPTS.parent / "REFERENCE.md").read_text(encoding="utf-8")
+        for needle in ("## Choosing the panel", "## Config", "agy 1.5.11",
+                       "Review this table when a provider releases a new model; the model ids in "
+                       "the config defaults (`amigos_config.py`) and in the effective config "
+                       "change with it.",
+                       "config defaults in `amigos_config.py`",
+                       "[P] = read on a primary page", "`gemini-4-carbon`", "`gemini-4-argon`",
+                       "--show-config", "`3amigos:3amigos-setup`"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_version_is_0_6_2_in_both_manifests(self):
         plugin = json.loads((SCRIPTS.parents[2] / ".claude-plugin" / "plugin.json").read_text())
-        self.assertEqual(plugin["version"], "0.5.0")
+        self.assertEqual(plugin["version"], "0.6.2")
+        self.assertIn("gemini", plugin["keywords"])
         market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text())
         entry = next(p for p in market["plugins"] if p["name"] == "3amigos")
-        self.assertEqual(entry["version"], "0.5.0")
+        self.assertEqual(entry["version"], "0.6.2")
+        self.assertEqual(entry["description"], plugin["description"])
+
+    def test_setup_runs_the_project_scan_script_not_a_shell_search(self):
+        # 2026-11-18: `grep -r` over a main checkout with 87 GB of media ran > 5 min per name,
+        # and CC Safety Net blocked a Bash command that named `.env` files.
+        setup = (SCRIPTS.parents[1] / "3amigos-setup" / "SKILL.md").read_text()
+        for gone in ("command grep -r", "amigos_find", "-exec grep"):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, setup)
+        for needle in ('python3 "<skill dir>/scripts/project_scan.py" "<main checkout>"',
+                       "`key_assigned.<name>`", "gcloud config get-value project",
+                       "Gemini answers:", "`--show-config` line of section 5"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, setup)
+
+
+SCAN = SCRIPTS.parents[1] / "3amigos-setup" / "scripts" / "project_scan.py"
+SECRETS = ("AIzaRootSecret", "AIzaLocalSecret", "AIzaSubSecret", "AIzaCodeSecret")
+
+
+class ProjectScanTest(unittest.TestCase):
+    """project_scan.py on a real git repo: what each file set sees, and that no key leaks."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.root = os.path.realpath(cls.tmp.name)
+        files = {
+            ".env": "GEMINI_API_KEY=AIzaRootSecret\nGOOGLE_CLOUD_PROJECT=root-env-proj\n",
+            ".env.local": "export GEMINI_API_KEY='AIzaLocalSecret'\n",
+            ".env.example": "GEMINI_API_KEY=\nGOOGLE_API_KEY=\"\"\nGOOGLE_CLOUD_PROJECT=example-proj\n",
+            "sub/.env": "GEMINI_API_KEY=AIzaSubSecret\n# GOOGLE_API_KEY=x\n",
+            "sub/.env.development": 'GOOGLE_CLOUD_PROJECT || "untracked-env-proj"\n',
+            "code.js": 'const p = process.env.GOOGLE_CLOUD_PROJECT || "code-proj-1";\n'
+                       'const k = process.env.GEMINI_API_KEY || "AIzaCodeSecret";\n',
+            "new.py": 'p = os.getenv("GOOGLE_CLOUD_PROJECT", "untracked-code")\n'
+                      'url = "https://aiplatform.googleapis.com/v1"\n',
+            "conf.yaml": "GOOGLE_CLOUD_LOCATION: europe-west4 # region\n",
+            ".claude/x.js": 'GOOGLE_CLOUD_PROJECT || "claude-proj"\n',
+            "node_modules/pkg/x.js": 'GOOGLE_CLOUD_PROJECT || "nm-proj"\n',
+            ".venv/x.py": 'GOOGLE_CLOUD_PROJECT || "venv-proj"\n',
+            "docs/plan.md": 'GOOGLE_CLOUD_PROJECT || "doc-proj"\nGOOGLE_API_KEY\n',
+            "ignored.log": 'GOOGLE_CLOUD_PROJECT || "ignored-proj"\n',
+            "odd\nname.js": 'GOOGLE_CLOUD_PROJECT ?? "newline-proj"\n',
+            "a b:c/x.js": 'GOOGLE_CLOUD_PROJECT = "colon-proj"\n',
+            ".gitignore": ".env\n.env.local\nsub/.env\n*.log\n",
+        }
+        for rel, text in files.items():
+            path = Path(cls.root, rel)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        Path(cls.root, "media.bin").write_bytes(b"\0GOOGLE_CLOUD_PROJECT || \"bin-proj\"\0")
+        git = ["git", "-C", cls.root, "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(git[:3] + ["init", "-q"], check=True)
+        subprocess.run(git + ["add", ".gitignore", ".env.example", "code.js", "docs/plan.md",
+                              ".claude/x.js", "media.bin"], check=True)
+        subprocess.run(git + ["commit", "-qm", "init"], check=True)
+        locked = Path(cls.root, "locked")
+        locked.mkdir()
+        Path(locked, ".env").write_text("GEMINI_API_KEY=AIzaLockedSecret\n")
+        locked.chmod(0)
+        cls.proc = subprocess.run([sys.executable, str(SCAN), cls.root, "--key-name", "MY_KEY"],
+                                  capture_output=True, text=True)
+        Path(cls.root, "locked").chmod(0o700)
+        cls.out = json.loads(cls.proc.stdout)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def rel_paths(self, paths):
+        return sorted(os.path.relpath(p, self.root) for p in paths)
+
+    def rel(self, entries):
+        return self.rel_paths(e["file"] for e in entries)
+
+    def test_no_key_value_is_printed(self):
+        self.assertEqual(self.proc.returncode, 0, self.proc.stderr)
+        for secret in SECRETS:
+            with self.subTest(secret=secret):
+                self.assertNotIn(secret, self.proc.stdout)
+
+    def test_not_secret_values_come_from_text_and_env_files(self):
+        found = sorted((os.path.relpath(e["file"], self.root), e["kind"], e["match"])
+                       for e in self.out["not_secret"])
+        self.assertEqual(found, [
+            (".env", "env", "GOOGLE_CLOUD_PROJECT=root-env-proj"),
+            (".env.example", "env-example", "GOOGLE_CLOUD_PROJECT=example-proj"),
+            ("a b:c/x.js", "text", 'GOOGLE_CLOUD_PROJECT = "colon-proj'),
+            ("conf.yaml", "text", "GOOGLE_CLOUD_LOCATION: europe-west4"),
+        ])
+
+    def test_vertex_in_code_skips_env_files_docs_ignored_and_excluded_dirs(self):
+        found = sorted((os.path.relpath(e["file"], self.root), e["match"])
+                       for e in self.out["vertex_in_code"])
+        self.assertEqual(found, [
+            ("a b:c/x.js", 'GOOGLE_CLOUD_PROJECT = "colon-proj"'),
+            ("code.js", 'GOOGLE_CLOUD_PROJECT || "code-proj-1"'),
+            ("new.py", 'GOOGLE_CLOUD_PROJECT", "untracked-code"'),
+            ("new.py", "aiplatform.googleapis.com"),
+            ("odd\nname.js", 'GOOGLE_CLOUD_PROJECT ?? "newline-proj"'),
+        ])
+
+    def test_an_unreadable_directory_is_listed_not_skipped_silently(self):
+        self.assertEqual(self.rel_paths(self.out["unreadable_dirs"]), ["locked"])
+
+    def test_key_named_lists_every_file_that_names_the_variable(self):
+        self.assertEqual(self.rel(self.out["key_named"]["GEMINI_API_KEY"]),
+                         [".env", ".env.example", ".env.local", "code.js", "sub/.env"])
+        self.assertEqual(self.rel(self.out["key_named"]["GOOGLE_API_KEY"]),
+                         [".env.example", "docs/plan.md", "sub/.env"])
+        self.assertEqual(self.out["key_named"]["MY_KEY"], [])
+
+    def test_key_assigned_needs_a_non_empty_assignment(self):
+        self.assertEqual(self.rel(self.out["key_assigned"]["GEMINI_API_KEY"]),
+                         [".env", ".env.local", "sub/.env"])
+        self.assertEqual(self.out["key_assigned"]["GOOGLE_API_KEY"], [])
+
+    def test_bad_key_name_and_non_checkout_exit_2(self):
+        for args in ([self.root, "--key-name", "a b"], [os.path.join(self.root, "sub")]):
+            with self.subTest(args=args):
+                proc = subprocess.run([sys.executable, str(SCAN), *args],
+                                      capture_output=True, text=True)
+                self.assertEqual(proc.returncode, 2)
+                self.assertIn("project_scan.py:", proc.stderr)
 
 
 if __name__ == "__main__":

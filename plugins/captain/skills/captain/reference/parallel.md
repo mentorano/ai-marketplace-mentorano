@@ -113,8 +113,8 @@ this time section, the work extensions, the outage extension, strict mode and th
 apply only with a box.
 
 - **No time boundary.** R6 bounds re-reviews only by their count (3, or 5 after the
-  review-bound panel). A Codex review keeps its `timeout 1200`; a panel's Codex deadline is
-  300 s; a mini-consensus opinion gets 240 s; the
+  review-bound panel). A Codex review keeps its `timeout 1200`; the deadline of a panel's
+  external voters is 600 s; a mini-consensus opinion gets 240 s; the
   NP1 extra writer always runs (`reference/triage.md`). Agent prompts carry no park time
   (`reference/prompts.md`).
 - **No cut for time.** Nothing goes to TODO because of time; the other TODO reasons stay.

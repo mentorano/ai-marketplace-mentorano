@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Per-session context size for a project's Claude Code sessions. Read-only. Copy of coord's script;
-the threshold comes from the captain config (`context_threshold`). A `captain:runner` runs it for main (R21).
+"""Per-session context size for a project's Claude Code sessions. Read-only.
+The threshold comes from the captain config (`context_threshold`). A `captain:runner` runs it for main (R21).
 
 Usage: measure-context.py <repo path> [hours=24] [--threshold N] [--all]
 

@@ -1,5 +1,5 @@
-"""Shared helpers of the two captain handoff hooks (R21): the log, the check for the global
-coord hooks, the successor terminal setting, and the plugin's measure-context script. Imported by
+"""Shared helpers of the two captain handoff hooks (R21): the log, the successor
+terminal setting, and the plugin's measure-context script. Imported by
 the hooks that sit next to it."""
 from __future__ import annotations
 
@@ -24,31 +24,6 @@ def log(entry: dict) -> None:
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError:
         pass
-
-
-def _commands(node):
-    """Every `command` string in the hooks section of settings.json, at any depth."""
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if key == "command" and isinstance(value, str):
-                yield value
-            else:
-                yield from _commands(value)
-    elif isinstance(node, list):
-        for item in node:
-            yield from _commands(item)
-
-
-def coord_hook_installed(script: str) -> bool:
-    """True when ~/.claude/settings.json registers coord's global hook `script` (e.g.
-    `handoff-at-boundary.py`). The captain copy then stays silent: one denial or injection, not two."""
-    try:
-        with open(Path.home() / ".claude" / "settings.json", encoding="utf-8") as fh:
-            settings = json.load(fh)
-    except (OSError, ValueError):
-        return False
-    hooks = settings.get("hooks") if isinstance(settings, dict) else None
-    return any(script in command for command in _commands(hooks))
 
 
 def successor_terminal() -> str:

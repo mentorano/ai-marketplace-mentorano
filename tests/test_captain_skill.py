@@ -36,9 +36,10 @@ SETUP_DIR = PLUGIN_DIR / "skills" / "captain-setup"
 SETUP_MD = SETUP_DIR / "SKILL.md"
 NOTIFY_TMPL = SETUP_DIR / "notify.sh.tmpl"
 # Approximate budget after the official guidance (SKILL.md under 500 lines, under ~5k tokens);
-# 22,500 characters stands in for ~5k tokens (raised for R22, 2026-10-30).
+# 22,500 characters stands in for ~5k tokens (raised for R22, 2026-10-30; to 23,500 for R23,
+# the owner review page, 2026-11-18).
 SKILL_MAX_LINES = 500
-SKILL_MAX_CHARS = 22_500
+SKILL_MAX_CHARS = 23_500
 AGENTS_DIR = ROOT / "plugins" / "captain" / "agents"
 CACHE_SKILL = "/Users/x/.claude/plugins/cache/m/captain/0.1.0/skills/captain"
 FIXTURE_ARGS = ("--repo", "/repo", "--skill-root", CACHE_SKILL)
@@ -136,7 +137,7 @@ class SkillMdTest(unittest.TestCase):
         self.assertIn("never start a run on your own", description)
         self.assertLess(len(description), 1024)
 
-    def test_rules_r1_to_r22_each_end_with_why(self):
+    def test_rules_r1_to_r23_each_end_with_why(self):
         text = read_text(SKILL_MD)
         found = {}
         for head, body in sections(text, "###"):
@@ -145,7 +146,7 @@ class SkillMdTest(unittest.TestCase):
                 # a rule section ends at the next heading of any level
                 body = re.split(r"(?m)^#{1,3} ", body[len(head):], maxsplit=1)[0]
                 found[int(match.group(1))] = body
-        self.assertEqual(sorted(found), list(range(1, 23)), "SKILL.md must have ### R1 .. ### R22")
+        self.assertEqual(sorted(found), list(range(1, 24)), "SKILL.md must have ### R1 .. ### R23")
         for number, body in found.items():
             # the section ends with a line starting **Why:** (it may wrap, but no new paragraph)
             lines = [line.strip() for line in body.strip().splitlines()]
@@ -2330,7 +2331,7 @@ class ConsensusTextTest(unittest.TestCase):
                        "## Full consensus: a 3amigos panel", "**Mapping.**",
                        "`verdict` is the option letter", "--voters 3",
                        "`no consensus`", "never unlocks an R10 action",
-                       "tmp/captain/<run>/amigos-<ID>/", "min(300 s, park − 5 min)",
+                       "tmp/captain/<run>/amigos-<ID>/", "min(600 s, park − 5 min)",
                        "starts at once", "## Fallback without 3amigos",
                        '"recommendation after 3amigos: OP2"', "a subagent cannot nest them",
                        "park − 5 min is under 60 s", "absent from `tally.json`",
@@ -2348,7 +2349,7 @@ class ConsensusTextTest(unittest.TestCase):
     def test_prompts_md_has_the_panel_task_and_the_runner_prompt(self):
         text = read_text(PROMPTS_MD)
         self.assertIn("## Full consensus prompt (R9) - 3amigos `task.md`", text)
-        self.assertIn("## Panel runner prompt (R9) - to the `captain:runner`", text)
+        self.assertIn("## Panel runner prompt (R9) - to each `captain:runner`", text)
         self.assertIn('{"items":[{"id":"<decision ID>","verdict":"<option letter>"', text)
         self.assertIn("--fields verdict --voters 3", text)
         self.assertIn('No "ok" file at all', text)
@@ -2362,6 +2363,173 @@ class ConsensusTextTest(unittest.TestCase):
         self.assertIn("Opus voter of a 3amigos panel", text)
         self.assertIn("Fable voter of a 3amigos panel", text)
         self.assertIn("that passes `panel.py --check`; fallback without 3amigos", text)
+
+
+class GeminiPanelTextTest(unittest.TestCase):
+    """Captain 0.29.0 (GV5): the 3amigos panel has a Gemini voter and is chosen by config."""
+
+    CONSENSUS_MD = SKILL_DIR / "reference" / "consensus.md"
+
+    @staticmethod
+    def flat(path):
+        return " ".join(read_text(path).split())
+
+    def test_versions_match(self):
+        plugin = json.loads(read_text(PLUGIN_DIR / ".claude-plugin" / "plugin.json"))
+        self.assertEqual("0.32.0", plugin["version"])  # bumped when the coord plugin was removed
+        manifest = json.loads(read_text(ROOT / ".claude-plugin" / "marketplace.json"))
+        entry = next(p for p in manifest["plugins"] if p["name"] == "captain")
+        self.assertEqual("0.32.0", entry["version"])
+
+    def test_consensus_md_follows_the_effective_panel(self):
+        text = self.flat(self.CONSENSUS_MD)
+        for needle in ("the three voters of the panel main chooses per decision class",
+                       "`panel.py --show-config`",
+                       "only when `opus` is on the panel",
+                       "minus Codex when it is marked `false` in the config `tools`",
+                       "One panel runner (`captain:runner`) per external voter on the panel",
+                       "each running `panel.py --panel <the panel> --voters <that one voter>`",
+                       "a missing voter's stand-in starts as soon as that voter ends",
+                       "the one main marks `config: yes` and launches first, runs `panel.py --show-config` first",
+                       "its voter is Gemini when Gemini is on the panel, else Codex",
+                       "the config runner still runs `--show-config` and the tally",
+                       "The report on a runner's own voter is its final report, the config "
+                       "runner's too.",
+                       "Each Opus or Fable voter (and stand-in) runs `panel.py --check <its file> "
+                       "--require items=<N>` itself as its last step and reports that status "
+                       "line; main starts a stand-in at once on `missing`.",
+                       "main resumes the config runner by `SendMessage` to its `agentId` with the "
+                       "answer files and their status lines",
+                       "carries the repair advice; main passes it to the owner",
+                       "captain drops only Codex",
+                       "Gemini is a 3amigos voter; it uses agy first when the config `tools` has it",
+                       "`agy: false` adds `--no-agy` to the Gemini runner, and Gemini stays on the panel",
+                       "`note` `agy usage limit` → `run.md` records `agy: usage limit`",
+                       "every later panel of the run gets `--no-agy`",
+                       "why `no-backend`", "Codex dropped) → no voter runner;",
+                       "sends that line (`panel`, `external`) to main at once by `SendMessage`, then goes on without waiting",
+                       "Main launches the other external runner and the Opus and Fable voters of the panel when that line arrives",
+                       "A config error (exit 2) is the config runner's final report and it runs nothing",
+                       "deadline of every external voter is min(600 s, park − 5 min)",
+                       "is 600 s, and the agent voters are told the same 600 s",
+                       "from 300 s to 600 s to guard against temporary network issues",
+                       "an exhausted agy quota must not slow every later panel"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+        for gone in ("agy is not a 3amigos voter", "Codex, an Opus and a Fable voter",
+                     "`--voters codex"):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, text)
+
+    def test_panel_runner_prompt_runs_the_external_voters(self):
+        text = read_text(PROMPTS_MD)
+        runner = text.split("## Panel runner prompt (R9)", 1)[1].split("\n## ", 1)[0]
+        flat = " ".join(runner.split())
+        for needle in ("Run one external voter of a 3amigos panel, and with config: yes also the "
+                       "panel config and the tally",
+                       "config: yes → first, once for this panel: python3 "
+                       "'<skill dir>/scripts/panel.py' --show-config",
+                       "Your voter: gemini when the external list has it, else codex when it has "
+                       "codex and Codex above is on, else none",
+                       "--voters <your voter> <--no-agy when your voter is gemini and agy above "
+                       "is not on>",
+                       "Report as soon as your voter ends",
+                       "This is your final report, with config: yes too; main resumes the config "
+                       "runner by SendMessage for steps 3-5.",
+                       "<dir>/gemini.log only through grep -c",
+                       "grep -c 'Eligibility check failed' '<dir>/gemini.log' (the count only, "
+                       "never the lines)",
+                       "advice \"agy is not logged in: open agy once and log in\"",
+                       "advice by gemini.fallback of the config line",
+                       "vertex → \"log in again: gcloud auth login, then gcloud auth "
+                       "application-default login\"",
+                       "key → \"set the variable named by key_env, or fix the key_dotenv file\" "
+                       "(never a value)",
+                       "config: yes, when main resumes you with the answer files and their status "
+                       "lines (all voters ended): run panel.py --check with --require items=<N> "
+                       "only on an agent answer file that has no status line.",
+                       "agy: <on | off in config | usage limit>",
+                       "Send its line to main at once by SendMessage (an exception to one message "
+                       "when done), then go on without waiting for an answer.",
+                       "Exit 2 (a config error) → report it as your final report and run nothing else.",
+                       "--fields verdict --voters 3",
+                       "(gemini: status, why, backend, model, note)"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, flat)
+        self.assertNotIn("--voters codex", text)
+        self.assertNotIn("Run the Codex voter", text)
+        self.assertIn("--deadline <min(600, park - 5 min) in s; 600 with no box>", flat)
+        self.assertIn("<Agents:> Last step: python3 '<skill dir>/scripts/panel.py' --check "
+                      "<dir>/<that file> --require items=<N> and report its status line.",
+                      " ".join(text.split()))
+        self.assertIn("the external voters (Codex, Gemini) through `panel.py`, one runner each",
+                      " ".join(text.split()))
+
+    def test_tools_md_names_the_gemini_voter(self):
+        text = self.flat(TOOLS_MD)
+        for needle in ("Opus voter of a 3amigos panel, only when `opus` is on the panel",
+                       "beside the Gemini voter when both are on the panel",
+                       "`--no-agy` for Gemini when it applies",
+                       "one `captain:runner` per external voter, in parallel, runs "
+                       "`panel.py --panel <the panel> --voters <that voter>`",
+                       "Full consensus voters are the 3amigos panel main picks per decision class",
+                       "every voter (Codex, Gemini, agy, Fable, Opus)",
+                       "agy is also the first backend of the 3amigos panel's Gemini voter, "
+                       "called by `panel.py`, not by captain",
+                       "`agy: false` only adds `--no-agy`",
+                       "`--deadline` min(600 s, park − 5 min), 600 s with no box"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+        self.assertNotIn("--voters codex", text)
+
+    def test_consensus_md_main_picks_the_panel_by_class(self):
+        text = self.flat(self.CONSENSUS_MD)
+        for needle in ("**Panel choice.** For each panel main classifies the decision itself, with "
+                       "no question to the owner, and passes the matching panel with `--panel` to "
+                       "every `panel.py` call of that panel (the config runner's `--show-config` too)",
+                       "technical: design and architecture trade-offs, spec critique, code-related "
+                       "triage (bugs, review findings, the R6 review bound) → `opus,codex,gemini`",
+                       "product and scope, UX, naming, creative proposals → `codex,gemini,fable`",
+                       "\"Choosing the panel\" table for its task class; with no matching row, the "
+                       "default `codex,gemini,fable`",
+                       "The run's `--panel` wins over the project and the user config (3amigos "
+                       "precedence: run > project > user > default)",
+                       "`panel: technical — opus,codex,gemini`",
+                       "several open decisions of one class go in one panel",
+                       "the panel dir, the `panel:` field",
+                       "**Why:** 2026-11-18, the owner: captain decides by itself whether a "
+                       "decision is technical",
+                       "ranks Opus strongest for design, architecture and code triage"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_panel_runner_prompt_passes_the_panel(self):
+        text = read_text(PROMPTS_MD)
+        runner = " ".join(text.split("## Panel runner prompt (R9)", 1)[1].split("\n## ", 1)[0].split())
+        for needle in ("Panel: <a,b,c>.",
+                       "Pass --panel <a,b,c> above to every panel.py call except --check.",
+                       "--show-config --panel <a,b,c>",
+                       "--out '<dir>' --panel <a,b,c> --voters <your voter>"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, runner)
+
+    def test_3amigos_called_from_captain_names_the_panel_choice(self):
+        skill = ROOT / "plugins" / "3amigos" / "skills" / "3amigos" / "SKILL.md"
+        section = read_text(skill).split("## Called from captain", 1)[1].split("\n## ", 1)[0]
+        section = " ".join(section.split())
+        for needle in ("Captain picks the panel itself, per decision class, with no question to "
+                       "the owner",
+                       "technical (design, architecture, spec critique, code-related triage) → "
+                       "`opus,codex,gemini`",
+                       "product and scope, UX, naming, creative → `codex,gemini,fable`",
+                       "The run's `--panel` wins over the project and the user config",
+                       "one captain runner each"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, section)
+
+    def test_queue_md_run_template_has_the_agy_line(self):
+        queue = read_text(SKILL_DIR / "reference" / "queue.md")
+        self.assertIn("- agy: available | off in config | usage limit (panel <ID>)", queue)
 
 
 class ReviewTriageTextTest(unittest.TestCase):
@@ -3132,8 +3300,10 @@ class ShortReadsAllowedTest(unittest.TestCase):
                 self.assertEqual(self.bash(command), "ok")
 
     def test_skills_tools_and_run_checkout_docs(self):
-        for skill in ("utils:one-by-one", "utils:new-session-tab"):
+        for skill in ("utils:one-by-one", "utils:new-session-tab", "utils:self-review"):
             self.assertEqual(self.kind("Skill", {"skill": skill}), "ok", skill)
+        # SV1: only the plugin skill; a bare `self-review` may be a personal skill that runs a build
+        self.assertEqual(self.kind("Skill", {"skill": "self-review"}), "VIOLATION")
         self.assertEqual(self.kind("Skill", {"skill": "clean-code:clean-code"}), "VIOLATION")
         for name in ("mcp__serena__find_symbol", "mcp__serena__get_symbols_overview",
                      "mcp__plugin_serena_serena__find_referencing_symbols"):
@@ -3289,6 +3459,68 @@ class OwnerDecisionsHandoffTextTest(unittest.TestCase):
         self.assertIn("a recorded decision is settled (reopened only on new evidence or by the owner); "
                       "only owner or permanent ones outlive the run", skill)
         self.assertIn("denial is final; a classifier one only for that action in this run", skill)
+
+
+class ReviewPageSkillTest(unittest.TestCase):
+    """Captain 0.31.0: R23 builds and reads the owner review page with `utils:review-page`."""
+
+    REVIEW_PAGE_MD = SKILL_DIR / "reference" / "review-page.md"
+
+    @staticmethod
+    def flat(text: str) -> str:
+        return " ".join(text.split())
+
+    def prompt(self, prefix: str) -> str:
+        found = [body for head, body in sections(read_text(PROMPTS_MD), "##")
+                 if head.startswith(prefix)]
+        self.assertEqual(len(found), 1, f"prompts.md must have one section {prefix!r}")
+        return self.flat(found[0])
+
+    def test_r23_names_the_skill_and_the_index_and_prompts_stay(self):
+        skill = read_text(SKILL_MD)
+        self.assertIn("### R23", skill)
+        r23 = skill.split("### R23", 1)[1].split("\n## Index", 1)[0]
+        self.assertIn("utils:review-page", r23)
+        self.assertIn("reference/review-page.md", skill.split("## Index", 1)[1])
+        self.assertTrue(self.REVIEW_PAGE_MD.is_file())
+        prompts = read_text(PROMPTS_MD)
+        self.assertIn("## Review page prompt (R23)", prompts)
+        self.assertIn("## Review comments prompt (R23)", prompts)
+
+    def test_no_old_script_path_is_left_under_captain(self):
+        stale = [str(path.relative_to(ROOT)) for pattern in ("**/*.md", "**/*.py")
+                 for path in PLUGIN_DIR.glob(pattern)
+                 if "scripts/review-page/" in path.read_text(encoding="utf-8")]
+        self.assertEqual([], stale)
+        self.assertNotIn("scripts/review-page/", read_text(ROOT / "README.md"))
+
+    def test_the_page_prompt_invokes_the_skill_after_the_shots(self):
+        text = self.prompt("## Review page prompt (R23)")
+        for needle in ("Invoke the Skill `utils:review-page`", "<review-page dir>/scripts/build.py",
+                       "<review-page dir>/scripts/serve.py", "NOT BUILT NO SKILL"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+        invoke = text.index("Invoke the Skill `utils:review-page`")
+        self.assertLess(text.index("Screenshots"), invoke)
+        self.assertLess(invoke, text.index("sections.json"))
+        self.assertIn("NOT BUILT NO SKILL", text[invoke:text.index("sections.json")])
+        self.assertIn("shot paths", text[invoke:text.index("sections.json")])
+
+    def test_the_comments_prompt_invokes_the_skill(self):
+        text = self.prompt("## Review comments prompt (R23)")
+        self.assertIn("Invoke the Skill `utils:review-page`", text)
+        self.assertIn("<review-page dir>/scripts/comments.py", text)
+
+    def test_the_r3_frame_allows_the_skill_in_the_r23_prompts(self):
+        frame = self.prompt("## Agent frame (R3)")
+        start = frame.index("Do not launch subagents or invoke review skills")
+        end = frame.index("Hard time limit", start)
+        self.assertRegex(frame[start:end], r"`utils:review-page`[^.]*the two R23 prompts")
+
+    def test_review_page_md_names_the_skill_and_the_fallback(self):
+        text = self.flat(read_text(self.REVIEW_PAGE_MD))
+        self.assertIn("utils:review-page", text)
+        self.assertIn("NOT BUILT NO SKILL", text)
 
 
 if __name__ == "__main__":

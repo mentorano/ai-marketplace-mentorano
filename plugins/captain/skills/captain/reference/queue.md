@@ -2,6 +2,7 @@
 
 ## Contents
 
+- [Self-review of every written output (SV1)](#self-review-of-every-written-output-sv1)
 - [R19 IDs](#r19-ids)
 - [run.md](#runmd)
 - [queue.md (R10)](#queuemd-r10)
@@ -20,6 +21,42 @@
 
 All run state lives in `./tmp/captain/<YYYYMMDD-HHMMSS>/` in the repository.
 The main session writes these files with `Write` (R1).
+
+## Self-review of every written output (SV1)
+
+Whoever writes an output self-reviews it once, in the same context, before anyone acts on it:
+the Skill call `utils:self-review` (utils plugin, 0.8.0 or later). An agent does it before
+every commit and before its report (the frame's house rule, `reference/prompts.md`). Main does
+it in the turn of the `Write` or `Edit`, with `Read` of the written file and of its sources,
+never from memory. The Skill list does not show `utils:self-review` → the same steps by hand:
+read the whole output back, list what is missing, wrong or not asked for, check each point
+against the source, fix the confirmed ones. No subagent, no other review skill, no test run.
+Only the exact name `utils:self-review`: a bare `self-review` may be a personal skill that runs
+a build.
+
+It is not a review. The R5 gate and the review by a fresh agent (R6, R7) stay as they are, and
+a self-review never counts as a passed review at the push gate.
+
+| Main's output | Sources of its self-review | Where it shows |
+|---|---|---|
+| the `## Tasks` split (start step 6) and every re-split | the plan, spec or handover, top to bottom: every phase, wave and item is a row; `Touches` and `After` are filled | the `Plan split self-review (SV1):` line of the `run.md` header, never a line inside `## Tasks` |
+| the handoff, the kickoff text, the `ACK` | `reference/handoff.md`, How step 2 | the handoff's `Self-review (SV1):` line |
+| the `ui-check.md` use-case list | the plan's acceptance criteria and the diff: each `ZDn` with a frontend file has a `STSn` | a `Self-review (SV1):` line under the list |
+| a panel's `task.md` and `data.md` | `decisions.md` and the question: every decision, option, constraint and count a voter needs is inline | - |
+| a `.agent-memory/` file (MSH2) | the kept drafts: no rule lost or changed in a merge | MSH3 follows |
+| a TODO entry, a doc edit, the end report | `run.md`, `decisions.md`, `queue.md` | the R17 gate (`check-run-end.py`) |
+
+Bookkeeping lines of `run.md` (an agent row, a state, `Last check:`, a timer id) get no
+self-review. A report in the frame's shape (items 1-8) or a fix report that lacks its
+`self-review:` result goes back to that agent once, by `SendMessage`: "Run the SV1 self-review
+and report its line". Reviews, triage reports and votes have their own contract and carry no
+such line.
+
+**Why:** the owner, 18.11.2026: every output of a session or an agent (plan, spec, code, doc,
+handoff) is checked at once, in the same context, for what it missed; the review by a fresh
+agent stays; and the pass is a real skill, not a sentence in a prompt. The author still holds
+the whole task in its window, so its own pass is the cheapest check there is, and the fresh
+review then spends its findings on real defects.
 
 ## R19 IDs
 
@@ -67,10 +104,13 @@ A new area: pick two letters from the area's name; record them in `run.md` under
 - Config: read | setup done | missing, away (notify none, tools from `command -v`)   browser: agent-browser | playwright-repo | playwright-mcp | none (start step 1 writes only agent-browser or none; main sets playwright-repo or playwright-mcp later, per repo, in `reference/ui-check.md`)
 - Tools: codex on/off, agy on/off   Notify: <method> | none
 - Codex: available | off in config | usage limit, resets at <time>
+- agy: available | off in config | usage limit (panel <ID>)
 - Agent types: plugin | fallback
 - mode: fix-all | normal — <one-line reason> (ZD1, start step 6; present: shown with the plan)
+- Plan split self-review (SV1): <n> of <n> plan items are `## Tasks` rows; added: <IDs | none> (after start step 6 and every re-split)
 - Dev targets: <IDs confirmed for this repo | none>   Other repos named by the owner: <list | none>
 - Project memory (PK6): on (<abs memory.py path>) | off: <reason>
+- Review page (R23): <round> <url> PID <pid> '<abs review folder>'   lan: <lan url | none>   triaged: <n> lines | none (`reference/review-page.md`)
 
 ## Timers
 | Timer | Kind | Id |
@@ -372,7 +412,8 @@ uncommitted file, and the kept rows get `not written: no time`.
    Prefer editing an existing file; drafts on one topic may be merged into one file.
 2. MSH2 Write. Main writes each file itself with `Write` (new) or `Edit` (existing) at
    `<abs run checkout>/.agent-memory/<topic>.md`: `name` = stem, one-line `description`
-   ≤ 160 characters saying *when*, `paths` when file-specific (DL1, PT1).
+   ≤ 160 characters saying *when*, `paths` when file-specific (DL1, PT1). Then main
+   self-reviews each written file against its drafts (SV1): no rule lost or changed in a merge.
 3. MSH3 Revalidate. One `captain:worker` (Opus), single pass, gets the memory revalidation
    prompt (`reference/prompts.md`) and answers `keep`, `fix: <change>` or `drop: <reason>` per
    file; it writes nothing. Main applies it: `fix` → `Edit`; `drop` → a runner's `restore` of

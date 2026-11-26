@@ -50,6 +50,11 @@ writes the use-case list. This is light work (R1): the diff, the plan, `run.md`.
 - Write the list to `tmp/captain/<run>/ui-check.md`. In present mode show it to the owner
   before the check starts, so the owner can test the same list by hand in parallel.
 - At most ~12. More → one per changed screen; mark the rest `not checked` with a reason.
+- Self-review (SV1, `utils:self-review`) before the list is shown or used, against the plan's
+  acceptance criteria and the diff: add what is missing, and end the file with
+  `Self-review (SV1): <n> of <n> criteria and <m> of <m> frontend tasks have a use case or a
+  `not checked` reason` (the ~12 limit above stands)
+  (`reference/queue.md`).
 
 **Why:** the owner asked for the use cases **before** the test, to check them by hand in
 parallel.
@@ -310,6 +315,8 @@ Each checking runner reports in the R3 frame, one line per use case: `STSn PASS 
 ## Present mode (UP8)
 
 - Show the list as one block with `STS` IDs. Do not wait for the owner's results.
+- Screens the owner must see before the check, several at once: the R23 review page
+  (`reference/review-page.md`), one link instead of shots in the chat.
 - An owner reply "STS3 does not work" is a FAIL with the owner as evidence (UP6).
 - Headed on request.
 - "I will test too" (or the like) at any point before the stop → `keep` (VA5).

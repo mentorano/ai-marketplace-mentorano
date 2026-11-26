@@ -69,6 +69,12 @@ name, the commit subjects and the touched directories. Mark inference as
 inference. Do not delete a `TODO:` without replacing it; an unanswered one
 renders in muted italics so the gap is visible rather than silent.
 
+Then self-review the prose with the skill `utils:self-review` (not in the Skill
+list → the same steps by hand), against the measured values on the same
+branch: every state, count and date in a sentence equals its field, inference
+is marked as inference, and every `TODO:` is answered or left on purpose. The
+board goes to the team; a sentence that contradicts its own numbers misleads.
+
 Commit `BOARD.md`. It is the artifact under version control, and its diff
 between two runs is a readable record of what moved.
 

@@ -53,6 +53,9 @@ feasible designs, and records costs, uncertainty, and verification. It
 covers deployment, data, runtime, and team constraints beyond source
 imports. A local refactor stays in clean-code. Similar domain models in
 independent contexts need a coupling analysis before shared extraction.
+Before an ADR or a review is handed over, the skill self-reviews it with
+`utils:self-review` against the drivers and the evidence; that pass is not
+the architecture review itself.
 
 The source review covers all 27 chapters of *Fundamentals of Software
 Architecture*, second edition (2025). The skill uses original synthesis,
@@ -150,7 +153,10 @@ no row. The sloppy-mode octal forms (`0755`, `"\033[0m"`) are not errors
 for JavaScript: the parser complains but builds the whole tree, so those
 files are measured. The TypeScript parser is stricter than a browser or
 Node in a few other places, for example an HTML comment line in a legacy
-script; such a `.js` file is a broken run too. A `.js` or `.html` file that is not UTF-8 is measured
+script; such a `.js` file is a broken run too. TypeScript syntax in
+JavaScript (a type annotation such as `x: number`, `private`) is checked by a
+one-file grammar pass: a `.js` file with it is a broken run, an inline script
+with it goes to `UNPARSED`. A `.js` or `.html` file that is not UTF-8 is measured
 too, read one character per byte: only the structure counts, an old page
 is often cp1251 or latin-1, and a letter of such an encoding stays a
 letter, so an identifier still parses. A name with those letters prints in

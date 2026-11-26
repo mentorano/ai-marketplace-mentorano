@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+:root{--bg:#f4f5f8;--panel:#fff;--line:#d7dce5;--fg:#161a23;--mut:#5b6476;--link:#1a5bb8;--ok:#1b7f4b;--chg:#b26a00;--q:#1a5bb8;--warn-bg:#fff0c2;--warn-fg:#6b4600;--code:#eceff4;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#12151c;--panel:#1b1f2a;--line:#2b3142;--fg:#eef0f5;--mut:#9aa3b5;--link:#8cc0ff;--ok:#3fc27f;--chg:#f0a73a;--q:#8cc0ff;--warn-bg:#3a3320;--warn-fg:#ffd77a;--code:#222735;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,system-ui,"Segoe UI",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin-bottom:8px}
+h1{font-size:22px;margin:0}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
+nav a{padding:4px 10px;border:1px solid var(--line);border-radius:999px;color:var(--fg);text-decoration:none;font-size:14px;background:var(--panel)}
+nav a .st{font-size:12px;color:var(--mut)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin:0 0 16px;scroll-margin-top:8px}
+h2{font-size:20px;margin:0 0 6px}
+h2 small{font-weight:400;color:var(--mut);font-size:15px}
+p{margin:6px 0}
+a{color:var(--link);overflow-wrap:anywhere}
+.look{font-weight:600}
+.warn{background:var(--warn-bg);color:var(--warn-fg);border-radius:8px;padding:8px 10px;margin:8px 0;font-size:15px}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin:10px 0}
+figure{margin:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+figure img{display:block;width:100%;height:auto;max-height:min(420px,70vh);object-fit:contain;cursor:zoom-in;background:var(--bg)}
+figcaption{font-size:13px;color:var(--mut);padding:4px 8px;overflow-wrap:anywhere}
+pre{background:var(--code);border-radius:8px;padding:10px;overflow-x:auto;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
+.box{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+textarea{width:100%;min-height:64px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-weight:600;min-height:44px;padding:6px 16px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+button.ok{border-color:var(--ok);color:var(--ok)}button.chg{border-color:var(--chg);color:var(--chg)}button.q{border-color:var(--q);color:var(--q)}
+.said{list-style:none;margin:8px 0 0;padding:0;font-size:15px}
+.said li{border-left:3px solid var(--line);padding:2px 8px;margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.said li.v-ok{border-color:var(--ok)}.said li.v-chg{border-color:var(--chg)}.said li.v-q{border-color:var(--q)}
+.said .meta{color:var(--mut);font-size:13px}
+#msg{font-size:14px;color:var(--mut)}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9;padding:8px;cursor:zoom-out}
+#lb.on{display:flex}#lb img{max-width:100%;max-height:100%;object-fit:contain}
+@media (max-height:430px){.wrap{padding:8px 12px}h1{font-size:19px}section{padding:12px}}
+</style></head>
+<body><div class="wrap">
+<header><h1>{{TITLE}}</h1>
+<div class="btns"><button id="dl" type="button">Download all comments (.md)</button></div></header>
+{{INTRO}}
+<p id="msg">Comments are kept locally (comments.jsonl) and the session reads them when you say "done". Click a picture for full size. "ok" here means "looks right", not permission for a merge, a push or any other action.</p>
+<nav id="nav"></nav>
+{{SECTIONS}}
+</div>
+<div id="lb"><img alt=""></div>
+<script>
+const SECS = [...document.querySelectorAll("section[id]")];
+const VERDICTS = [["ok", "ok"], ["change", "chg"], ["question", "q"]];
+const CLS = Object.fromEntries(VERDICTS);
+let all = [];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const msg = t => { document.getElementById("msg").textContent = t; };
+for (const s of SECS) {
+  const box = document.createElement("div"); box.className = "box";
+  box.innerHTML = `<textarea placeholder="Comment on ${esc(s.id)}…" aria-label="Comment on ${esc(s.id)}"></textarea>
+    <div class="btns">${VERDICTS.map(([v, c]) => `<button type="button" class="${c}" data-v="${v}">${v}</button>`).join("")}</div><ul class="said"></ul>`;
+  s.appendChild(box);
+  box.querySelectorAll("button").forEach(b => b.addEventListener("click", () => send(s.id, b.dataset.v, box.querySelector("textarea"))));
+}
+async function send(id, verdict, ta) {
+  const text = ta.value.trim();
+  await loaded; // the first GET must not overwrite a comment sent before it returned
+  if (verdict !== "ok" && !text) { msg(`${id}: write what to change or what you ask, then press "${verdict}".`); ta.focus(); return; }
+  try {
+    const r = await fetch("/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, verdict, text }) });
+    if (r.status === 400 || r.status === 413) { // refused: the text stays in the box to fix
+      const why = await r.json().then(j => j.error, () => r.status);
+      msg(`${id}: the server refused the comment (${why}); the text is still in the box${r.status === 413 ? " — shorten it and try again" : ""}.`); ta.focus(); return;
+    }
+    if (!r.ok) throw Error(r.status);
+    all.push(await r.json()); ta.value = ""; render(); msg(`Saved: ${id} — ${verdict}`);
+  } catch (e) {
+    all.push({ ts: new Date().toLocaleString("en"), id, verdict, text, local: true }); render();
+    msg(`The server did not answer (${e.message}) — the comment is only in the page; download the .md file.`);
+  }
+}
+function render() {
+  const nav = document.getElementById("nav"); nav.innerHTML = "";
+  for (const s of SECS) {
+    const mine = all.filter(c => c.id === s.id), last = mine[mine.length - 1];
+    s.querySelector(".said").innerHTML = mine.map(c => `<li class="v-${CLS[c.verdict] || "x"}"><span class="meta">${esc(c.ts)} · <b>${esc(c.verdict)}</b>${c.local ? " · only here" : ""}</span>${c.text ? "\n" + esc(c.text) : ""}</li>`).join("");
+    nav.insertAdjacentHTML("beforeend", `<a href="#${encodeURIComponent(s.id)}">${esc(s.id)} <span class="st">${last ? esc(last.verdict) : "—"}</span></a>`);
+  }
+}
+async function load() {
+  try { const r = await fetch("/comments", { cache: "no-store" }); if (!r.ok) throw Error(r.status); all = await r.json(); }
+  catch { msg("No connection to the server — comments will not be saved; use \"Download all comments (.md)\"."); }
+  render();
+}
+document.getElementById("dl").addEventListener("click", () => {
+  let md = `# ${document.title}: comments\n\n`;
+  for (const s of SECS) {
+    const mine = all.filter(c => c.id === s.id);
+    md += `## ${s.id} — ${s.dataset.title}\n\n` + (mine.length ? mine.map(c => `- ${c.ts} · **${c.verdict}**${c.text ? ": " + c.text.replace(/\n/g, "\n  ") : ""}`).join("\n") : "- (none)") + "\n\n";
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([md], { type: "text/markdown" })); a.download = "review-comments.md"; a.click();
+});
+const lb = document.getElementById("lb");
+document.querySelectorAll("figure img").forEach(i => i.addEventListener("click", () => { lb.querySelector("img").src = i.src; lb.classList.add("on"); }));
+lb.addEventListener("click", () => lb.classList.remove("on"));
+addEventListener("keydown", e => { if (e.key === "Escape") lb.classList.remove("on"); });
+const loaded = load();
+</script>
+</body></html>

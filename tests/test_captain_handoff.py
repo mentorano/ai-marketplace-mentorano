@@ -117,10 +117,6 @@ class HookCase(unittest.TestCase):
         if on:
             (self.state / SESSION).write_text("{}\n", encoding="utf-8")
 
-    def settings(self, command: str):
-        data = {"hooks": {"PreToolUse": [{"matcher": "Agent|Task", "hooks": [{"type": "command", "command": command}]}]}}
-        (self.home / ".claude" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
-
     def config(self, **values):
         directory = self.home / ".claude" / "captain"
         directory.mkdir(parents=True, exist_ok=True)
@@ -152,6 +148,8 @@ class BoundaryHookTest(HookCase):
         self.assertIn("`~/.claude/kickoffs/proj-captain.md`", reason)
         self.assertIn("Context is 300k", reason)
         self.assertIn("/captain resume", reason)
+        self.assertIn("self-review it (How step 2: the skill `utils:self-review` against decisions.md, "
+                      "run.md and queue.md, then its `Self-review (SV1):` line)", reason)
         self.assertIsNone(self.denial(self.dispatch(tr)), "the same dispatch goes through on retry")
         self.assertIsNotNone(self.denial(self.dispatch(tr, description="Implement ZD4: the import page")),
                              "another task is held again")
@@ -325,13 +323,6 @@ class BoundaryHookTest(HookCase):
         self.assertIsNone(self.denial(self.dispatch(tr, agent_id="a1")))
         self.assertIsNone(self.denial(self.dispatch(tr, tool_name="Bash")))
 
-    def test_the_global_coord_hook_does_not_silence_it(self):
-        # 2026-10-05: coord's global hook only knows `Implement ...`, so deferring to it left captain ungated
-        self.captain_mode()
-        tr = self.transcript(300_000)
-        self.settings("/Users/x/.claude/hooks/handoff-at-boundary.py")
-        self.assertIsNotNone(self.denial(self.dispatch(tr, description="Size cap in the upload step")))
-
     def test_bad_input_never_blocks(self):
         for raw in ("", "not json", "[]", '{"tool_name": "Agent"}'):
             result = subprocess.run([sys.executable, str(BOUNDARY)], input=raw, capture_output=True, text=True,
@@ -379,12 +370,6 @@ class KickoffHookTest(HookCase):
         self.assertEqual(self.clear(self.transcript()).stdout, "", "no name, no kickoff: there is no repo fallback")
         self.assertEqual(self.clear(self.transcript(name="someone-else")).stdout, "")
         self.assertTrue(path.exists())
-
-    def test_silent_when_the_global_coord_hook_is_installed(self):
-        path = self.kickoff()
-        self.settings("/Users/x/.claude/hooks/kickoff-on-clear.py")
-        self.assertEqual(self.clear(self.transcript(name="proj-captain")).stdout, "")
-        self.assertTrue(path.exists(), "the file stays for coord's hook")
 
 
 class MeasureAndWiringTest(HookCase):

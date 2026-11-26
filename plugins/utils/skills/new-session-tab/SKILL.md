@@ -13,6 +13,14 @@ prompt file. For a background session to reach from a phone, use `bg-claude-rc` 
 1. Write the prompt to `./tmp/handover-<topic>-<date>.md` in the repository (`<date>` as
    `YYYYMMDD`, `<topic>` a short slug). Make it self-contained: the goal, what is done (commits,
    files), what is left, open decisions, and the first step. The new session knows nothing else.
+   Then self-review it at once, in this session, before the tab opens: invoke this plugin's
+   skill `utils:self-review` on the file, with this conversation from its start as the
+   source. Read the file as the new session will. Every instruction, decision and answer of
+   the user that still stands, every open question, the work that is left, uncommitted or
+   unpushed work, and each path, branch and command as exact text must be in the file. Add
+   what is missing, and tell the user the `self-review:` result line and what the pass
+   added. The new session cannot ask this one: what the file lacks is lost. The self-review
+   is not a review and replaces none.
 2. Pick the session name: `<repo-slug>-<topic>`, letters, digits, `.`, `_`, `-` only. The
    skill's argument `prefix=<p>` (a caller's own session name prefix) → pass
    `--name-prefix=<p>`; the script puts it in front of a name that does not start with it, and

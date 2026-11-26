@@ -112,7 +112,9 @@ ANY_OF_INPUT = {"SendMessage": ("to", "recipient"), "TaskStop": ("task_id", "she
 # one-by-one questions and the new-session-tab handover: only main talks to the owner (PR9)
 ALLOWED_SKILLS = {"captain", "captain:captain", "captain-setup", "captain:captain-setup",
                   "3amigos", "3amigos:3amigos", "one-by-one", "utils:one-by-one",
-                  "new-session-tab", "utils:new-session-tab"}
+                  "new-session-tab", "utils:new-session-tab",
+                  # SV1, main's self-review of its own output; the bare name may be a personal skill
+                  "utils:self-review"}
 # serena lookups that only read the symbol graph (SA5); its edits stay agent work
 SERENA_READS = {"find_symbol", "find_referencing_symbols", "find_implementations",
                 "find_declaration", "get_symbols_overview"}

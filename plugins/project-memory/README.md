@@ -54,7 +54,9 @@ says when the file is worth reading; `paths` is optional, a YAML list of globs.
    `overdue`.
 5. Run `/project-memory:memory-defrag` when the health asks for it. One general-purpose
    subagent merges, splits and trims the files; the skill then deletes the files it emptied
-   and shows the full diff. Run it on its own branch when working with a team, and start a
+   and shows the full diff. Before its report the subagent self-reviews its diff with
+   `utils:self-review`: every rule a removed line carried is in a file that stays, or is
+   named under **Removed**. Run it on its own branch when working with a team, and start a
    new session afterwards to load the new rules.
 
 The plugin never commits. Commit the memory yourself, or ask the session to.

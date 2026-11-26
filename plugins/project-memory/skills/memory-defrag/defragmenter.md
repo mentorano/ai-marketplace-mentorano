@@ -65,13 +65,20 @@ apply to this task; every other rule in this prompt does.
    superseded), make it EMPTY: replace its entire content — frontmatter included — with
    nothing. Do not delete it with a shell command; the skill that started you deletes the
    emptied files after you finish. Never leave a file that only carries frontmatter.
-4. Return the report as your **final message** (write no report file): a heading, then
+4. Self-review before the report, in this context: invoke the skill `utils:self-review`
+   (not in your Skill list → the same steps by hand) with these checks. Run the read-only
+   `git diff -- <memory directory>` and read every removed line. Each rule a removed line
+   carried is either in a file that stays, with its reason, or named under **Removed** as a
+   duplicate or superseded. Read each file you wrote back once: frontmatter complete, no
+   rule cut off or changed in meaning. Put back what was lost. When git gives no diff, read
+   the changed files back against what you read in step 1.
+5. Return the report as your **final message** (write no report file): a heading, then
    **Merged** (`b.md → a.md: why`), **Split** (`x.md → x-1.md, x-2.md: why`), **Removed**
    (`dup.md: duplicate of a.md` / `old.md: superseded by b.md`), **Still flagged** (each
    health reason that still holds and why it could not be cleared without losing a rule that
    is still true, and each pair of conflicting rules you kept), and one closing line with the
-   file count before and after and the always-on bytes before and after. Keep it under 60
-   lines.
+   file count before and after and the always-on bytes before and after, then
+   `self-review: <n> removed rules traced, <m> put back`. Keep it under 60 lines.
 
 Never write progress notes, run summaries or anything about this run into the memory
 directory. Never run git commands that change anything, and never commit.
